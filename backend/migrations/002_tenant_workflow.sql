@@ -14,3 +14,9 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, recipient_id, listing_id, created_at DESC);
+
+-- Public directory and moderation queries use these indexes without changing
+-- any existing user, listing, or report data.
+CREATE INDEX IF NOT EXISTS idx_users_directory ON users(role, status, name);
+CREATE INDEX IF NOT EXISTS idx_listings_owner_published ON listings(owner_id, status) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_reports_status_created ON reports(status, created_at DESC);

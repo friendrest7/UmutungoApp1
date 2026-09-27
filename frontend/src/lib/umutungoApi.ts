@@ -39,6 +39,34 @@ export type TenantDashboardData = {
   reviews: Array<{ id: string; listing_id: string; listing_title: string; rating: number; body: string; created_at: string }>;
 };
 
+export type DirectoryProfile = {
+  id: string;
+  name: string;
+  role: 'property_owner' | 'komisiyoneri';
+  business_name: string;
+  physical_address: string;
+  verified: boolean;
+  published_listings: number;
+};
+
+export type AdminReport = {
+  id: string;
+  listing_id: string;
+  listing_title: string;
+  reporter_name: string;
+  reported_user_name: string;
+  reason: string;
+  details: string;
+  status: 'pending' | 'reviewing' | 'resolved' | 'dismissed';
+  created_at: string;
+};
+
+export type AdminReportsResponse = {
+  items: AdminReport[];
+  count: number;
+  summary: Record<'pending' | 'reviewing' | 'resolved' | 'dismissed', number>;
+};
+
 export function apiBaseUrl() {
   const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').trim().replace(/\/$/, '');
   if (configured) return configured;
@@ -56,6 +84,18 @@ export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
   const response = await fetch(`${apiBaseUrl()}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}), Authorization: `Bearer ${token}` },
+  });
+  const body = await response.json().catch(() => ({})) as T & { error?: string };
+  if (!response.ok) throw new Error(body.error ?? 'Umutungo request failed');
+  return body as T;
+}
+
+export async function publicUmutungoApi<T>(path: string, init: RequestInit = {}) {
+  const base = apiBaseUrl();
+  if (!base) return null;
+  const response = await fetch(`${base}${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
   });
   const body = await response.json().catch(() => ({})) as T & { error?: string };
   if (!response.ok) throw new Error(body.error ?? 'Umutungo request failed');

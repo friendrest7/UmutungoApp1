@@ -37,6 +37,7 @@ The default development OTP is `111111`. It is returned only in development mode
 | POST | `/api/v1/auth/request-otp` | Request phone OTP |
 | POST | `/api/v1/auth/verify-otp` | Verify OTP and receive bearer token |
 | GET | `/api/v1/listings` | Public listing search |
+| GET | `/api/v1/directory` | Public landlord and commissioner directory search |
 | POST | `/api/v1/listings` | Create a listing as broker/owner |
 | GET/PATCH/DELETE | `/api/v1/listings/{id}` | View or manage a listing |
 | POST | `/api/v1/listings/{id}/applications` | Apply to rent a listing |
@@ -50,6 +51,8 @@ The default development OTP is `111111`. It is returned only in development mode
 | GET | `/api/v1/listings/{id}/reviews` | Read listing reviews |
 | POST | `/api/v1/bookings` | Create a hospitality booking request |
 | POST | `/api/v1/reports` | Report a listing or account |
+| GET | `/api/v1/admin/reports` | Admin-only report queue and summary |
+| PATCH | `/api/v1/admin/reports/{id}` | Admin-only report status update |
 | GET | `/api/v1/notifications` | Notification center |
 | GET | `/api/v1/owner/dashboard` | Owner/broker dashboard summary |
 | GET | `/api/v1/tenant/dashboard` | Tenant rental summary |

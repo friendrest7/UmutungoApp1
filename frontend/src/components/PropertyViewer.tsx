@@ -148,6 +148,20 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     try { await umutungoApi('/api/v1/messages', { method: 'POST', body: JSON.stringify({ listing_id: property.id, body: contactMessage }) }); } catch { /* Local/demo message */ }
     setMessageSent(true);
   };
+  const handleReport = async () => {
+    const reasonInput = window.prompt('Report reason: fraud, duplicate, incorrect information, sold/unavailable, offensive content, or other.');
+    if (!reasonInput?.trim()) return;
+    const normalized = reasonInput.trim().toLowerCase().replace(/\s+/g, '_');
+    const reason = ['fraud', 'duplicate', 'incorrect_information', 'sold_unavailable', 'offensive_content'].includes(normalized) ? normalized : 'other';
+    window.localStorage.setItem('umutungo-listing-report', JSON.stringify({ listingId: property.id, reason, createdAt: new Date().toISOString() }));
+    try {
+      const listingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(property.id) ? property.id : '';
+      const result = await umutungoApi('/api/v1/reports', { method: 'POST', body: JSON.stringify({ listing_id: listingId, reason, details: `${reasonInput.trim()} (property: ${property.id})` }) });
+      window.alert(result ? 'Report sent to the Umutungo admin team.' : 'Report saved locally. Sign in with a connected account to send it to the admin team.');
+    } catch {
+      window.alert('Report saved locally. Sign in with a connected account to send it to the admin team.');
+    }
+  };
   const markHouseSeen = async () => {
     setHouseSeen(true);
     const applications = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as Array<Record<string, unknown>>;
@@ -192,7 +206,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   return <div className="property-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby="property-viewer-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="property-viewer">
       <header className="property-viewer-header">
-        <div><span className="eyebrow">{t(language, 'Verified listing')}</span><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={() => { const reason = window.prompt('Report reason: fraud, duplicate, incorrect information, sold/unavailable, offensive content, or other.'); if (reason?.trim()) window.localStorage.setItem('umutungo-listing-report', JSON.stringify({ listingId: property.id, reason: reason.trim(), createdAt: new Date().toISOString() })); }}>Report this listing</button></div>
+        <div><span className="eyebrow">{t(language, 'Verified listing')}</span><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button></div>
         <button className="property-viewer-close" type="button" onClick={onClose} aria-label={t(language, 'Close property viewer')}><Icon name="x" size={20} /></button>
       </header>
 

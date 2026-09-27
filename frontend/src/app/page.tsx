@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
 import { CookieConsent } from '../components/CookieConsent';
@@ -46,6 +46,7 @@ export default function HomePage() {
   const [type, setType] = useState('Any type');
   const [intent, setIntent] = useState('Buy or rent');
   const [priceRange, setPriceRange] = useState('Any price');
+  const [directoryQuery, setDirectoryQuery] = useState('');
   const [searchMessage, setSearchMessage] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -77,6 +78,10 @@ export default function HomePage() {
     const shopSlug = categorySlugs[type] ?? 'houses';
     window.location.assign(`/categories/${shopSlug}?location=${encodeURIComponent(location)}&intent=${encodeURIComponent(intent)}&priceRange=${encodeURIComponent(priceRange)}`);
   };
+  const submitDirectorySearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    window.location.assign(`/directory${directoryQuery.trim() ? `?search=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
+  };
 
   const toggleFavorite = (id: string) => setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const selectCategory = (category: string) => {
@@ -101,6 +106,7 @@ export default function HomePage() {
       <section className="hero-section" id="home">
         <div className="hero-image"><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <h1>{copy('Find a place')} <em>{copy('that feels like home.')}</em></h1>
+          <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Search landlords and commissioners" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Search landlords or commissioners" /><button type="submit" aria-label="Search directory"><Icon name="arrow" size={15} /></button></form>
           <p className="hero-lead">{copy('Browse verified homes, land and commercial spaces across Rwanda.')}</p>
           <div className="hero-actions"><a className="button button-primary" href="/categories/houses">{copy('Browse properties')} <Icon name="arrow" size={16} /></a><button className="button button-commissioner" type="button" onClick={() => requestSignIn('Commissioner / Komisiyoneri')}>{copy('Join as Commissioner')} <Icon name="arrow" size={16} /></button></div>
         </div></div><div className="container hero-search-wrap"><PropertySearch language={language} location={location} type={type} intent={intent} priceRange={priceRange} onLocationChange={setLocation} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>

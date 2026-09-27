@@ -297,6 +297,58 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
+
+.landing-directory-search { display: flex; min-height: 45px; align-items: center; gap: 8px; padding: 0 7px 0 13px; border: 1px solid rgba(255,255,255,.58); border-radius: 999px; background: rgba(255,255,255,.12); color: #fff; backdrop-filter: blur(12px); }
+.hero-copy > .landing-directory-search { width: min(100%, 390px); margin-bottom: 28px; transform: translateX(2cm); }
+.landing-directory-search:focus-within { border-color: rgba(255,255,255,.95); background: rgba(255,255,255,.2); }
+.landing-directory-search input { width: auto; min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; font-size: 10px; }
+.landing-directory-search input::placeholder { color: rgba(255,255,255,.86); }
+.landing-directory-search button { display: grid; width: 31px; height: 31px; place-items: center; border: 0; border-radius: 50%; background: #fff; color: #087d3d; cursor: pointer; }
+.directory-page { min-height: 100vh; background: var(--paper); color: var(--ink); }
+.directory-page-header { display: flex; align-items: center; justify-content: space-between; width: min(1160px, calc(100% - 48px)); min-height: 82px; margin: auto; }
+.directory-page-header .brand-logo { width: 108px; }
+.directory-back-link { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; font-weight: 800; }
+.directory-back-link svg { transform: rotate(180deg); }
+.directory-hero { padding: 88px 0 74px; background: linear-gradient(115deg, #173d24, #477b50); color: #fff; }
+.directory-hero h1 { max-width: 620px; margin: 11px 0 15px; font-family: Montserrat, Arial, sans-serif; font-size: clamp(43px, 6vw, 78px); font-weight: 500; letter-spacing: -.07em; line-height: .96; }
+.directory-hero h1 em { color: #c9e5bf; font-style: normal; }
+.directory-hero p:not(.eyebrow) { max-width: 520px; color: rgba(255,255,255,.78); font-size: 13px; line-height: 1.7; }
+.directory-search-form { display: flex; width: min(640px, 100%); min-height: 55px; align-items: center; gap: 12px; margin-top: 27px; padding: 0 8px 0 18px; border: 1px solid rgba(255,255,255,.42); border-radius: 999px; background: rgba(255,255,255,.12); backdrop-filter: blur(12px); }
+.directory-search-form input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; font-size: 12px; }
+.directory-search-form input::placeholder { color: rgba(255,255,255,.7); }
+.directory-search-form .button { min-height: 40px; padding: 0 17px; }
+.directory-results { padding-top: 70px; padding-bottom: 90px; }
+.directory-results-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+.directory-results-heading h2 { margin: 9px 0 0; font-family: Montserrat, Arial, sans-serif; font-size: clamp(27px, 4vw, 44px); font-weight: 500; letter-spacing: -.06em; }
+.directory-results-heading > span { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.professional-directory-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 31px; }
+.professional-card { display: flex; min-height: 225px; flex-direction: column; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.professional-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.professional-avatar { display: grid; width: 43px; height: 43px; place-items: center; border-radius: 50%; background: #e2f1e4; color: #087d3d; font-size: 11px; font-weight: 800; }
+.professional-role { color: #087d3d; font-size: 9px; font-weight: 800; text-align: right; }
+.professional-card h3 { margin: 22px 0 4px; font-family: Montserrat, Arial, sans-serif; font-size: 20px; font-weight: 600; letter-spacing: -.04em; }
+.professional-business { margin: 0; color: var(--muted); font-size: 11px; }
+.professional-location { display: flex; align-items: center; gap: 5px; margin: 12px 0 0; color: var(--muted); font-size: 10px; }
+.professional-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
+.professional-verified { display: inline-flex; align-items: center; gap: 4px; color: #087d3d; font-weight: 800; }
+.directory-empty, .directory-error { margin-top: 30px; padding: 38px 20px; border: 1px solid var(--line); border-radius: 14px; text-align: center; }
+.directory-empty { color: var(--muted); }
+.directory-empty h3 { margin: 12px 0 5px; color: var(--ink); font-family: Montserrat, Arial, sans-serif; font-size: 20px; }
+.directory-empty p { margin: 0; font-size: 11px; }
+.directory-error { color: #9b3a30; font-size: 12px; }
+
+@media (max-width: 760px) {
+  .landing-directory-search { width: 100%; }
+  .landing-directory-search input { width: auto; flex: 1; }
+  .directory-page-header { width: calc(100% - 30px); }
+  .directory-hero { padding: 65px 0 58px; }
+  .directory-search-form { border-radius: 17px; flex-wrap: wrap; padding: 10px; }
+  .directory-search-form input { flex-basis: calc(100% - 32px); min-height: 35px; }
+  .directory-search-form .button { width: 100%; }
+  .directory-results { padding-top: 52px; }
+  .directory-results-heading { align-items: start; flex-direction: column; }
+  .professional-directory-grid { grid-template-columns: 1fr; }
+}
 @keyframes property-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-5px); }
@@ -495,7 +547,7 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
 .app-realistic .nav-post span::after { content: '+'; font-size: 16px; }
 .app-realistic .hero-image { min-height: 570px; }
 .app-realistic .hero-content { min-height: 570px; padding-top: 34px; padding-bottom: 112px; }
-.app-realistic .hero-copy { max-width: 560px; }
+.app-realistic .hero-copy { max-width: 560px; transform: translateY(-24px); }
 .hero-kicker { margin: 0 0 17px; color: #c7e9cf; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .app-realistic h1 { font-size: clamp(38px, 4.1vw, 53px); letter-spacing: -.045em; }
 .app-realistic .hero-lead { max-width: 430px; font-size: 14px; }

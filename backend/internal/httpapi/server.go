@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/request-otp", s.requestOTP)
 	mux.HandleFunc("/api/v1/auth/verify-otp", s.verifyOTP)
 	mux.HandleFunc("/api/v1/me", s.me)
+	mux.HandleFunc("/api/v1/directory", s.directory)
 	mux.HandleFunc("/api/v1/listings", s.listings)
 	mux.HandleFunc("/api/v1/listings/", s.listingRoute)
 	mux.HandleFunc("/api/v1/applications", s.applications)
@@ -53,6 +55,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/reviews", s.reviews)
 	mux.HandleFunc("/api/v1/bookings", s.bookings)
 	mux.HandleFunc("/api/v1/reports", s.reports)
+	mux.HandleFunc("/api/v1/admin/reports", s.adminReports)
+	mux.HandleFunc("/api/v1/admin/reports/", s.adminReportRoute)
 	mux.HandleFunc("/api/v1/notifications", s.notifications)
 	mux.HandleFunc("/api/v1/owner/dashboard", s.ownerDashboard)
 	mux.HandleFunc("/api/v1/tenant/dashboard", s.tenantDashboard)
@@ -281,7 +285,10 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		l.tags, l.amenities, l.created_at
 		FROM listings l JOIN users u ON u.id=l.owner_id
 		WHERE l.deleted_at IS NULL AND l.status='published'
-		AND ($1='' OR l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%')
+		AND ($1='' OR l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%'
+			OR l.province ILIKE '%' || $1 || '%' OR l.district ILIKE '%' || $1 || '%'
+			OR l.sector ILIKE '%' || $1 || '%' OR l.cell ILIKE '%' || $1 || '%'
+			OR l.village ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%')
 		AND ($2='' OR l.province=$2) AND ($3='' OR l.district=$3)
 		AND ($4='' OR l.sector=$4) AND ($5='' OR l.category=$5)
 		AND ($6='' OR l.transaction_type=$6)
@@ -310,6 +317,67 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 			"cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status,
 			"tags": rawJSON(tags), "amenities": rawJSON(amenities), "created_at": createdAt,
 		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
+}
+
+// directory exposes only active landlord/commissioner profile information that
+// is useful for discovery. Private contact details and KYC documents stay out
+// of this public response.
+func (s *Server) directory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	q := r.URL.Query()
+	search := strings.TrimSpace(q.Get("search"))
+	role := strings.ToLower(strings.TrimSpace(q.Get("role")))
+	if role != "" && role != "property_owner" && role != "komisiyoneri" {
+		errorJSON(w, http.StatusBadRequest, "role must be property_owner or komisiyoneri")
+		return
+	}
+	limit := 30
+	if value, err := strconv.Atoi(q.Get("limit")); err == nil && value > 0 {
+		if value < limit {
+			limit = value
+		}
+	}
+	rows, err := s.db.Query(r.Context(), `
+		SELECT u.id, u.name, u.role, u.verified_at,
+		       COALESCE(bp.business_name, ''), COALESCE(bp.physical_address, ''),
+		       COUNT(l.id) FILTER (WHERE l.status='published' AND l.deleted_at IS NULL)
+		FROM users u
+		LEFT JOIN business_profiles bp ON bp.user_id=u.id
+		LEFT JOIN listings l ON l.owner_id=u.id
+		WHERE u.status='active'
+		  AND u.role IN ('property_owner', 'komisiyoneri')
+		  AND ($1='' OR u.name ILIKE '%' || $1 || '%' OR COALESCE(bp.business_name,'') ILIKE '%' || $1 || '%' OR COALESCE(bp.physical_address,'') ILIKE '%' || $1 || '%')
+		  AND ($2='' OR u.role=$2)
+		GROUP BY u.id, u.name, u.role, u.verified_at, bp.business_name, bp.physical_address
+		ORDER BY COUNT(l.id) FILTER (WHERE l.status='published' AND l.deleted_at IS NULL) DESC, u.name ASC
+		LIMIT $3`, search, role, limit)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load professional directory")
+		return
+	}
+	defer rows.Close()
+	items := make([]map[string]any, 0)
+	for rows.Next() {
+		var id, name, userRole, businessName, address string
+		var verifiedAt *time.Time
+		var listingCount int
+		if err := rows.Scan(&id, &name, &userRole, &verifiedAt, &businessName, &address, &listingCount); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not read professional directory")
+			return
+		}
+		items = append(items, map[string]any{
+			"id": id, "name": name, "role": userRole, "business_name": businessName,
+			"physical_address": address, "verified": verifiedAt != nil, "published_listings": listingCount,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not read professional directory")
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 }
@@ -926,6 +994,106 @@ func (s *Server) reports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "pending"})
+}
+
+func (s *Server) adminReports(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "administrator access required")
+		return
+	}
+	limit := 100
+	if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 && value < limit {
+		limit = value
+	}
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	rows, err := s.db.Query(r.Context(), `
+		SELECT r.id, COALESCE(r.listing_id::text,''), COALESCE(l.title,''),
+		       r.reporter_id, COALESCE(reporter.name,''), COALESCE(r.reported_user_id::text,''),
+		       COALESCE(reported.name,''), r.reason, r.details, r.status, r.created_at
+		FROM reports r
+		JOIN users reporter ON reporter.id=r.reporter_id
+		LEFT JOIN listings l ON l.id=r.listing_id
+		LEFT JOIN users reported ON reported.id=r.reported_user_id
+		WHERE ($1='' OR r.status=$1)
+		ORDER BY r.created_at DESC
+		LIMIT $2`, status, limit)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load moderation reports")
+		return
+	}
+	defer rows.Close()
+	items := make([]map[string]any, 0)
+	for rows.Next() {
+		var id, listingID, listingTitle, reporterID, reporterName, reportedUserID, reportedName, reason, details, reportStatus string
+		var createdAt time.Time
+		if err := rows.Scan(&id, &listingID, &listingTitle, &reporterID, &reporterName, &reportedUserID, &reportedName, &reason, &details, &reportStatus, &createdAt); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not read moderation reports")
+			return
+		}
+		items = append(items, map[string]any{
+			"id": id, "listing_id": listingID, "listing_title": listingTitle,
+			"reporter_id": reporterID, "reporter_name": reporterName,
+			"reported_user_id": reportedUserID, "reported_user_name": reportedName,
+			"reason": reason, "details": details, "status": reportStatus, "created_at": createdAt,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not read moderation reports")
+		return
+	}
+	var pending, reviewing, resolved, dismissed int
+	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FILTER (WHERE status='pending'), COUNT(*) FILTER (WHERE status='reviewing'), COUNT(*) FILTER (WHERE status='resolved'), COUNT(*) FILTER (WHERE status='dismissed') FROM reports`).Scan(&pending, &reviewing, &resolved, &dismissed)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items, "count": len(items),
+		"summary": map[string]int{"pending": pending, "reviewing": reviewing, "resolved": resolved, "dismissed": dismissed},
+	})
+}
+
+func (s *Server) adminReportRoute(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "administrator access required")
+		return
+	}
+	if r.Method != http.MethodPatch {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/reports/")
+	if id == "" || strings.Contains(id, "/") {
+		errorJSON(w, http.StatusBadRequest, "report id is required")
+		return
+	}
+	var input struct {
+		Status string `json:"status"`
+	}
+	if !decodeJSON(w, r, &input) || (input.Status != "pending" && input.Status != "reviewing" && input.Status != "resolved" && input.Status != "dismissed") {
+		errorJSON(w, http.StatusBadRequest, "invalid report status")
+		return
+	}
+	result, err := s.db.Exec(r.Context(), `UPDATE reports SET status=$1 WHERE id=$2`, input.Status, id)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, "could not update report")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		errorJSON(w, http.StatusNotFound, "report not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": input.Status})
 }
 
 func (s *Server) notifications(w http.ResponseWriter, r *http.Request) {

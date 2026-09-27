@@ -30,6 +30,8 @@ The default development OTP is `111111`. It is returned only in development mode
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | GET | `/healthz` | Liveness check |
+| GET | `/health` | Liveness check (friendly health URL) |
+| GET | `/` | API identity and health URL |
 | GET | `/readyz` | PostgreSQL readiness check |
 | POST | `/api/v1/auth/register` | Register a client, tenant, broker, or owner |
 | POST | `/api/v1/auth/request-otp` | Request phone OTP |

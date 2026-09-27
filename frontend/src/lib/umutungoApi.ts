@@ -40,7 +40,9 @@ export type TenantDashboardData = {
 };
 
 export function apiBaseUrl() {
-  return (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+  const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').trim().replace(/\/$/, '');
+  if (configured) return configured;
+  return process.env.NODE_ENV === 'production' ? 'https://umutungoappbackend1.onrender.com' : '';
 }
 
 export function apiToken() {
@@ -59,4 +61,3 @@ export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
   if (!response.ok) throw new Error(body.error ?? 'Umutungo request failed');
   return body as T;
 }
-

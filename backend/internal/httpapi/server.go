@@ -35,7 +35,9 @@ func New(db *pgxpool.Pool, cfg config.Config) *Server {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.root)
 	mux.HandleFunc("/healthz", s.health)
+	mux.HandleFunc("/health", s.health)
 	mux.HandleFunc("/readyz", s.ready)
 	mux.HandleFunc("/api/v1/auth/register", s.register)
 	mux.HandleFunc("/api/v1/auth/request-otp", s.requestOTP)
@@ -56,6 +58,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/tenant/dashboard", s.tenantDashboard)
 	mux.HandleFunc("/api/v1/maintenance", s.maintenance)
 	return s.middleware(mux)
+}
+
+func (s *Server) root(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		errorJSON(w, http.StatusNotFound, "route not found")
+		return
+	}
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"service": "umutungo-api",
+		"status":  "ok",
+		"health":  "/health",
+	})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -1095,17 +1113,21 @@ func (s *Server) createSession(r *http.Request, userID string) (string, error) {
 
 func (s *Server) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if s.corsOrigin(origin) != "" {
+			w.Header().Set("Access-Control-Allow-Origin", s.corsOrigin(origin))
+			if s.cfg.CorsOrigins != "*" {
+				w.Header().Add("Vary", "Origin")
+			}
+		}
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Max-Age", "600")
+		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		origin := r.Header.Get("Origin")
-		if s.cfg.CorsOrigins == "*" || strings.Contains(","+s.cfg.CorsOrigins+",", ","+origin+",") {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Content-Type", "application/json")
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				errorJSON(w, http.StatusInternalServerError, "internal server error")
@@ -1113,6 +1135,21 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) corsOrigin(origin string) string {
+	if origin == "" {
+		return ""
+	}
+	if strings.TrimSpace(s.cfg.CorsOrigins) == "*" {
+		return "*"
+	}
+	for _, allowed := range strings.Split(s.cfg.CorsOrigins, ",") {
+		if strings.TrimSpace(allowed) == origin {
+			return origin
+		}
+	}
+	return ""
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {

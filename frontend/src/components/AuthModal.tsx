@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { Icon } from './Icons';
+import { apiBaseUrl } from '../lib/umutungoApi';
 
 export type AuthRole = 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Admin';
 
@@ -55,7 +56,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     event.preventDefault();
     if (phone.trim().length < 8) { setError('Enter a valid Rwanda phone number.'); return; }
     setError('');
-    const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+    const apiUrl = apiBaseUrl();
     if (apiUrl) {
       try {
         const response = await fetch(`${apiUrl}/api/v1/auth/request-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone.trim() }) });
@@ -69,7 +70,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
 
   const verifyCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+    const apiUrl = apiBaseUrl();
     if (apiUrl) {
       try {
         const response = await fetch(`${apiUrl}/api/v1/auth/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone.trim(), code: code.trim() }) });

@@ -36,7 +36,7 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	log.Printf("Umutungo API listening on http://localhost:%s", cfg.Port)
+	log.Printf("Umutungo API listening on :%s", cfg.Port)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server stopped: %v", err)
 	}

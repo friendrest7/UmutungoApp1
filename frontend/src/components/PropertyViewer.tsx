@@ -6,6 +6,7 @@ import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
 import { PropertyPlaceholder } from './PropertyCard';
 import { AuthModal } from './AuthModal';
+import { umutungoApi } from '../lib/umutungoApi';
 
 type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void };
 type ViewerMode = 'photos' | 'tour' | 'plan';
@@ -19,6 +20,13 @@ function PaymentLogo({ method }: { method: PaymentMethod }) {
   if (method === 'mastercard') return <span className="payment-brand payment-brand-mastercard"><i /><i /></span>;
   if (method === 'visa') return <span className="payment-brand payment-brand-visa">VISA</span>;
   return <span className="payment-brand payment-brand-other"><Icon name="creditCard" size={17} /></span>;
+}
+
+function propertyPriceAmount(value: string) {
+  const normalized = value.replace(/[^0-9.]/g, '');
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount <= 0) return 1;
+  return value.toLowerCase().includes('m') ? amount * 1000000 : amount;
 }
 
 export function PropertyViewer({ language, property, onClose }: PropertyViewerProps) {
@@ -50,6 +58,8 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewMessage, setReviewMessage] = useState('');
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [houseSeen, setHouseSeen] = useState(false);
+  const [applicationId, setApplicationId] = useState('');
   const dragStart = useRef<{ x: number; turn: number } | null>(null);
 
   useEffect(() => {
@@ -86,6 +96,8 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     setReviewRating(5);
     setReviewMessage('');
     setReviewSubmitted(false);
+    setHouseSeen(false);
+    setApplicationId('');
     setTransactionOpen(true);
   };
   const handleTransactionContinue = () => {
@@ -93,38 +105,55 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     setPaymentError('');
     setTransactionStep(transactionType === 'rent' ? 'application' : 'payment');
   };
-  const handleApplicationSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleApplicationSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (applicationPhone.replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number.'); return; }
-    const application = { id: `${property.id}-${Date.now()}`, propertyId: property.id, propertyTitle: property.title, applicant: applicationName, phone: applicationPhone, message: applicationMessage, status: 'Submitted', createdAt: new Date().toISOString() };
+    const application = { id: `${property.id}-${Date.now()}`, propertyId: property.id, propertyTitle: property.title, applicant: applicationName, phone: applicationPhone, message: applicationMessage, status: 'Submitted', viewedAt: null, createdAt: new Date().toISOString() };
     const existing = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as typeof application[];
     window.localStorage.setItem('umutungo-rental-applications', JSON.stringify([application, ...existing]));
+    try {
+      const result = await umutungoApi<{ id: string }>('/api/v1/listings/' + encodeURIComponent(property.id) + '/applications', { method: 'POST', body: JSON.stringify({ message: applicationMessage, applicant_info: { name: applicationName, phone: applicationPhone } }) });
+      if (result?.id) setApplicationId(result.id);
+    } catch { /* Keep the local application available for the demo workspace. */ }
     setPaymentError('');
     setTransactionStep('success');
   };
-  const handlePaymentSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handlePaymentSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const isMobileMoney = paymentMethod === 'momo' || paymentMethod === 'airtel';
     if (isMobileMoney && paymentPhone.trim().replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number to continue.'); return; }
     if (!isMobileMoney && cardNumber.replace(/\D/g, '').length < 12) { setPaymentError('Enter a valid card number to continue.'); return; }
     if (!isMobileMoney && (!cardExpiry.trim() || cardCvv.trim().length < 3)) { setPaymentError('Enter your card expiry date and security code.'); return; }
     setPaymentError('');
+    try {
+      const result = await umutungoApi<{ status: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', phone: paymentPhone }) });
+      if (result) window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...result, propertyId: property.id, createdAt: new Date().toISOString() }));
+    } catch { /* The API can be enabled with a token; keep the UI usable without one. */ }
     setPaymentPhone('');
     setCardNumber('');
     setCardExpiry('');
     setCardCvv('');
     setTransactionStep('success');
   };
-  const handleReviewSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleReviewSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!reviewMessage.trim()) return;
+    try { await umutungoApi('/api/v1/reviews', { method: 'POST', body: JSON.stringify({ listing_id: property.id, rating: reviewRating, body: reviewMessage }) }); } catch { /* Local/demo review */ }
     setReviewSubmitted(true);
     setReviewOpen(false);
   };
-  const handleLandlordMessage = (event: FormEvent<HTMLFormElement>) => {
+  const handleLandlordMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!contactMessage.trim()) return;
+    try { await umutungoApi('/api/v1/messages', { method: 'POST', body: JSON.stringify({ listing_id: property.id, body: contactMessage }) }); } catch { /* Local/demo message */ }
     setMessageSent(true);
+  };
+  const markHouseSeen = async () => {
+    setHouseSeen(true);
+    const applications = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as Array<Record<string, unknown>>;
+    window.localStorage.setItem('umutungo-rental-applications', JSON.stringify(applications.map((item) => item.propertyId === property.id ? { ...item, viewedAt: new Date().toISOString() } : item)));
+    if (applicationId) { try { await umutungoApi(`/api/v1/applications/${applicationId}/viewed`, { method: 'POST', body: '{}' }); } catch { /* local/demo application */ } }
+    setTransactionStep('payment');
   };
   const paymentOptions: Array<{ id: PaymentMethod; label: string; detail: string; mark: string }> = [
     { id: 'momo', label: 'MTN MoMo', detail: 'Approve securely on your MoMo phone', mark: 'MoMo' },
@@ -261,16 +290,17 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
             <span className="eyebrow">Request received</span>
             <h2 id="property-action-title">You are on your way</h2>
             <p className="property-action-intro">Your {transactionType === 'rent' ? 'rental' : 'property'} request for <strong>{property.title}</strong> has been recorded. You can now speak with the landlord directly.</p>
+            {transactionType === 'rent' && !houseSeen && <div className="property-seen-card"><strong>Have you seen the house?</strong><span>Mark it as seen to unlock the payment step and leave a verified review.</span><button className="property-contact-button" type="button" onClick={markHouseSeen}>I have seen this house <Icon name="check" size={14} /></button></div>}
             <div className="property-landlord-card">
               <div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong>Eric N.</strong><small>Verified landlord · {property.location}</small></span></div>
               <button className="property-landlord-view" type="button" onClick={() => setLandlordVisible((current) => !current)}>{landlordVisible ? 'Hide details' : 'View landlord'} <Icon name="arrow" size={14} /></button>
               {landlordVisible && <div className="property-landlord-details"><span><b>Phone</b> +250 788 214 600</span><span><b>Email</b> eric.n@umutungo.rw</span><small>Ask about availability, viewing times, deposit terms, and anything else you need to know.</small></div>}
               <button className="property-contact-button" type="button" onClick={() => setContactOpen(true)}><Icon name="bookPen" size={15} /> Open chat with landlord</button>
             </div>
-            <div className="property-review-card">
+            {houseSeen && <div className="property-review-card">
               <div><span className="eyebrow">After your request</span><h3>How was this property experience?</h3><p>Share a quick review to help other renters make a confident choice.</p></div>
               {reviewSubmitted ? <p className="property-review-success" role="status"><Icon name="check" size={14} /> Thank you — your review was submitted.</p> : reviewOpen ? <form className="property-review-form" onSubmit={handleReviewSubmit}><div className="property-review-stars" aria-label="Choose a rating">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" className={value <= reviewRating ? 'is-selected' : ''} aria-label={value + ' stars'} onClick={() => setReviewRating(value)}>★</button>)}</div><textarea value={reviewMessage} onChange={(event) => setReviewMessage(event.target.value)} placeholder="Tell us about the listing and landlord experience" rows={3} required /><button className="property-review-submit" type="submit">Submit review <Icon name="arrow" size={14} /></button></form> : <button className="property-review-open" type="button" onClick={() => setReviewOpen(true)}>Leave a review <Icon name="arrow" size={14} /></button>}
-            </div>
+            </div>}
           </>}
         </section>
         {contactOpen && <div className="landlord-contact-overlay" role="dialog" aria-modal="true" aria-labelledby="landlord-contact-title">

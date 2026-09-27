@@ -40,6 +40,12 @@ The default development OTP is `111111`. It is returned only in development mode
 | POST | `/api/v1/listings/{id}/applications` | Apply to rent a listing |
 | GET | `/api/v1/applications` | View submitted/received applications |
 | POST | `/api/v1/applications/{id}/decision` | Accept, reject, or request information |
+| POST | `/api/v1/applications/{id}/viewed` | Record that the tenant has seen the house |
+| POST/GET | `/api/v1/payments`, `/api/v1/payments/{id}` | Start and check an MTN MoMo, Airtel Money, card, or manual payment |
+| POST | `/api/v1/payments/{id}/confirm` | Confirm a pending provider payment after provider approval |
+| POST/GET | `/api/v1/messages` | Contact a landlord and load the tenant conversation |
+| POST | `/api/v1/reviews` | Submit a review after a recorded property viewing |
+| GET | `/api/v1/listings/{id}/reviews` | Read listing reviews |
 | POST | `/api/v1/bookings` | Create a hospitality booking request |
 | POST | `/api/v1/reports` | Report a listing or account |
 | GET | `/api/v1/notifications` | Notification center |

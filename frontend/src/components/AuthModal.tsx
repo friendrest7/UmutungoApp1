@@ -51,15 +51,36 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     complete(account.role);
   };
 
-  const sendCode = (event: FormEvent<HTMLFormElement>) => {
+  const sendCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (phone.trim().length < 8) { setError('Enter a valid Rwanda phone number.'); return; }
-    setError(''); setNotice('Verification code sent. For development, use 11111.'); setMethod('otp');
+    setError('');
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+    if (apiUrl) {
+      try {
+        const response = await fetch(`${apiUrl}/api/v1/auth/request-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone.trim() }) });
+        const result = await response.json() as { error?: string; development_code?: string };
+        if (!response.ok) { setError(result.error ?? 'Verification code could not be sent.'); return; }
+        setNotice(`Verification code sent${result.development_code ? ` — development code: ${result.development_code}` : ''}.`);
+      } catch { setError('The Umutungo API could not be reached.'); return; }
+    } else setNotice('Verification code sent. For development, use 111111.');
+    setMethod('otp');
   };
 
-  const verifyCode = (event: FormEvent<HTMLFormElement>) => {
+  const verifyCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (code.trim() !== '11111') { setError('That code is not correct. Use 11111 in this testing environment.'); return; }
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+    if (apiUrl) {
+      try {
+        const response = await fetch(`${apiUrl}/api/v1/auth/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone.trim(), code: code.trim() }) });
+        const result = await response.json() as { error?: string; access_token?: string };
+        if (!response.ok || !result.access_token) { setError(result.error ?? 'That code is not correct.'); return; }
+        window.localStorage.setItem('umutungo-api-token', result.access_token);
+        complete(role ?? 'Tenant');
+        return;
+      } catch { setError('The Umutungo API could not be reached.'); return; }
+    }
+    if (code.trim() !== '111111') { setError('That code is not correct. Use 111111 in this testing environment.'); return; }
     complete(role ?? 'Tenant');
   };
 

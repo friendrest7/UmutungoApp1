@@ -144,9 +144,12 @@ CREATE TABLE IF NOT EXISTS rental_applications (
     applicant_info JSONB NOT NULL DEFAULT '{}'::jsonb,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected', 'more_info', 'withdrawn')),
     decision_note TEXT,
+    viewed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     decided_at TIMESTAMPTZ
 );
+
+ALTER TABLE rental_applications ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS rental_agreements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -185,6 +188,16 @@ CREATE TABLE IF NOT EXISTS payments (
     provider_reference TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'successful', 'failed', 'refunded')),
     receipt_number TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    listing_id UUID REFERENCES listings(id) ON DELETE SET NULL,
+    body TEXT NOT NULL,
+    read_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -308,3 +321,6 @@ CREATE INDEX IF NOT EXISTS idx_listings_created ON listings(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_applications_applicant ON rental_applications(applicant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, recipient_id, listing_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_author_listing ON reviews(author_id, listing_id) WHERE listing_id IS NOT NULL;

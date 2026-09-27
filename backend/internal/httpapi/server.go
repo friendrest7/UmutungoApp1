@@ -45,6 +45,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/listings/", s.listingRoute)
 	mux.HandleFunc("/api/v1/applications", s.applications)
 	mux.HandleFunc("/api/v1/applications/", s.applicationRoute)
+	mux.HandleFunc("/api/v1/payments", s.payments)
+	mux.HandleFunc("/api/v1/payments/", s.paymentRoute)
+	mux.HandleFunc("/api/v1/messages", s.messages)
+	mux.HandleFunc("/api/v1/reviews", s.reviews)
 	mux.HandleFunc("/api/v1/bookings", s.bookings)
 	mux.HandleFunc("/api/v1/reports", s.reports)
 	mux.HandleFunc("/api/v1/notifications", s.notifications)
@@ -368,6 +372,10 @@ func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
 		s.createApplication(w, r, id)
 		return
 	}
+	if len(parts) > 1 && parts[1] == "reviews" && r.Method == http.MethodGet {
+		s.listReviews(w, r, id)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		s.getListing(w, r, id)
@@ -502,7 +510,7 @@ func (s *Server) applications(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	rows, err := s.db.Query(r.Context(), `SELECT a.id,a.listing_id,l.title,a.applicant_id,u.name,a.status,a.message,a.created_at FROM rental_applications a JOIN listings l ON l.id=a.listing_id JOIN users u ON u.id=a.applicant_id WHERE a.applicant_id=$1 OR l.owner_id=$1 ORDER BY a.created_at DESC`, user.ID)
+	rows, err := s.db.Query(r.Context(), `SELECT a.id,a.listing_id,l.title,a.applicant_id,u.name,a.status,a.message,a.viewed_at,a.created_at FROM rental_applications a JOIN listings l ON l.id=a.listing_id JOIN users u ON u.id=a.applicant_id WHERE a.applicant_id=$1 OR l.owner_id=$1 ORDER BY a.created_at DESC`, user.ID)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load applications")
 		return
@@ -511,9 +519,10 @@ func (s *Server) applications(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, 0)
 	for rows.Next() {
 		var id, listingID, title, applicantID, applicantName, status, message string
+		var viewedAt *time.Time
 		var createdAt time.Time
-		if rows.Scan(&id, &listingID, &title, &applicantID, &applicantName, &status, &message, &createdAt) == nil {
-			items = append(items, map[string]any{"id": id, "listing_id": listingID, "listing_title": title, "applicant_id": applicantID, "applicant_name": applicantName, "status": status, "message": message, "created_at": createdAt})
+		if rows.Scan(&id, &listingID, &title, &applicantID, &applicantName, &status, &message, &viewedAt, &createdAt) == nil {
+			items = append(items, map[string]any{"id": id, "listing_id": listingID, "listing_title": title, "applicant_id": applicantID, "applicant_name": applicantName, "status": status, "message": message, "viewed_at": viewedAt, "created_at": createdAt})
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -521,7 +530,19 @@ func (s *Server) applications(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) applicationRoute(w http.ResponseWriter, r *http.Request) {
 	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/applications/"), "/")
-	if r.Method != http.MethodPost || id == "" {
+	if id == "" {
+		errorJSON(w, http.StatusNotFound, "application route not found")
+		return
+	}
+	if strings.HasSuffix(id, "/viewed") {
+		if r.Method != http.MethodPost {
+			errorJSON(w, http.StatusMethodNotAllowed, "use POST /api/v1/applications/{id}/viewed")
+			return
+		}
+		s.markApplicationViewed(w, r, strings.TrimSuffix(id, "/viewed"))
+		return
+	}
+	if r.Method != http.MethodPost {
 		errorJSON(w, http.StatusMethodNotAllowed, "use POST /api/v1/applications/{id}/decision")
 		return
 	}
@@ -575,6 +596,257 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": input.Status})
+}
+
+func (s *Server) markApplicationViewed(w http.ResponseWriter, r *http.Request, id string) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	result, err := s.db.Exec(r.Context(), `UPDATE rental_applications SET viewed_at=COALESCE(viewed_at,NOW()) WHERE id=$1 AND applicant_id=$2`, id, user.ID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not record property viewing")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		errorJSON(w, http.StatusNotFound, "application not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "status": "viewed", "viewed_at": time.Now()})
+}
+
+func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "use POST /api/v1/payments")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var input struct {
+		RelatedType string  `json:"related_type"`
+		RelatedID   string  `json:"related_id"`
+		Amount      float64 `json:"amount"`
+		Currency    string  `json:"currency"`
+		Provider    string  `json:"provider"`
+		Phone       string  `json:"phone"`
+	}
+	if !decodeJSON(w, r, &input) || input.RelatedID == "" || input.Amount <= 0 {
+		errorJSON(w, http.StatusBadRequest, "related_id and a positive amount are required")
+		return
+	}
+	input.RelatedType = strings.ToLower(strings.TrimSpace(input.RelatedType))
+	input.Provider = strings.ToLower(strings.TrimSpace(input.Provider))
+	if input.RelatedType != "application" && input.RelatedType != "agreement" && input.RelatedType != "listing" {
+		errorJSON(w, http.StatusBadRequest, "related_type must be application, agreement, or listing")
+		return
+	}
+	if input.Provider != "mtn_momo" && input.Provider != "airtel_money" && input.Provider != "card" && input.Provider != "manual" {
+		errorJSON(w, http.StatusBadRequest, "provider must be mtn_momo, airtel_money, card, or manual")
+		return
+	}
+	if (input.Provider == "mtn_momo" || input.Provider == "airtel_money") && strings.TrimSpace(input.Phone) == "" {
+		errorJSON(w, http.StatusBadRequest, "phone is required for mobile money payments")
+		return
+	}
+	if !s.canPayFor(r, user.ID, input.RelatedType, input.RelatedID) {
+		errorJSON(w, http.StatusForbidden, "you cannot pay for this property request")
+		return
+	}
+	if input.Currency == "" {
+		input.Currency = "RWF"
+	}
+	reference, err := randomToken()
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create payment reference")
+		return
+	}
+	providerReference := "UM-" + strings.ToUpper(reference[:12])
+	status := "pending"
+	if input.Provider == "manual" {
+		status = "successful"
+	}
+	var id string
+	err = s.db.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status,receipt_number) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $8='successful' THEN $7 ELSE NULL END) RETURNING id`, user.ID, input.RelatedType, input.RelatedID, input.Amount, input.Currency, input.Provider, providerReference, status).Scan(&id)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, "could not create payment")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "provider": input.Provider, "provider_reference": providerReference, "amount": input.Amount, "currency": input.Currency})
+}
+
+func (s *Server) canPayFor(r *http.Request, userID, relatedType, relatedID string) bool {
+	var exists bool
+	switch relatedType {
+	case "application":
+		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_applications WHERE id=$1 AND applicant_id=$2 AND viewed_at IS NOT NULL)`, relatedID, userID).Scan(&exists)
+	case "agreement":
+		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_agreements WHERE id=$1 AND tenant_id=$2)`, relatedID, userID).Scan(&exists)
+	case "listing":
+		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listings WHERE id=$1 AND status='published')`, relatedID).Scan(&exists)
+	}
+	return exists
+}
+
+func (s *Server) paymentRoute(w http.ResponseWriter, r *http.Request) {
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/payments/"), "/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || parts[0] == "" {
+		errorJSON(w, http.StatusNotFound, "payment not found")
+		return
+	}
+	if len(parts) == 2 && parts[1] == "confirm" && r.Method == http.MethodPost {
+		s.confirmPayment(w, r, parts[0])
+		return
+	}
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET /api/v1/payments/{id} or POST /api/v1/payments/{id}/confirm")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var id, relatedType, relatedID, provider, status, currency, providerReference string
+	var amount float64
+	var createdAt time.Time
+	err := s.db.QueryRow(r.Context(), `SELECT id,related_type,COALESCE(related_id::text,''),amount,currency,provider,COALESCE(provider_reference,''),status,created_at FROM payments WHERE id=$1 AND user_id=$2`, parts[0], user.ID).Scan(&id, &relatedType, &relatedID, &amount, &currency, &provider, &providerReference, &status, &createdAt)
+	if err != nil {
+		errorJSON(w, http.StatusNotFound, "payment not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "related_type": relatedType, "related_id": relatedID, "amount": amount, "currency": currency, "provider": provider, "provider_reference": providerReference, "status": status, "created_at": createdAt})
+}
+
+func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id string) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	result, err := s.db.Exec(r.Context(), `UPDATE payments SET status='successful', receipt_number=COALESCE(receipt_number,provider_reference) WHERE id=$1 AND user_id=$2 AND status='pending'`, id, user.ID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not confirm payment")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		errorJSON(w, http.StatusNotFound, "pending payment not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": "successful"})
+}
+
+func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if r.Method == http.MethodGet {
+		listingID := r.URL.Query().Get("listing_id")
+		rows, err := s.db.Query(r.Context(), `SELECT m.id,m.sender_id,s.name,m.recipient_id,recipient.name,COALESCE(m.listing_id::text,''),m.body,m.created_at FROM messages m JOIN users s ON s.id=m.sender_id JOIN users recipient ON recipient.id=m.recipient_id WHERE (m.sender_id=$1 OR m.recipient_id=$1) AND ($2='' OR m.listing_id=NULLIF($2,'')::uuid) ORDER BY m.created_at ASC LIMIT 200`, user.ID, listingID)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load messages")
+			return
+		}
+		defer rows.Close()
+		items := make([]map[string]any, 0)
+		for rows.Next() {
+			var id, senderID, senderName, recipientID, recipientName, rowListingID, body string
+			var createdAt time.Time
+			if rows.Scan(&id, &senderID, &senderName, &recipientID, &recipientName, &rowListingID, &body, &createdAt) == nil {
+				items = append(items, map[string]any{"id": id, "sender_id": senderID, "sender_name": senderName, "recipient_id": recipientID, "recipient_name": recipientName, "listing_id": rowListingID, "body": body, "created_at": createdAt})
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET or POST /api/v1/messages")
+		return
+	}
+	var input struct {
+		ListingID   string `json:"listing_id"`
+		RecipientID string `json:"recipient_id"`
+		Body        string `json:"body"`
+	}
+	if !decodeJSON(w, r, &input) || strings.TrimSpace(input.Body) == "" {
+		errorJSON(w, http.StatusBadRequest, "message body is required")
+		return
+	}
+	if input.RecipientID == "" && input.ListingID != "" {
+		_ = s.db.QueryRow(r.Context(), `SELECT owner_id FROM listings WHERE id=$1 AND status='published'`, input.ListingID).Scan(&input.RecipientID)
+	}
+	if input.RecipientID == "" || input.RecipientID == user.ID {
+		errorJSON(w, http.StatusBadRequest, "a valid landlord recipient is required")
+		return
+	}
+	var id string
+	err := s.db.QueryRow(r.Context(), `INSERT INTO messages(sender_id,recipient_id,listing_id,body) VALUES($1,$2,NULLIF($3,'')::uuid,$4) RETURNING id`, user.ID, input.RecipientID, input.ListingID, strings.TrimSpace(input.Body)).Scan(&id)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, "could not send message")
+		return
+	}
+	_, _ = s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'message_received','New landlord message',$2)`, input.RecipientID, fmt.Sprintf("%s sent you a message", user.Name))
+	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "sent"})
+}
+
+func (s *Server) reviews(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "use POST /api/v1/reviews")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var input struct {
+		ListingID   string `json:"listing_id"`
+		AgreementID string `json:"agreement_id"`
+		Rating      int    `json:"rating"`
+		Body        string `json:"body"`
+	}
+	if !decodeJSON(w, r, &input) || input.ListingID == "" || input.Rating < 1 || input.Rating > 5 {
+		errorJSON(w, http.StatusBadRequest, "listing_id and a rating from 1 to 5 are required")
+		return
+	}
+	var eligible bool
+	_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_applications WHERE listing_id=$1 AND applicant_id=$2 AND viewed_at IS NOT NULL) OR EXISTS(SELECT 1 FROM rental_agreements WHERE listing_id=$1 AND tenant_id=$2)`, input.ListingID, user.ID).Scan(&eligible)
+	if !eligible {
+		errorJSON(w, http.StatusForbidden, "you can review a property after viewing it")
+		return
+	}
+	var id string
+	err := s.db.QueryRow(r.Context(), `INSERT INTO reviews(author_id,listing_id,agreement_id,rating,body) VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5) RETURNING id`, user.ID, input.ListingID, input.AgreementID, input.Rating, strings.TrimSpace(input.Body)).Scan(&id)
+	if err != nil {
+		errorJSON(w, http.StatusConflict, "you have already reviewed this property")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": "published", "rating": input.Rating})
+}
+
+func (s *Server) listReviews(w http.ResponseWriter, r *http.Request, listingID string) {
+	rows, err := s.db.Query(r.Context(), `SELECT r.id,r.author_id,u.name,r.rating,r.body,r.created_at FROM reviews r JOIN users u ON u.id=r.author_id WHERE r.listing_id=$1 ORDER BY r.created_at DESC`, listingID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load reviews")
+		return
+	}
+	defer rows.Close()
+	items := make([]map[string]any, 0)
+	for rows.Next() {
+		var id, authorID, authorName, body string
+		var rating int
+		var createdAt time.Time
+		if rows.Scan(&id, &authorID, &authorName, &rating, &body, &createdAt) == nil {
+			items = append(items, map[string]any{"id": id, "author_id": authorID, "author_name": authorName, "rating": rating, "body": body, "created_at": createdAt})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (s *Server) bookings(w http.ResponseWriter, r *http.Request) {
@@ -706,7 +978,61 @@ func (s *Server) tenantDashboard(w http.ResponseWriter, r *http.Request) {
 			properties = append(properties, map[string]any{"agreement_id": id, "listing_id": listingID, "title": title, "rent_amount": rent, "currency": currency, "due_day": dueDay, "start_date": startDate, "end_date": endDate, "status": status})
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"properties": properties})
+	applications := make([]map[string]any, 0)
+	applicationRows, _ := s.db.Query(r.Context(), `SELECT a.id,a.listing_id,l.title,a.status,a.message,a.viewed_at,a.created_at FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.applicant_id=$1 ORDER BY a.created_at DESC`, user.ID)
+	if applicationRows != nil {
+		defer applicationRows.Close()
+		for applicationRows.Next() {
+			var id, listingID, title, status, message string
+			var viewedAt *time.Time
+			var createdAt time.Time
+			if applicationRows.Scan(&id, &listingID, &title, &status, &message, &viewedAt, &createdAt) == nil {
+				applications = append(applications, map[string]any{"id": id, "listing_id": listingID, "listing_title": title, "status": status, "message": message, "viewed_at": viewedAt, "created_at": createdAt})
+			}
+		}
+	}
+
+	payments := make([]map[string]any, 0)
+	paymentRows, _ := s.db.Query(r.Context(), `SELECT id,related_type,COALESCE(related_id::text,''),amount,currency,provider,status,COALESCE(receipt_number,''),created_at FROM payments WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`, user.ID)
+	if paymentRows != nil {
+		defer paymentRows.Close()
+		for paymentRows.Next() {
+			var id, relatedType, relatedID, currency, provider, status, receipt string
+			var amount float64
+			var createdAt time.Time
+			if paymentRows.Scan(&id, &relatedType, &relatedID, &amount, &currency, &provider, &status, &receipt, &createdAt) == nil {
+				payments = append(payments, map[string]any{"id": id, "related_type": relatedType, "related_id": relatedID, "amount": amount, "currency": currency, "provider": provider, "status": status, "receipt_number": receipt, "created_at": createdAt})
+			}
+		}
+	}
+
+	messages := make([]map[string]any, 0)
+	messageRows, _ := s.db.Query(r.Context(), `SELECT m.id,m.sender_id,s.name,m.recipient_id,recipient.name,COALESCE(m.listing_id::text,''),m.body,m.created_at FROM messages m JOIN users s ON s.id=m.sender_id JOIN users recipient ON recipient.id=m.recipient_id WHERE m.sender_id=$1 OR m.recipient_id=$1 ORDER BY m.created_at DESC LIMIT 100`, user.ID)
+	if messageRows != nil {
+		defer messageRows.Close()
+		for messageRows.Next() {
+			var id, senderID, senderName, recipientID, recipientName, listingID, body string
+			var createdAt time.Time
+			if messageRows.Scan(&id, &senderID, &senderName, &recipientID, &recipientName, &listingID, &body, &createdAt) == nil {
+				messages = append(messages, map[string]any{"id": id, "sender_id": senderID, "sender_name": senderName, "recipient_id": recipientID, "recipient_name": recipientName, "listing_id": listingID, "body": body, "created_at": createdAt})
+			}
+		}
+	}
+
+	reviews := make([]map[string]any, 0)
+	reviewRows, _ := s.db.Query(r.Context(), `SELECT r.id,r.listing_id,l.title,r.rating,r.body,r.created_at FROM reviews r LEFT JOIN listings l ON l.id=r.listing_id WHERE r.author_id=$1 ORDER BY r.created_at DESC LIMIT 100`, user.ID)
+	if reviewRows != nil {
+		defer reviewRows.Close()
+		for reviewRows.Next() {
+			var id, listingID, title, body string
+			var rating int
+			var createdAt time.Time
+			if reviewRows.Scan(&id, &listingID, &title, &rating, &body, &createdAt) == nil {
+				reviews = append(reviews, map[string]any{"id": id, "listing_id": listingID, "listing_title": title, "rating": rating, "body": body, "created_at": createdAt})
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"properties": properties, "applications": applications, "payments": payments, "messages": messages, "reviews": reviews})
 }
 
 func (s *Server) maintenance(w http.ResponseWriter, r *http.Request) {

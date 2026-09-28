@@ -2,10 +2,23 @@ export type ApiApplication = {
   id: string;
   listing_id: string;
   listing_title: string;
+  applicant_id?: string;
+  applicant_name?: string;
   status: string;
   message: string;
   viewed_at?: string | null;
   created_at: string;
+};
+
+export type ApiNotification = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  read_at?: string | null;
+  created_at: string;
+  application_id?: string;
+  status?: string;
 };
 
 export type ApiPayment = {

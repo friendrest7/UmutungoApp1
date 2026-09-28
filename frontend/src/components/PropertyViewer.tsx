@@ -63,8 +63,9 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   const [reviewMessage, setReviewMessage] = useState('');
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [houseSeen, setHouseSeen] = useState(false);
+  const [viewingRequested, setViewingRequested] = useState(false);
   const [applicationId, setApplicationId] = useState('');
-  const dragStart = useRef<{ x: number; turn: number } | null>(null);
+  const dragStart = useRef<{ x: number; y: number; turn: number; pointerType: string } | null>(null);
 
   useEffect(() => {
     setSignedIn(Boolean(window.localStorage.getItem('umutungo-demo-user')));
@@ -104,6 +105,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     setReviewMessage('');
     setReviewSubmitted(false);
     setHouseSeen(false);
+    setViewingRequested(false);
     setApplicationId('');
     setTransactionOpen(true);
   };
@@ -128,13 +130,24 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   const handleApplicationSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (applicationPhone.replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number.'); return; }
-    const application = { id: `${property.id}-${Date.now()}`, propertyId: property.id, propertyTitle: property.title, applicant: applicationName, phone: applicationPhone, message: applicationMessage, status: 'Submitted', viewedAt: null, createdAt: new Date().toISOString() };
+    const application = { id: `${property.id}-${Date.now()}`, propertyId: property.id, propertyTitle: property.title, applicant: applicationName, phone: applicationPhone, message: applicationMessage, status: 'pending', viewedAt: null, createdAt: new Date().toISOString() };
     setApplicationId(application.id);
     const existing = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as typeof application[];
     window.localStorage.setItem('umutungo-rental-applications', JSON.stringify([application, ...existing]));
+    const notification = { id: `notification-${application.id}`, type: 'application_received', title: 'New rental application', body: `${applicationName || 'A tenant'} applied for ${property.title}`, applicationId: application.id, status: 'pending', createdAt: application.createdAt };
+    const storedNotifications = JSON.parse(window.localStorage.getItem('umutungo-landlord-notifications') ?? '[]') as typeof notification[];
+    window.localStorage.setItem('umutungo-landlord-notifications', JSON.stringify([notification, ...storedNotifications]));
+    window.dispatchEvent(new CustomEvent('umutungo:landlord-data-changed'));
     try {
       const result = await umutungoApi<{ id: string }>('/api/v1/listings/' + encodeURIComponent(property.id) + '/applications', { method: 'POST', body: JSON.stringify({ message: applicationMessage, applicant_info: { name: applicationName, phone: applicationPhone } }) });
-      if (result?.id) setApplicationId(result.id);
+      if (result?.id) {
+        setApplicationId(result.id);
+        const applications = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as Array<Record<string, unknown>>;
+        window.localStorage.setItem('umutungo-rental-applications', JSON.stringify(applications.map((item) => item.id === application.id ? { ...item, id: result.id } : item)));
+        const notifications = JSON.parse(window.localStorage.getItem('umutungo-landlord-notifications') ?? '[]') as Array<Record<string, unknown>>;
+        window.localStorage.setItem('umutungo-landlord-notifications', JSON.stringify(notifications.map((item) => item.applicationId === application.id ? { ...item, applicationId: result.id } : item)));
+        window.dispatchEvent(new CustomEvent('umutungo:landlord-data-changed'));
+      }
     } catch { /* Keep the local application available for the demo workspace. */ }
     setPaymentError('');
     setTransactionStep('success');
@@ -208,6 +221,11 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     if (applicationId) { try { await umutungoApi(`/api/v1/applications/${applicationId}/viewed`, { method: 'POST', body: '{}' }); } catch { /* local/demo application */ } }
     openPaymentSecurity();
   };
+  const openPropertyMap = () => {
+    const query = encodeURIComponent(`${property.location}, Rwanda`);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank', 'noopener,noreferrer');
+    setViewingRequested(true);
+  };
   const paymentOptions: Array<{ id: PaymentMethod; label: string; detail: string; mark: string }> = [
     { id: 'momo', label: 'MTN MoMo', detail: 'Approve securely on your MoMo phone', mark: 'MoMo' },
     { id: 'airtel', label: 'Airtel Money', detail: 'Pay from your Airtel Money wallet', mark: 'A' },
@@ -239,9 +257,16 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     event.preventDefault();
     movePlayer(move[0], move[1]);
   };
-  const startLook = (event: ReactPointerEvent<HTMLDivElement>) => { dragStart.current = { x: event.clientX, turn }; event.currentTarget.setPointerCapture(event.pointerId); };
+  const startLook = (event: ReactPointerEvent<HTMLDivElement>) => { dragStart.current = { x: event.clientX, y: event.clientY, turn, pointerType: event.pointerType }; event.currentTarget.setPointerCapture(event.pointerId); };
   const dragLook = (event: ReactPointerEvent<HTMLDivElement>) => { if (dragStart.current) setTurn(dragStart.current.turn + (event.clientX - dragStart.current.x) * .35); };
-  const stopLook = () => { dragStart.current = null; };
+  const stopLook = (event?: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragStart.current && event?.pointerType === 'touch') {
+      const deltaX = event.clientX - dragStart.current.x;
+      const deltaY = event.clientY - dragStart.current.y;
+      if (Math.abs(deltaY) > 42 && Math.abs(deltaY) > Math.abs(deltaX)) movePlayer(0, deltaY < 0 ? -8 : 8);
+    }
+    dragStart.current = null;
+  };
   const handleTourWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
     setTourZoom((current) => Math.max(0, Math.min(3, current + (event.deltaY < 0 ? 1 : -1))));
@@ -360,7 +385,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
             <span className="eyebrow">Request received</span>
             <h2 id="property-action-title">You are on your way</h2>
             <p className="property-action-intro">Your {transactionType === 'rent' ? 'rental' : 'property'} request for <strong>{property.title}</strong> has been recorded. You can now speak with the landlord directly.</p>
-            {transactionType === 'rent' && !houseSeen && <div className="property-seen-card"><strong>Have you seen the house?</strong><span>Mark it as seen to unlock the payment step and leave a verified review.</span><button className="property-contact-button" type="button" onClick={markHouseSeen}>I have seen this house <Icon name="check" size={14} /></button></div>}
+            {transactionType === 'rent' && !houseSeen && <div className="property-seen-card"><strong>Have you finished exploring?</strong><span>{viewingRequested ? 'Visit the property first, then return here and confirm when you are ready to pay.' : 'Choose whether you have visited the property or want to open its location before paying.'}</span><div className="property-seen-actions"><button className="property-contact-button" type="button" onClick={markHouseSeen}>I finished exploring <Icon name="check" size={14} /></button><button className="property-map-button" type="button" onClick={openPropertyMap}><Icon name="pin" size={14} /> No, I want to view it</button></div></div>}
             <div className="property-landlord-card">
               <div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong>Eric N.</strong><small>Verified landlord · {property.location}</small></span></div>
               <button className="property-landlord-view" type="button" onClick={() => setLandlordVisible((current) => !current)}>{landlordVisible ? 'Hide details' : 'View landlord'} <Icon name="arrow" size={14} /></button>

@@ -952,6 +952,21 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
 .landlord-empty-properties { display: grid; justify-items: start; gap: 10px; margin-top: 25px; padding: 35px; border: 1px dashed #b8d7bb; border-radius: 12px; background: #f5fbf4; }
 .landlord-empty-properties h3 { margin: 5px 0 0; font-family: Montserrat, Arial, sans-serif; font-size: 19px; }
 .landlord-empty-properties p, .landlord-empty-note { margin: 0 0 8px; color: var(--dashboard-muted); font-size: 10px; line-height: 1.6; }
+.landlord-notification-panel { display: grid; gap: 18px; }
+.landlord-notification-count { padding: 6px 9px; border-radius: 999px; background: #e8f3eb; color: #087d3d; font-size: 8px; font-weight: 800; }
+.landlord-notification-list, .landlord-application-list { display: grid; gap: 10px; }
+.landlord-notification-card, .landlord-application-card { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 0; border-bottom: 1px solid var(--dashboard-line); }
+.landlord-notification-card > div, .landlord-application-card-heading > div { display: grid; gap: 5px; }
+.landlord-notification-card strong, .landlord-application-card strong { font-size: 11px; }
+.landlord-notification-card small, .landlord-application-card small { color: var(--dashboard-muted); font-size: 9px; }
+.landlord-notification-card p, .landlord-application-card p { margin: 3px 0 0; color: var(--dashboard-muted); font-size: 9px; line-height: 1.5; }
+.landlord-notification-card button { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 11px; border: 1px solid #087d3d; border-radius: 999px; background: #087d3d; color: #fff; cursor: pointer; font-size: 9px; font-weight: 800; }
+.landlord-notification-empty { display: flex; align-items: center; gap: 10px; padding: 17px; border-radius: 10px; background: #f5fbf4; color: #087d3d; }
+.landlord-notification-empty p { margin: 0; color: var(--dashboard-muted); font-size: 10px; }
+.landlord-application-card { display: block; padding: 17px 0; }
+.landlord-application-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 15px; }
+.landlord-application-card > .role-dashboard-primary { margin-top: 13px; }
+.landlord-application-phone { display: block; margin-top: 8px; }
 .role-dashboard-outline:hover { border-color: #087d3d; background: #e9f5ec; }
 
 @media (max-width: 900px) {
@@ -1452,7 +1467,7 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
 .property-review-stars button.is-selected { color: #d29b20; }
 .property-review-submit { justify-self: start; padding: 0 13px; border: 1px solid var(--green); background: var(--green); color: #fff; }
 .property-review-success { display: flex; align-items: center; gap: 6px; color: var(--green-dark) !important; font-weight: 700; }
-.property-seen-card { display: grid; gap: 7px; margin: 16px 0 0; padding: 13px; border: 1px solid #b6ddbd; border-radius: 11px; background: var(--green-soft); }.property-seen-card strong { color: var(--green-dark); font-size: 11px; }.property-seen-card span { color: var(--muted); font-size: 9px; line-height: 1.5; }.property-seen-card .property-contact-button { justify-self: start; }
+.property-seen-card { display: grid; gap: 7px; margin: 16px 0 0; padding: 13px; border: 1px solid #b6ddbd; border-radius: 11px; background: var(--green-soft); }.property-seen-card strong { color: var(--green-dark); font-size: 11px; }.property-seen-card > span { color: var(--muted); font-size: 9px; line-height: 1.5; }.property-seen-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 3px; }.property-seen-card .property-contact-button, .property-map-button { justify-self: start; }.property-map-button { display: inline-flex; min-height: 34px; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid var(--green); border-radius: 999px; background: transparent; color: var(--green-dark); cursor: pointer; font-size: 9px; font-weight: 800; }.property-map-button:hover { background: #fff; }
 .tenant-dialog-overlay { position: fixed; z-index: 700; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(9,18,11,.42); backdrop-filter: blur(5px); }.tenant-dialog-backdrop { position: absolute; inset: 0; border: 0; background: transparent; cursor: pointer; }.tenant-dialog { position: relative; z-index: 1; width: min(480px, 100%); padding: 28px; border: 1px solid var(--dashboard-line); border-radius: 16px; background: var(--dashboard-surface); box-shadow: 0 25px 80px rgba(0,0,0,.28); }.tenant-dialog h2 { margin: 9px 0 8px; font-family: Montserrat, Arial, sans-serif; font-size: 28px; letter-spacing: -.05em; }.tenant-dialog-form { display: grid; gap: 12px; margin-top: 18px; }.tenant-dialog-form p { margin: 0; color: var(--dashboard-muted); font-size: 10px; line-height: 1.6; }.tenant-dialog-form label { display: grid; gap: 6px; color: var(--green-dark); font-size: 9px; font-weight: 800; }.tenant-dialog-form input, .tenant-dialog-form select, .tenant-dialog-form textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--dashboard-line); border-radius: 8px; background: var(--dashboard-paper); color: var(--dashboard-ink); font: inherit; font-size: 11px; }.tenant-dialog-form textarea { resize: vertical; }.tenant-dialog-form input:focus, .tenant-dialog-form select:focus, .tenant-dialog-form textarea:focus { border-color: #087d3d; outline: 0; box-shadow: 0 0 0 3px #e5f3e8; }
 
 @media (max-width: 900px) {
@@ -1464,7 +1479,7 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
 }
 
 @media (max-width: 560px) {
-  .viewer-mini-map { top: 57px; right: 12px; width: 104px; }.viewer-mini-map-canvas { height: 67px; }.viewer-game-controls { right: 12px; bottom: 65px; }.viewer-game-crosshair { display: none; }
+  .viewer-mini-map { top: 57px; right: 12px; width: 104px; }.viewer-mini-map-canvas { height: 67px; }.viewer-game-controls { display: none; }.viewer-game-crosshair { display: none; }.viewer-tour-topline small { display: none; }.viewer-tour-topline::after { margin-left: auto; padding: 7px 10px; border: 1px solid rgba(255,255,255,.3); border-radius: 999px; background: rgba(5,15,8,.42); color: rgba(255,255,255,.78); content: 'Swipe to look around'; font-size: 8px; font-weight: 700; }
 }
 
 @media (max-width: 560px) {

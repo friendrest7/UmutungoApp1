@@ -31,11 +31,22 @@ export type ApiMessage = {
   created_at: string;
 };
 
+export type TenantBooking = {
+  id: string;
+  property_id: string;
+  property_title: string;
+  location: string;
+  price: string;
+  payment_status: 'paid' | 'pending';
+  created_at: string;
+};
+
 export type TenantDashboardData = {
   properties: Array<Record<string, unknown>>;
   applications: ApiApplication[];
   payments: ApiPayment[];
   messages: ApiMessage[];
+  bookings: TenantBooking[];
   reviews: Array<{ id: string; listing_id: string; listing_title: string; rating: number; body: string; created_at: string }>;
 };
 

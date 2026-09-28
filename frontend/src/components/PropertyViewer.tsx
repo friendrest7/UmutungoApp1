@@ -11,7 +11,7 @@ import { umutungoApi } from '../lib/umutungoApi';
 type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void };
 type ViewerMode = 'photos' | 'tour' | 'plan';
 type TransactionType = 'rent' | 'buy';
-type TransactionStep = 'choose' | 'application' | 'payment' | 'success';
+type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
 
 function PaymentLogo({ method }: { method: PaymentMethod }) {
@@ -35,10 +35,14 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   const [mode, setMode] = useState<ViewerMode>('photos');
   const [tourStop, setTourStop] = useState(0);
   const [turn, setTurn] = useState(0);
+  const [tourZoom, setTourZoom] = useState(0);
   const [playerPosition, setPlayerPosition] = useState({ x: 50, y: 62 });
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [transactionType, setTransactionType] = useState<TransactionType>('rent');
   const [transactionStep, setTransactionStep] = useState<TransactionStep>('choose');
+  const [securityChallenge, setSecurityChallenge] = useState({ first: 4, second: 3, answer: '7' });
+  const [securityAnswer, setSecurityAnswer] = useState('');
+  const [humanConfirmed, setHumanConfirmed] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('momo');
@@ -64,6 +68,9 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
 
   useEffect(() => {
     setSignedIn(Boolean(window.localStorage.getItem('umutungo-demo-user')));
+    const first = 2 + Math.floor(Math.random() * 7);
+    const second = 1 + Math.floor(Math.random() * 6);
+    setSecurityChallenge({ first, second, answer: String(first + second) });
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape' && !authOpen) onClose(); };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -103,12 +110,26 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   const handleTransactionContinue = () => {
     if (!signedIn) { setAuthOpen(true); return; }
     setPaymentError('');
-    setTransactionStep(transactionType === 'rent' ? 'application' : 'payment');
+    setTransactionStep(transactionType === 'rent' ? 'application' : 'security');
+  };
+  const openPaymentSecurity = () => {
+    setSecurityAnswer('');
+    setHumanConfirmed(false);
+    setPaymentError('');
+    setTransactionStep('security');
+  };
+  const handleSecuritySubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!humanConfirmed) { setPaymentError('Confirm that you are human before continuing.'); return; }
+    if (securityAnswer.trim() !== securityChallenge.answer) { setPaymentError('That answer is not correct. Please try again.'); return; }
+    setPaymentError('');
+    setTransactionStep('payment');
   };
   const handleApplicationSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (applicationPhone.replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number.'); return; }
     const application = { id: `${property.id}-${Date.now()}`, propertyId: property.id, propertyTitle: property.title, applicant: applicationName, phone: applicationPhone, message: applicationMessage, status: 'Submitted', viewedAt: null, createdAt: new Date().toISOString() };
+    setApplicationId(application.id);
     const existing = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as typeof application[];
     window.localStorage.setItem('umutungo-rental-applications', JSON.stringify([application, ...existing]));
     try {
@@ -118,6 +139,12 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     setPaymentError('');
     setTransactionStep('success');
   };
+  const saveTenantBooking = (paymentStatus: 'paid' | 'pending') => {
+    const booking = { id: `booking-${property.id}`, property_id: property.id, property_title: property.title, location: property.location, price: property.price, payment_status: paymentStatus, created_at: new Date().toISOString() };
+    const stored = JSON.parse(window.localStorage.getItem('umutungo-tenant-bookings') ?? '[]') as typeof booking[];
+    window.localStorage.setItem('umutungo-tenant-bookings', JSON.stringify([booking, ...stored.filter((item) => item.property_id !== property.id)]));
+    window.dispatchEvent(new CustomEvent('umutungo:tenant-data-changed'));
+  };
   const handlePaymentSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const isMobileMoney = paymentMethod === 'momo' || paymentMethod === 'airtel';
@@ -125,10 +152,16 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     if (!isMobileMoney && cardNumber.replace(/\D/g, '').length < 12) { setPaymentError('Enter a valid card number to continue.'); return; }
     if (!isMobileMoney && (!cardExpiry.trim() || cardCvv.trim().length < 3)) { setPaymentError('Enter your card expiry date and security code.'); return; }
     setPaymentError('');
+    let paymentStatus: 'paid' | 'pending' = 'paid';
     try {
-      const result = await umutungoApi<{ status: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', phone: paymentPhone }) });
+      const result = await umutungoApi<{ id?: string; status?: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', phone: paymentPhone }) });
+      paymentStatus = result?.status?.toLowerCase() === 'successful' || result?.status?.toLowerCase() === 'paid' ? 'paid' : 'pending';
       if (result) window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...result, propertyId: property.id, createdAt: new Date().toISOString() }));
-    } catch { /* The API can be enabled with a token; keep the UI usable without one. */ }
+    } catch { /* The API can be enabled with a token; keep the local demo payment available. */ }
+    const localPayment = { id: `payment-${property.id}-${Date.now()}`, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', status: paymentStatus === 'paid' ? 'successful' : 'pending', created_at: new Date().toISOString() };
+    const storedPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as typeof localPayment[];
+    window.localStorage.setItem('umutungo-payments', JSON.stringify([localPayment, ...storedPayments.filter((item) => item.related_id !== localPayment.related_id)]));
+    saveTenantBooking(paymentStatus);
     setPaymentPhone('');
     setCardNumber('');
     setCardExpiry('');
@@ -146,7 +179,13 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     event.preventDefault();
     if (!contactMessage.trim()) return;
     try { await umutungoApi('/api/v1/messages', { method: 'POST', body: JSON.stringify({ listing_id: property.id, body: contactMessage }) }); } catch { /* Local/demo message */ }
+    const storedPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as Array<{ related_id?: string; status?: string }>;
+    const payment = storedPayments.find((item) => item.related_id === property.id || item.related_id === applicationId);
+    saveTenantBooking(payment?.status === 'successful' || payment?.status === 'paid' ? 'paid' : 'pending');
+    const storedMessages = JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as Array<Record<string, string>>;
+    window.localStorage.setItem('umutungo-tenant-messages', JSON.stringify([{ id: `message-${Date.now()}`, sender_id: 'me', sender_name: 'You', recipient_id: '', recipient_name: 'Eric N.', listing_id: property.id, listing_title: property.title, body: contactMessage, created_at: new Date().toISOString() }, ...storedMessages]));
     setMessageSent(true);
+    window.location.assign('/tenant?view=Messages');
   };
   const handleReport = async () => {
     const reasonInput = window.prompt('Report reason: fraud, duplicate, incorrect information, sold/unavailable, offensive content, or other.');
@@ -167,7 +206,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     const applications = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as Array<Record<string, unknown>>;
     window.localStorage.setItem('umutungo-rental-applications', JSON.stringify(applications.map((item) => item.propertyId === property.id ? { ...item, viewedAt: new Date().toISOString() } : item)));
     if (applicationId) { try { await umutungoApi(`/api/v1/applications/${applicationId}/viewed`, { method: 'POST', body: '{}' }); } catch { /* local/demo application */ } }
-    setTransactionStep('payment');
+    openPaymentSecurity();
   };
   const paymentOptions: Array<{ id: PaymentMethod; label: string; detail: string; mark: string }> = [
     { id: 'momo', label: 'MTN MoMo', detail: 'Approve securely on your MoMo phone', mark: 'MoMo' },
@@ -178,9 +217,10 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   ];
   const tourNames = isLand ? [t(language, 'Site entrance'), t(language, 'Buildable area'), t(language, 'Access road')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception')] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom')];
   const planNames = isLand ? [t(language, 'Plot frontage'), t(language, 'Buildable area'), t(language, 'Access road'), t(language, 'Green buffer')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception'), t(language, 'Staff area')] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom'), t(language, 'Garden')];
-  const tourImages = [0, 1, 2].map((index) => images[Math.min(index, images.length - 1)]);
+  const roomImages = images.filter((image) => /(?:^|\/)tour-[^/]+$/i.test(image.split('?')[0]));
+  const tourImages = (roomImages.length ? roomImages : images).slice(0, 3);
   const roomPositions = [{ x: 50, y: 62 }, { x: 71, y: 35 }, { x: 31, y: 29 }];
-  const walkTo = (index: number) => { setTourStop(index); setPlayerPosition(roomPositions[index]); };
+  const walkTo = (index: number) => { const nextIndex = Math.max(0, Math.min(index, tourImages.length - 1)); setTourStop(nextIndex); setPlayerPosition(roomPositions[nextIndex]); setTourZoom(0); };
   const movePlayer = (x: number, y: number) => {
     setPlayerPosition((current) => {
       const next = { x: Math.max(16, Math.min(84, current.x + x)), y: Math.max(20, Math.min(78, current.y + y)) };
@@ -202,6 +242,10 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   const startLook = (event: ReactPointerEvent<HTMLDivElement>) => { dragStart.current = { x: event.clientX, turn }; event.currentTarget.setPointerCapture(event.pointerId); };
   const dragLook = (event: ReactPointerEvent<HTMLDivElement>) => { if (dragStart.current) setTurn(dragStart.current.turn + (event.clientX - dragStart.current.x) * .35); };
   const stopLook = () => { dragStart.current = null; };
+  const handleTourWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setTourZoom((current) => Math.max(0, Math.min(3, current + (event.deltaY < 0 ? 1 : -1))));
+  };
 
   return <div className="property-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby="property-viewer-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="property-viewer">
@@ -220,14 +264,14 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
         <div className="property-viewer-media">
           {mode === 'photos' && <div className="viewer-photo-stage"><Image src={images[activeImage]} alt={t(language, property.title)} fill sizes="(max-width: 900px) 100vw, 62vw" priority className="viewer-main-image" /><span className="viewer-media-count">{activeImage + 1} / {images.length}</span><button className="viewer-arrow viewer-arrow-prev" type="button" onClick={() => changeImage(-1)} aria-label={t(language, 'Previous property image')}><Icon name="chevron" size={21} /></button><button className="viewer-arrow viewer-arrow-next" type="button" onClick={() => changeImage(1)} aria-label={t(language, 'Next property image')}><Icon name="chevron" size={21} /></button></div>}
 
-          {mode === 'tour' && <div className="viewer-tour-stage viewer-game-stage" tabIndex={0} onKeyDown={handleGameKey} onPointerDown={startLook} onPointerMove={dragLook} onPointerUp={stopLook} onPointerCancel={stopLook} onPointerLeave={stopLook} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 22, 12, .04), rgba(8, 22, 12, .78)), url(${tourImages[tourStop]})`, backgroundPosition: `${50 + turn * .12}% center` }}>
+          {mode === 'tour' && <div className="viewer-tour-stage viewer-game-stage" tabIndex={0} onKeyDown={handleGameKey} onWheel={handleTourWheel} onPointerDown={startLook} onPointerMove={dragLook} onPointerUp={stopLook} onPointerCancel={stopLook} onPointerLeave={stopLook} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 22, 12, .04), rgba(8, 22, 12, .78)), url(${tourImages[tourStop] ?? images[0]})`, backgroundPosition: `${50 + turn * .12}% center`, backgroundSize: tourZoom ? `${100 + tourZoom * 18}% auto` : 'cover' }}>
             <div className="viewer-tour-topline"><span><Icon name="sparkles" size={15} /> {t(language, 'Walk-through mode')}</span><small>{t(language, 'WASD / arrows to move · drag to look')}</small></div>
-            <div className="viewer-room-3d" style={{ transform: `translate(-50%, -48%) rotateX(56deg) rotateZ(-7deg) rotateY(${turn}deg)` }}><div className="viewer-room-floor" /><div className="viewer-room-wall viewer-room-wall-back" /><div className="viewer-room-wall viewer-room-wall-side" /><div className="viewer-room-rug" /><div className="viewer-room-sofa"><i /><i /><i /></div><div className="viewer-room-table"><i /><i /><i /><i /></div><div className="viewer-room-plant"><i /><b /><b /><b /></div></div>
             <div className="viewer-game-crosshair" aria-hidden="true" />
             <div className="viewer-tour-label"><strong>{tourNames[tourStop]}</strong><span>{t(language, 'Walk through the home and explore each stop')}</span></div>
-            <div className="viewer-mini-map" aria-label={t(language, 'Property map')}><span className="viewer-mini-map-title">{t(language, 'MAP')}</span><div className="viewer-mini-map-canvas">{tourNames.map((name, index) => <button key={name} className={tourStop === index ? 'is-active' : ''} type="button" style={{ left: `${roomPositions[index].x}%`, top: `${roomPositions[index].y}%` }} onClick={() => walkTo(index)} aria-label={`${t(language, 'Walk to')} ${name}`}><span>{index + 1}</span></button>)}<i style={{ left: `${playerPosition.x}%`, top: `${playerPosition.y}%` }} /></div></div>
+            <div className="viewer-mini-map" aria-label={t(language, 'Property map')}><div className="viewer-mini-map-heading"><span>{t(language, 'HOUSE MAP')}</span><small>{tourStop + 1} / {tourImages.length}</small></div><div className="viewer-mini-map-canvas">{tourNames.slice(0, tourImages.length).map((name, index) => <button key={name} className={tourStop === index ? 'is-active' : ''} type="button" style={{ left: `${roomPositions[index].x}%`, top: `${roomPositions[index].y}%` }} onClick={() => walkTo(index)} aria-label={`${t(language, 'Walk to')} ${name}`}><span>{index + 1}</span></button>)}<i style={{ left: `${playerPosition.x}%`, top: `${playerPosition.y}%` }} /></div></div>
             <div className="viewer-game-controls"><button type="button" onClick={() => movePlayer(0, -4)} aria-label={t(language, 'Move forward')}>W</button><div><button type="button" onClick={() => movePlayer(-4, 0)} aria-label={t(language, 'Move left')}>A</button><button type="button" onClick={() => movePlayer(0, 4)} aria-label={t(language, 'Move backward')}>S</button><button type="button" onClick={() => movePlayer(4, 0)} aria-label={t(language, 'Move right')}>D</button></div></div>
-            <div className="viewer-tour-controls"><button type="button" onClick={() => setTurn((current) => current - 18)} aria-label={t(language, 'Turn view left')}><Icon name="chevron" size={17} /></button><div>{tourNames.map((name, index) => <button className={tourStop === index ? 'is-active' : ''} type="button" key={name} onClick={() => walkTo(index)}>{name}</button>)}</div><button type="button" onClick={() => setTurn((current) => current + 18)} aria-label={t(language, 'Turn view right')}><Icon name="chevron" size={17} /></button></div>
+            <div className="viewer-tour-controls"><button type="button" onClick={() => setTurn((current) => current - 18)} aria-label={t(language, 'Turn view left')}><Icon name="chevron" size={17} /></button><div>{tourNames.slice(0, tourImages.length).map((name, index) => <button className={tourStop === index ? 'is-active' : ''} type="button" key={name} onClick={() => walkTo(index)}>{name}</button>)}</div><button type="button" onClick={() => setTurn((current) => current + 18)} aria-label={t(language, 'Turn view right')}><Icon name="chevron" size={17} /></button></div>
+            <div className="viewer-tour-zoom" aria-label={t(language, 'Tour zoom controls')}><button type="button" onClick={() => setTourZoom((current) => Math.max(0, current - 1))} aria-label={t(language, 'Zoom out')}>−</button><span>{100 + tourZoom * 18}%</span><button type="button" onClick={() => setTourZoom((current) => Math.min(3, current + 1))} aria-label={t(language, 'Zoom in')}>+</button></div>
           </div>}
 
           {mode === 'plan' && <div className="viewer-plan-stage"><div className="viewer-plan-heading"><span>{t(language, isLand ? 'Interactive site plan' : 'Interactive floor plan')}</span><small>{t(language, 'Tap a room to preview it')}</small></div><div className="viewer-floor-plan"><button className="viewer-plan-room plan-living" type="button" onClick={() => { setMode('tour'); walkTo(0); }}>{planNames[0]}<small>{isLand ? '620 m2' : isCommercial ? '82 m2' : '38 m2'}</small></button><button className="viewer-plan-room plan-kitchen" type="button" onClick={() => { setMode('tour'); walkTo(1); }}>{planNames[1]}<small>{isLand ? 'North side' : isCommercial ? '24 m2' : '14 m2'}</small></button><button className="viewer-plan-room plan-bedroom" type="button" onClick={() => { setMode('tour'); walkTo(2); }}>{planNames[2]}<small>{isLand ? 'Street edge' : isCommercial ? 'Front desk' : `${property.bedrooms} rooms`}</small></button><button className="viewer-plan-room plan-garden" type="button" onClick={() => { setMode('tour'); walkTo(2); }}>{planNames[3]}<small>{isLand ? 'Setback' : isCommercial ? 'Back of house' : 'Outdoor'}</small></button><span className="plan-door plan-door-one" /><span className="plan-door plan-door-two" /></div></div>}
@@ -274,6 +318,18 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
               <button className="property-action-continue" type="submit">Submit rental application <Icon name="arrow" size={16} /></button>
             </form>
             <button className="property-flow-back" type="button" onClick={() => setTransactionStep('choose')}><Icon name="arrow" size={13} /> Back to request options</button>
+          </>}
+
+          {transactionStep === 'security' && <>
+            <span className="eyebrow">Security check</span>
+            <h2 id="property-action-title">Verify you are human</h2>
+            <p className="property-action-intro">Complete this quick check before we connect you to the payment system.</p>
+            <form className="payment-form security-check-form" onSubmit={handleSecuritySubmit}>
+              <label className="human-check-label"><input type="checkbox" checked={humanConfirmed} onChange={(event) => { setHumanConfirmed(event.target.checked); setPaymentError(''); }} /> <span>I am human and I am ready to continue.</span></label>
+              <label>Security question <span className="registration-captcha-question">{securityChallenge.first} + {securityChallenge.second} = ?</span><input inputMode="numeric" value={securityAnswer} onChange={(event) => { setSecurityAnswer(event.target.value); setPaymentError(''); }} placeholder="Enter the answer" autoComplete="off" required /></label>
+              {paymentError && <p className="payment-error" role="alert">{paymentError}</p>}
+              <button className="property-action-continue" type="submit">Continue to secure payment <Icon name="arrow" size={16} /></button>
+            </form>
           </>}
 
           {transactionStep === 'payment' && <>
@@ -328,6 +384,6 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
         </div>}
       </div>
     )}
-    <AuthModal open={authOpen} role="Tenant" onClose={() => setAuthOpen(false)} onSuccess={() => { setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? 'application' : 'payment'); }} />
+    <AuthModal open={authOpen} role="Tenant" onClose={() => setAuthOpen(false)} onSuccess={() => { setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? 'application' : 'security'); }} />
   </div>;
 }

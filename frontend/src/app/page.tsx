@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
-import { CookieConsent } from '../components/CookieConsent';
 import { Icon } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
 import { PropertyCard, PropertyPlaceholder } from '../components/PropertyCard';
@@ -13,7 +12,7 @@ import { ReviewPanel } from '../components/ReviewPanel';
 import { Language, t } from '../data/translations';
 
 const properties: PropertyPlaceholder[] = [
-  { id: 'gisozi-home', title: 'Four-bedroom home with garden', type: 'House', location: 'Gisozi - Kigali', price: 'RWF 1,250,000', priceNote: '/ month', bedrooms: 4, bathrooms: 3, area: 220, accent: '#08a650', image: '/properties/house-01.jpg', images: ['/properties/house-01.jpg', '/properties/house-02.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg'], listed: 'Listed 4 days ago' },
+  { id: 'gisozi-home', title: 'Four-bedroom home with garden', type: 'House', location: 'Gisozi - Kigali', price: 'RWF 1,250,000', priceNote: '/ month', bedrooms: 4, bathrooms: 3, area: 220, accent: '#087d3d', image: '/properties/house-01.jpg', images: ['/properties/house-01.jpg', '/properties/house-02.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg'], listed: 'Listed 4 days ago' },
   { id: 'nyarutarama-home', title: 'Five-bedroom family residence', type: 'House', location: 'Nyarutarama - Kigali', price: 'RWF 2,400,000', priceNote: '/ month', bedrooms: 5, bathrooms: 4, area: 310, accent: '#6d8d6f', image: '/properties/house-02.jpg', images: ['/properties/house-02.jpg', '/properties/house-01.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg'], listed: 'Listed 2 weeks ago' },
   { id: 'kacyiru-apartment', title: 'Light-filled Kacyiru apartment', type: 'Apartment', location: 'Kacyiru - Kigali', price: 'RWF 1,100,000', priceNote: '/ month', bedrooms: 2, bathrooms: 2, area: 118, accent: '#b17c5b', image: '/properties/apartment-01.jpg', images: ['/properties/apartment-01.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg', '/properties/apartment-02.jpg'], listed: 'Listed yesterday' },
   { id: 'kimihurura-apartment', title: 'Modern apartment near Kimihurura', type: 'Apartment', location: 'Kimihurura - Kigali', price: 'RWF 1,650,000', priceNote: '/ month', bedrooms: 3, bathrooms: 2, area: 145, accent: '#7f8f77', image: '/properties/apartment-02.jpg', images: ['/properties/apartment-02.jpg', '/properties/apartment-01.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg'], listed: 'Listed 3 days ago' },
@@ -156,7 +155,6 @@ export default function HomePage() {
       <ReviewPanel language={language} />
     </main>
     <Footer language={language} />
-    <CookieConsent />
     {selectedProperty && <PropertyViewer language={language} property={selectedProperty} onClose={() => setSelectedProperty(null)} />}
   </div>;
 }

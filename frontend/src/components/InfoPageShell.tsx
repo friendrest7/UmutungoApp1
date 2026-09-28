@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AiChatbot } from './AiChatbot';
-import { CookieConsent } from './CookieConsent';
 import { Footer } from './Footer';
 import { Icon } from './Icons';
 import { Navbar } from './Navbar';
@@ -53,7 +52,6 @@ export function InfoPageShell({ page }: { page: InfoPage }) {
     {page === 'about' && <AboutPage copy={copy} />}
     {page === 'categories' && <CategoriesPage copy={copy} />}
     <Footer language={language} />
-    <CookieConsent />
   </div>;
 }
 

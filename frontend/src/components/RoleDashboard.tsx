@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
-import { ApiApplication, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
+import { ApiApplication, ApiMessage, TenantBooking, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
 
 export type DashboardRole = 'tenant' | 'commissioner' | 'landlord' | 'admin';
 type Metric = { label: string; value: string; note: string; icon: IconName; tone: 'green' | 'amber' | 'blue' | 'dark' };
@@ -66,7 +66,7 @@ function TenantWorkspaceSection({ view, tenantData, onViewed, onPay, onContact, 
   const rows = view === 'Applications' && tenantData ? tenantData.applications.map((application) => ({ title: application.listing_title, detail: `${application.status} · ${application.viewed_at ? 'House seen' : 'House not seen yet'}`, action: application.viewed_at ? 'Pay deposit' : 'Mark house seen', application })) : view === 'Messages' && tenantData ? tenantData.messages.map((message) => ({ title: `${message.sender_name} · landlord conversation`, detail: message.body, action: 'Reply', application: undefined })) : view === 'Rent & utilities' && tenantData ? tenantData.payments.map((payment) => ({ title: `${payment.provider} payment`, detail: `${payment.currency} ${payment.amount.toLocaleString()} · ${payment.status}`, action: 'View payment', application: undefined })) : view === 'Applications' ? [{ title: 'No applications yet', detail: 'Apply to a house to see your next steps here.', action: 'Explore homes' }] : view === 'Rent & utilities' ? [{ title: 'No payments yet', detail: 'Payments will appear here after you have seen a property.', action: 'View applications' }] : view === 'Maintenance' ? [{ title: 'Kitchen tap replacement', detail: 'Submitted today · Open', action: 'View request' }, { title: 'Bedroom light repair', detail: 'Completed last month', action: 'View history' }] : view === 'Tenants' ? [{ title: 'Aline Mukamana', detail: 'Kacyiru apartment · Rent up to date', action: 'Open tenant' }, { title: 'Patrick Nshimiyimana', detail: 'Gisozi family home · Payment due in 3 days', action: 'Send reminder' }] : view === 'Viewings' ? [{ title: 'Kacyiru apartment', detail: 'Tomorrow · 11:30 AM · Confirmed', action: 'View details' }, { title: 'Gisozi family home', detail: 'Friday · 2:00 PM · Landlord confirmed', action: 'Open visit' }] : view === 'Messages' ? [{ title: 'No conversations yet', detail: 'Contact a landlord from an application or property page.', action: 'Explore homes' }] : [{ title: 'Light-filled Kacyiru apartment', detail: '2 beds · Kacyiru · RWF 1.1M / month', action: 'View property' }, { title: 'Four-bedroom home with garden', detail: 'Gisozi · RWF 1.25M / month', action: 'Compare' }];
   const handleAction = (action: string, application?: ApiApplication) => { if (application && action === 'Mark house seen') onViewed?.(application); else if (application && action === 'Pay deposit') onPay?.(application); else if (application && action === 'Contact landlord') onContact?.(application); else if (application && action === 'Review property') onReview?.(application); else if (action === 'Pay rent' || action === 'Review utilities') window.localStorage.setItem('umutungo-last-payment-intent', JSON.stringify({ action, createdAt: new Date().toISOString() })); };
   const primaryLabel = view === 'Applications' ? 'Start another application' : view === 'Rent & utilities' ? 'Add a payment method' : view === 'Maintenance' ? 'Create maintenance request' : view === 'Tenants' ? 'Invite a tenant' : view === 'Messages' ? 'Start a new conversation' : view === 'Viewings' ? 'Find another viewing' : 'Explore more properties';
-  return <section className="tenant-workspace-section"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">{panel.eyebrow}</span><h2>{panel.title}</h2><p>{panel.description}</p></div><span className="tenant-workspace-icon"><Icon name={panel.icon} size={22} /></span></div><div className="tenant-workspace-list">{rows.map((row) => <article key={row.title}><span className="tenant-workspace-row-icon"><Icon name={panel.icon} size={16} /></span><div><strong>{row.title}</strong><small>{row.detail}</small></div><button type="button" onClick={() => handleAction(row.action, 'application' in row ? row.application : undefined)}>{row.action}<Icon name="arrow" size={14} /></button>{'application' in row && row.application?.viewed_at && <><button type="button" onClick={() => onContact?.(row.application)}>Contact landlord<Icon name="users" size={14} /></button><button type="button" onClick={() => onReview?.(row.application)}>Review property<Icon name="arrow" size={14} /></button></>}</article>)}</div>{notice && <p className="workspace-action-notice" role="status"><Icon name="check" size={14} /> {notice}</p>}<button className="role-dashboard-primary" type="button" onClick={() => handleAction(primaryLabel)}><Icon name={view === 'Messages' ? 'bookPen' : 'arrow'} size={16} /> {primaryLabel}</button></section>;
+  return <section className="tenant-workspace-section"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">{panel.eyebrow}</span><h2>{panel.title}</h2><p>{panel.description}</p></div><span className="tenant-workspace-icon"><Icon name={panel.icon} size={22} /></span></div>{tenantData?.bookings && <TenantBookingSummary bookings={tenantData.bookings} />}<div className="tenant-workspace-list">{rows.map((row) => <article key={row.title}><span className="tenant-workspace-row-icon"><Icon name={panel.icon} size={16} /></span><div><strong>{row.title}</strong><small>{row.detail}</small></div><button type="button" onClick={() => handleAction(row.action, 'application' in row ? row.application : undefined)}>{row.action}<Icon name="arrow" size={14} /></button>{'application' in row && row.application?.viewed_at && <><button type="button" onClick={() => onContact?.(row.application)}>Contact landlord<Icon name="users" size={14} /></button><button type="button" onClick={() => onReview?.(row.application)}>Review property<Icon name="arrow" size={14} /></button></>}</article>)}</div>{notice && <p className="workspace-action-notice" role="status"><Icon name="check" size={14} /> {notice}</p>}<button className="role-dashboard-primary" type="button" onClick={() => handleAction(primaryLabel)}><Icon name={view === 'Messages' ? 'bookPen' : 'arrow'} size={16} /> {primaryLabel}</button></section>;
 }
 
 function LandlordPropertiesSection({ listings, title = 'My properties', actionLabel = 'Post a property' }: { listings: DashboardListing[]; title?: string; actionLabel?: string }) {
@@ -108,7 +108,12 @@ function CommissionerDashboard() {
   return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label="Commissioner dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><Link href="/post-property"><Icon name="bookPen" size={16} /> Add a property</Link></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><div className="role-dashboard-profile"><span className="role-dashboard-avatar">CM</span><span><strong>My account</strong><small>Verified commissioner</small></span><Icon name="chevron" size={14} /></div></header>{body}</section></main>;
 }
 
-const emptyTenantData: TenantDashboardData = { properties: [], applications: [], payments: [], messages: [], reviews: [] };
+const emptyTenantData: TenantDashboardData = { properties: [], applications: [], payments: [], messages: [], bookings: [], reviews: [] };
+
+function TenantBookingSummary({ bookings }: { bookings: TenantBooking[] }) {
+  if (!bookings.length) return null;
+  return <section className="tenant-booking-summary" aria-label="Booked houses"><div className="tenant-booking-summary-heading"><span className="role-dashboard-eyebrow">Your booked house</span><Icon name="home" size={17} /></div>{bookings.map((booking) => <article key={booking.id}><div><strong>{booking.property_title}</strong><small>{booking.location} · {booking.price}</small></div><span className={`role-dashboard-status ${booking.payment_status === 'paid' ? 'new' : 'pending'}`}>{booking.payment_status === 'paid' ? 'Paid' : 'Pending payment'}</span></article>)}</section>;
+}
 
 function TenantDashboard() {
   const config = configs.tenant;
@@ -125,19 +130,28 @@ function TenantDashboard() {
   const [reviewBody, setReviewBody] = useState('');
 
   useEffect(() => {
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    if (requestedView && config.navigation.some((item) => item.label === requestedView)) setActive(requestedView);
+  }, [config.navigation]);
+
+  useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const storedApplications = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as Array<Record<string, string>>;
       const localApplications: ApiApplication[] = storedApplications.map((item) => ({ id: item.id, listing_id: item.propertyId ?? '', listing_title: item.propertyTitle ?? 'Rental property', status: (item.status ?? 'pending').toLowerCase(), message: item.message ?? '', viewed_at: item.viewedAt ?? null, created_at: item.createdAt ?? new Date().toISOString() }));
       const localPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as TenantDashboardData['payments'];
-      if (!cancelled) setTenantData({ ...emptyTenantData, applications: localApplications, payments: localPayments });
+      const localMessages = JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as ApiMessage[];
+      const localBookings = JSON.parse(window.localStorage.getItem('umutungo-tenant-bookings') ?? '[]') as TenantBooking[];
+      if (!cancelled) setTenantData({ ...emptyTenantData, applications: localApplications, payments: localPayments, messages: localMessages, bookings: localBookings });
       try {
         const apiData = await umutungoApi<TenantDashboardData>('/api/v1/tenant/dashboard');
-        if (apiData && !cancelled) setTenantData(apiData);
+        if (apiData && !cancelled) setTenantData((current) => ({ ...apiData, applications: [...apiData.applications, ...current.applications.filter((local) => !apiData.applications.some((item) => item.id === local.id))], payments: [...apiData.payments, ...current.payments.filter((local) => !apiData.payments.some((item) => item.id === local.id))], messages: [...apiData.messages, ...current.messages.filter((local) => !apiData.messages.some((item) => item.id === local.id))], bookings: current.bookings }));
       } catch { /* Keep the local workspace available when the API is not running. */ }
     };
     load();
-    return () => { cancelled = true; };
+    const refresh = () => load();
+    window.addEventListener('umutungo:tenant-data-changed', refresh);
+    return () => { cancelled = true; window.removeEventListener('umutungo:tenant-data-changed', refresh); };
   }, []);
 
   const updateApplication = async (application: ApiApplication, viewedAt: string) => {

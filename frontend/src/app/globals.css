@@ -1139,6 +1139,15 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
 .auth-overlay { position: fixed; z-index: 900; inset: 0; display: grid; place-items: center; padding: 20px; }
 .auth-backdrop { position: absolute; inset: 0; border: 0; background: rgba(10, 17, 12, .55); backdrop-filter: blur(7px); cursor: pointer; }
 .auth-modal { position: relative; z-index: 1; width: min(430px, 100%); max-height: min(720px, calc(100vh - 35px)); overflow-y: auto; padding: 31px; border: 1px solid rgba(226,221,210,.9); border-radius: 17px; background: #fffdf8; box-shadow: 0 28px 90px rgba(11, 22, 14, .24); }
+body[data-auth-placement="right"] .auth-overlay { place-items: stretch end; padding: 16px; }
+body[data-auth-placement="right"] .auth-modal { width: min(430px, calc(100vw - 32px)); max-height: calc(100vh - 32px); border-radius: 20px; animation: auth-panel-in .3s ease both; }
+body[data-auth-placement="right"] .auth-modal-heading,
+body[data-auth-placement="right"] .auth-divider,
+body[data-auth-placement="right"] .auth-method-button,
+body[data-auth-placement="right"] .auth-legal { display: none; }
+body[data-auth-placement="right"] .auth-modal { padding: 52px 26px 26px; }
+body[data-auth-placement="right"] .auth-choice-view { margin-top: 0; }
+@keyframes auth-panel-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
 .auth-close { position: absolute; top: 17px; right: 17px; display: grid; width: 29px; height: 29px; place-items: center; border: 0; border-radius: 50%; background: #f2eee7; color: #5c685d; cursor: pointer; }
 .auth-modal-heading { padding-right: 32px; }
 .auth-eyebrow { color: #087d3d; font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
@@ -2528,6 +2537,8 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .app-realistic .button-commissioner { background: var(--green); border-color: var(--green); }
 .app-realistic .button-primary:hover,
 .app-realistic .button-commissioner:hover { background: var(--green-dark); border-color: var(--green-dark); }
+.app-realistic .hero-actions .button-secondary { border-color: rgba(255,255,255,.78); background: rgba(255,255,255,.16); color: #fff; }
+.app-realistic .hero-actions .button-secondary:hover { border-color: #fff; background: rgba(255,255,255,.28); color: #fff; }
 .app-realistic .landing-directory-search { width: min(100%, 470px); min-height: 50px; margin: 0 auto 22px; border-color: rgba(255, 255, 255, .62); border-radius: 14px; background: rgba(8, 28, 16, .24); box-shadow: 0 12px 28px rgba(0, 0, 0, .12); backdrop-filter: blur(14px); }
 .app-realistic .hero-copy > .landing-directory-search { transform: none; }
 .app-realistic .landing-directory-search button { width: 36px; height: 36px; background: #fff; color: var(--green-dark); }
@@ -2761,3 +2772,32 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   border-color: #064c29 !important;
   background: #064c29 !important;
 }
+
+.landlord-property-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.landlord-property-actions button { min-height: 34px; }
+.landlord-delete-button { border: 1px solid rgba(180, 55, 45, .35); border-radius: 999px; padding: 8px 12px; background: transparent; color: #a33b30; cursor: pointer; font-size: 10px; font-weight: 800; }
+.landlord-delete-button:hover { background: #fff0ee; border-color: #a33b30; }
+.landlord-approval-controls { display: flex; align-items: end; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.landlord-approval-controls label { display: grid; gap: 5px; color: var(--dashboard-muted); font-size: 9px; font-weight: 800; }
+.landlord-approval-controls input { width: 190px; min-height: 36px; border: 1px solid var(--dashboard-line); border-radius: 8px; padding: 0 10px; background: var(--dashboard-card); color: var(--dashboard-ink); }
+.landlord-message-layout { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(0, 1.5fr); gap: 16px; }
+.landlord-message-inbox { display: grid; align-content: start; gap: 8px; }
+.landlord-message-inbox button { display: grid; gap: 5px; border: 1px solid var(--dashboard-line); border-radius: 10px; padding: 12px; background: var(--dashboard-card); color: var(--dashboard-ink); text-align: left; cursor: pointer; }
+.landlord-message-inbox button.is-selected { border-color: #087d3d; box-shadow: 0 0 0 2px rgba(8,125,61,.1); }
+.landlord-message-inbox small { overflow: hidden; color: var(--dashboard-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.landlord-message-inbox time, .landlord-message-thread time { color: var(--dashboard-muted); font-size: 9px; }
+.landlord-message-thread { display: grid; gap: 14px; min-width: 0; }
+.landlord-message-thread-list { display: grid; gap: 9px; max-height: 360px; overflow: auto; padding: 4px; }
+.landlord-message-thread-list article { justify-self: start; max-width: 82%; border-radius: 12px 12px 12px 3px; padding: 10px 12px; background: var(--dashboard-soft); }
+.landlord-message-thread-list article.is-owner { justify-self: end; border-radius: 12px 12px 3px 12px; background: #e6f4eb; }
+.landlord-message-thread-list p { margin: 5px 0; color: var(--dashboard-muted); font-size: 11px; line-height: 1.5; }
+.tenant-message-composer { display: grid; gap: 9px; }
+.tenant-message-composer label { color: var(--dashboard-muted); font-size: 10px; font-weight: 800; }
+.tenant-message-composer textarea { width: 100%; resize: vertical; border: 1px solid var(--dashboard-line); border-radius: 10px; padding: 11px; background: var(--dashboard-card); color: var(--dashboard-ink); font: inherit; }
+.tenant-message-composer > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.tenant-message-composer > div button { width: auto; margin-top: 0; padding-inline: 16px; }
+.tenant-message-composer > small { color: var(--dashboard-muted); font-size: 10px; }
+.tenant-message-empty { display: flex; align-items: center; gap: 12px; border: 1px dashed var(--dashboard-line); border-radius: 12px; padding: 22px; color: var(--dashboard-muted); }
+.tenant-message-empty p { margin: 4px 0 0; font-size: 11px; }
+.post-save-error { margin: 0 0 12px; border: 1px solid rgba(180, 55, 45, .3); border-radius: 8px; padding: 10px 12px; color: #a33b30; background: #fff4f2; font-size: 11px; }
+@media (max-width: 760px) { .landlord-message-layout { grid-template-columns: 1fr; } .landlord-message-inbox { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

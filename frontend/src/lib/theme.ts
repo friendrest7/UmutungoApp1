@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+'use client';
+
+import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
 export type Theme = 'light' | 'dark';
 
 const THEME_STORAGE_KEY = 'umutungo-theme';
 const LEGACY_DASHBOARD_THEME_KEY = 'umutungo-dashboard-theme';
 const THEME_CHANGED_EVENT = 'umutungo:theme-changed';
+type ThemeContextValue = { darkMode: boolean; toggleTheme: () => void };
+const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function readStoredTheme(): Theme {
   if (typeof window === 'undefined') return 'light';
@@ -33,11 +37,25 @@ function storeTheme(theme: Theme) {
   }
 }
 
-export function usePersistentTheme() {
+function applyThemeToDocument(theme: Theme) {
+  if (typeof document === 'undefined') return;
+  const darkMode = theme === 'dark';
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.classList.toggle('theme-dark', darkMode);
+  document.body.classList.toggle('theme-dark', darkMode);
+  document.querySelectorAll<HTMLElement>('.app').forEach((element) => element.classList.toggle('theme-dark', darkMode));
+  document.querySelectorAll<HTMLElement>('.role-dashboard').forEach((element) => element.classList.toggle('dashboard-dark', darkMode));
+}
+
+function useThemeState(): ThemeContextValue {
   const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {
-    const syncTheme = () => setTheme(readStoredTheme());
+    const syncTheme = () => {
+      const nextTheme = readStoredTheme();
+      setTheme(nextTheme);
+      applyThemeToDocument(nextTheme);
+    };
     const onStorage = (event: StorageEvent) => {
       if (event.key === THEME_STORAGE_KEY || event.key === LEGACY_DASHBOARD_THEME_KEY) syncTheme();
     };
@@ -45,9 +63,12 @@ export function usePersistentTheme() {
     syncTheme();
     window.addEventListener('storage', onStorage);
     window.addEventListener(THEME_CHANGED_EVENT, syncTheme);
+    const observer = new MutationObserver(() => applyThemeToDocument(readStoredTheme()));
+    observer.observe(document.documentElement, { childList: true, subtree: true });
     return () => {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener(THEME_CHANGED_EVENT, syncTheme);
+      observer.disconnect();
     };
   }, []);
 
@@ -55,10 +76,21 @@ export function usePersistentTheme() {
     setTheme((currentTheme) => {
       const nextTheme: Theme = currentTheme === 'dark' ? 'light' : 'dark';
       storeTheme(nextTheme);
+      applyThemeToDocument(nextTheme);
       window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
       return nextTheme;
     });
   }, []);
 
   return { darkMode: theme === 'dark', toggleTheme };
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  return createElement(ThemeContext.Provider, { value: useThemeState() }, children);
+}
+
+export function usePersistentTheme() {
+  const context = useContext(ThemeContext);
+  const localTheme = useThemeState();
+  return context ?? localTheme;
 }

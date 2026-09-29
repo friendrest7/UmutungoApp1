@@ -62,6 +62,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/favorites", s.favorites)
 	mux.HandleFunc("/api/v1/favorites/", s.favoriteRoute)
 	mux.HandleFunc("/api/v1/owner/dashboard", s.ownerDashboard)
+	mux.HandleFunc("/api/v1/owner/listings", s.ownerListings)
 	mux.HandleFunc("/api/v1/tenant/dashboard", s.tenantDashboard)
 	mux.HandleFunc("/api/v1/maintenance", s.maintenance)
 	return s.middleware(mux)
@@ -694,11 +695,16 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 	var input struct {
-		Status string `json:"status"`
-		Note   string `json:"note"`
+		Status     string   `json:"status"`
+		Note       string   `json:"note"`
+		RentAmount *float64 `json:"rent_amount"`
 	}
 	if !decodeJSON(w, r, &input) || !validApplicationStatus(input.Status) {
 		errorJSON(w, http.StatusBadRequest, "status must be accepted, rejected, or more_info")
+		return
+	}
+	if input.RentAmount != nil && *input.RentAmount <= 0 {
+		errorJSON(w, http.StatusBadRequest, "rent_amount must be positive")
 		return
 	}
 	var applicantID, listingID, ownerID string
@@ -718,13 +724,17 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 	if input.Status == "accepted" {
-		if _, err = tx.Exec(r.Context(), `INSERT INTO rental_agreements(listing_id,tenant_id,landlord_id,rent_amount,currency) SELECT $1,$2,l.owner_id,l.price,l.currency FROM listings l WHERE l.id=$1`, listingID, applicantID); err != nil {
+		if _, err = tx.Exec(r.Context(), `INSERT INTO rental_agreements(listing_id,tenant_id,landlord_id,rent_amount,currency) SELECT $1,$2,l.owner_id,COALESCE($3,l.price),l.currency FROM listings l WHERE l.id=$1`, listingID, applicantID, input.RentAmount); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not create tenant relationship")
 			return
 		}
 		_, _ = tx.Exec(r.Context(), `UPDATE users SET role='tenant', updated_at=NOW() WHERE id=$1 AND role='client'`, applicantID)
 	}
-	_, _ = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_decision','Rental application update',$2)`, applicantID, "Your rental application was "+input.Status)
+	decisionBody := "Your rental application was " + input.Status
+	if input.Status == "accepted" && input.RentAmount != nil {
+		decisionBody = fmt.Sprintf("Your rental application was accepted at RWF %.0f per month", *input.RentAmount)
+	}
+	_, _ = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_decision','Rental application update',$2)`, applicantID, decisionBody)
 	if err := tx.Commit(r.Context()); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not finish application update")
 		return
@@ -1266,6 +1276,57 @@ func (s *Server) ownerDashboard(w http.ResponseWriter, r *http.Request) {
 	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE l.owner_id=$1 AND a.status='pending'`, user.ID).Scan(&applicationsCount)
 	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM rental_agreements WHERE landlord_id=$1 AND status='active'`, user.ID).Scan(&tenantsCount)
 	writeJSON(w, http.StatusOK, map[string]any{"listings": listingsCount, "active_listings": activeListings, "pending_applications": applicationsCount, "active_tenants": tenantsCount})
+}
+
+func (s *Server) ownerListings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "property_owner" && user.Role != "komisiyoneri" && user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "owner dashboard access required")
+		return
+	}
+	ownerID := user.ID
+	ownerFilter := "l.owner_id=$1"
+	args := []any{ownerID}
+	if user.Role == "admin" {
+		ownerFilter = "TRUE"
+		args = nil
+	}
+	rows, err := s.db.Query(r.Context(), fmt.Sprintf(`
+		SELECT l.id,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,
+		l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.status,
+		l.tags,l.amenities,l.created_at,COALESCE((SELECT url FROM listing_media lm WHERE lm.listing_id=l.id ORDER BY lm.sort_order LIMIT 1),'')
+		FROM listings l WHERE %s AND l.deleted_at IS NULL ORDER BY l.created_at DESC`, ownerFilter), args...)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load owner listings")
+		return
+	}
+	defer rows.Close()
+	items := make([]map[string]any, 0)
+	for rows.Next() {
+		var id, category, transactionType, title, description, currency, province, district, sector, cell, village, status, cover string
+		var price float64
+		var tags, amenities []byte
+		var createdAt time.Time
+		if err := rows.Scan(&id, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &status, &tags, &amenities, &createdAt, &cover); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not read owner listings")
+			return
+		}
+		items = append(items, map[string]any{
+			"id": id, "category": category, "transaction_type": transactionType, "title": title, "description": description,
+			"price": price, "currency": currency, "province": province, "district": district, "sector": sector,
+			"cell": cell, "village": village, "status": status, "tags": rawJSON(tags), "amenities": rawJSON(amenities),
+			"cover": cover, "created_at": createdAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 }
 
 func (s *Server) tenantDashboard(w http.ResponseWriter, r *http.Request) {

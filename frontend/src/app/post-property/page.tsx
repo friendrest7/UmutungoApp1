@@ -7,6 +7,7 @@ import { AuthModal } from '../../components/AuthModal';
 import { Icon } from '../../components/Icons';
 import { Logo } from '../../components/Logo';
 import { getDistrictNames, getSectorNames, provinceNames } from '../../data/rwandaLocations';
+import { umutungoApi } from '../../lib/umutungoApi';
 
 type PropertyType = 'House' | 'Apartment' | 'Land' | 'Commercial' | 'Office' | 'Equipment' | 'Hospitality';
 type Intent = 'For rent' | 'For sale';
@@ -112,6 +113,7 @@ export default function PostPropertyPage() {
   const [published, setPublished] = useState(false);
   const [accessRole, setAccessRole] = useState<'Landlord' | 'Commissioner / Komisiyoneri' | null>(null);
   const [checkingAccess, setCheckingAccess] = useState(true);
+  const [saveError, setSaveError] = useState('');
 
   const gallery = uploadedImages.length ? uploadedImages : curatedImages[propertyType];
   const cover = selectedCover ?? gallery[0];
@@ -198,10 +200,39 @@ export default function PostPropertyPage() {
   const toggleAmenity = (amenity: string) => setAmenities((current) => current.includes(amenity) ? current.filter((item) => item !== amenity) : [...current, amenity]);
   const next = () => setStep((current) => Math.min(3, current + 1));
   const previous = () => setStep((current) => Math.max(1, current - 1));
-  const saveListing = () => {
+  const saveListing = async () => {
     if (!district || !sector) { setLocationError('Choose a valid district and sector before saving the listing.'); setStep(2); return; }
     const expiryDays = accessRole === 'Commissioner / Komisiyoneri' ? 30 : ownerTier.startsWith('Silver') ? 90 : ownerTier.startsWith('Gold') ? 180 : 365;
-    const listing: LandlordListing = { id: `listing-${Date.now()}`, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: intent === 'For rent' ? '/ month' : ' asking', cover, images: gallery, bedrooms, bathrooms, area, amenities, status: publicationMode, savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: new Date(Date.now() + expiryDays * 86400000).toISOString() };
+    setSaveError('');
+    const amount = Number(price.replace(/[^0-9.]/g, '')) || 0;
+    let databaseListing: { id?: string; status?: string; expires_at?: string } | null = null;
+    try {
+      databaseListing = await umutungoApi<{ id?: string; status?: string; expires_at?: string }>('/api/v1/listings', {
+        method: 'POST',
+        body: JSON.stringify({
+          category: propertyType.toLowerCase(),
+          transaction_type: intent === 'For rent' ? 'rent_out' : 'sell',
+          title: listingTitle,
+          description,
+          price: amount,
+          currency: 'RWF',
+          province: location,
+          district,
+          sector,
+          cell,
+          village,
+          publish_at: publicationMode === 'Scheduled' && scheduledFor ? new Date(scheduledFor).toISOString() : null,
+          tags: amenities,
+          amenities,
+          contact_method: 'message',
+          media: gallery.map((url) => ({ type: 'photo', url })),
+          measurements: { building_size: Number(area) || 0, bedrooms: Number(bedrooms) || 0, bathrooms: Number(bathrooms) || 0, parking: amenities.includes('Parking') ? 1 : 0 },
+        }),
+      });
+    } catch {
+      setSaveError('The listing could not be saved to the hosted database. It was kept locally so you can continue testing.');
+    }
+    const listing: LandlordListing = { id: databaseListing?.id ?? `listing-${Date.now()}`, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: intent === 'For rent' ? '/ month' : ' asking', cover, images: gallery, bedrooms, bathrooms, area, amenities, status: publicationMode, savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: databaseListing?.expires_at ?? new Date(Date.now() + expiryDays * 86400000).toISOString() };
     const storageKey = accessRole === 'Commissioner / Komisiyoneri' ? 'umutungo-commissioner-properties' : 'umutungo-landlord-properties';
     try {
       const existing = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as LandlordListing[];
@@ -223,7 +254,7 @@ export default function PostPropertyPage() {
     <header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><div className="post-header-center"><span className="post-live-dot" /> Draft autosaved</div><div className="post-header-links"><Link className="post-home-link" href="/"><Icon name="home" size={14} /> Home</Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /> Exit builder</Link></div></header>
     <div className="post-property-layout">
       <aside className="post-property-sidebar"><div><p className="post-eyebrow">New listing</p><h1>Make a place<br /><em>feel possible.</em></h1><p className="post-sidebar-copy">Tell the story clearly. The right people are already looking.</p></div><nav className="post-progress" aria-label="Listing steps">{steps.map((item) => <button className={step === item.number ? 'is-active' : step > item.number ? 'is-complete' : ''} type="button" key={item.number} onClick={() => setStep(item.number)}><span className="post-step-number">{step > item.number ? <Icon name="check" size={13} /> : `0${item.number}`}</span><span><strong>{item.label}</strong><small>{item.note}</small></span></button>)}</nav><div className="post-sidebar-tip"><Icon name="sparkles" size={17} /><span><strong>Small detail, big difference</strong><small>Listings with 5+ photos get more attention.</small></span></div></aside>
-      <section className="post-property-main">
+      <section className="post-property-main">{saveError && <p className="post-save-error" role="alert">{saveError}</p>}
         <div className="post-main-heading"><div><p className="post-eyebrow">Step 0{step} of 03</p><h2>{steps[step - 1].label}</h2></div><span className="post-save-status"><Icon name="check" size={13} /> Saved locally</span></div>
         <div className="post-builder-grid"><div className="post-form-card">{step === 2 && <RwandaLocationFields province={location} onProvinceChange={(value) => { setLocation(value); setLocationError(''); }} district={district} districtOptions={districtOptions} onDistrictChange={(value) => { setDistrict(value); setSector(''); setCell(''); setVillage(''); }} sector={sector} sectorOptions={locationOptions} onSectorChange={(value) => { setSector(value); setCell(''); setVillage(''); }} cell={cell} cellOptions={cellOptions} onCellChange={(value) => { setCell(value); setVillage(''); }} village={village} villageOptions={villageOptions} onVillageChange={setVillage} loading={locationLoading} error={locationError} gpsPin={gpsPin} onCaptureGps={() => navigator.geolocation?.getCurrentPosition((position) => { setGpsPin(`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`); setLocationError(''); }, () => setLocationError('Location access was not available. You can continue with the administrative location.'))} />}
           {step === 1 && <div className="post-form-section"><div className="post-section-intro"><h3>Start with the essentials</h3><p>Choose a format and give your property a title people will remember.</p></div><div className="post-category-field"><span className="post-field-label">Property category</span><div className="post-category-grid" role="group" aria-label="Property category">{typeOptions.map((item) => <button className={propertyType === item.key ? 'is-selected' : ''} type="button" key={item.key} onClick={() => setPropertyType(item.key)}><span className="post-category-icon"><Icon name={item.icon} size={17} /></span><strong>{item.label}</strong>{propertyType === item.key && <span className="post-category-check"><Icon name="check" size={12} /></span>}</button>)}</div><small className="post-category-help">Choose the category that best describes what you are listing.</small></div><div className="post-field-group"><span className="post-field-label">Listing intent</span><div className="post-segmented"><button className={intent === 'For rent' ? 'is-selected' : ''} type="button" onClick={() => setIntent('For rent')}>For rent</button><button className={intent === 'For sale' ? 'is-selected' : ''} type="button" onClick={() => setIntent('For sale')}>For sale</button></div></div><label className="post-field"><span>Listing title</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={defaultTitles[propertyType]} /></label><label className="post-field"><span>Short description <small>Optional</small></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What makes this place special? Mention the light, the view, the street or the feeling." rows={4} /></label></div>}

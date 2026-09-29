@@ -7,6 +7,7 @@ import { Footer } from './Footer';
 import { Icon } from './Icons';
 import { Navbar } from './Navbar';
 import { Language, t } from '../data/translations';
+import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 
 type InfoPage = 'how' | 'about' | 'categories';
@@ -75,13 +76,11 @@ function HowItWorksStory({ copy }: { copy: (key: string) => string }) {
 }
 
 export function InfoPageShell({ page }: { page: InfoPage }) {
-  const [language, setLanguage] = useState<Language>('English');
+  const { language, changeLanguage: setLanguage } = usePersistentLanguage();
   const { darkMode, toggleTheme } = usePersistentTheme();
   const copy = (key: string) => t(language, key);
 
   useEffect(() => {
-    const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
-    if (storedLanguage && ['English', 'French', 'Kinyarwanda', 'Swahili'].includes(storedLanguage)) setLanguage(storedLanguage);
   }, []);
 
   useEffect(() => {
@@ -90,7 +89,6 @@ export function InfoPageShell({ page }: { page: InfoPage }) {
 
   const changeLanguage = (nextLanguage: Language) => {
     setLanguage(nextLanguage);
-    window.localStorage.setItem('umutungo-language', nextLanguage);
   };
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic info-page-shell`}>

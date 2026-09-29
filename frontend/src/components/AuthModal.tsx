@@ -1,12 +1,12 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Icon } from './Icons';
 import { apiBaseUrl } from '../lib/umutungoApi';
 
 export type AuthRole = 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Admin';
 
-type AuthModalProps = { open: boolean; role?: AuthRole; onClose: () => void; onSuccess: (role: AuthRole) => void };
+type AuthModalProps = { open: boolean; role?: AuthRole; placement?: 'center' | 'right'; onClose: () => void; onSuccess: (role: AuthRole) => void };
 type SignInMethod = 'choose' | 'email' | 'phone' | 'otp';
 type GoogleTokenResponse = { access_token?: string; error?: string; error_description?: string };
 type GoogleApi = { accounts: { oauth2: { initTokenClient: (options: { client_id: string; scope: string; callback: (response: GoogleTokenResponse) => void }) => { requestAccessToken: (options?: { prompt?: string }) => void } } } };
@@ -25,7 +25,7 @@ function roleLabel(role?: AuthRole) {
   return role ?? 'your Umutungo account';
 }
 
-export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
+export function AuthModal({ open, role, placement = 'center', onClose, onSuccess }: AuthModalProps) {
   const [method, setMethod] = useState<SignInMethod>('choose');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,6 +33,12 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    if (!open || placement !== 'right') return;
+    document.body.dataset.authPlacement = 'right';
+    return () => { delete document.body.dataset.authPlacement; };
+  }, [open, placement]);
 
   if (!open) return null;
 

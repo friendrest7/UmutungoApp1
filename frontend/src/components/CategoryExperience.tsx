@@ -6,10 +6,11 @@ import { AiChatbot } from './AiChatbot';
 import { Icon } from './Icons';
 import { Navbar } from './Navbar';
 import { Language, t } from '../data/translations';
+import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 import type { PropertyPlaceholder } from './PropertyCard';
 import { PropertyViewer } from './PropertyViewer';
-import { listFavorites, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
+import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 
 type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'Book'; detail: string; rating: string; image: string; verified?: boolean };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[]; listings: Listing[] };
@@ -54,8 +55,17 @@ const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlac
   return { id: item.id, title: item.title, type, location: item.location.replace(/\s*·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images: [item.image, ...images.filter((image) => image !== item.image)], listed: 'Listed recently', availableFor: item.intent === 'For sale' ? 'sale' : 'rent' };
 };
 
+type DatabaseListing = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; tags?: string[]; amenities?: string[] };
+
+const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Listing => {
+  const intent: Listing['intent'] = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
+  const location = [item.sector, item.district, item.province].filter(Boolean).join(' · ');
+  const detail = [item.description, ...(item.amenities ?? [])].filter(Boolean).join(' · ') || 'Details available from the owner';
+  return listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, category.cover, 'New', true);
+};
+
 export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialIntent = '', initialPriceRange = '' }: { slug: string; initialQuery?: string; initialLocation?: string; initialIntent?: string; initialPriceRange?: string }) {
-  const [language, setLanguage] = useState<Language>('English');
+  const { language, changeLanguage: setLanguage } = usePersistentLanguage();
   const { darkMode, toggleTheme } = usePersistentTheme();
   const rawCategory = categoryConfigs[slug] ?? categoryConfigs.houses;
   const category = { ...rawCategory, name: t(language, rawCategory.name), eyebrow: t(language, rawCategory.eyebrow), description: t(language, rawCategory.description) };
@@ -63,14 +73,18 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   const [filter, setFilter] = useState(category.filters[0]);
   const [saved, setSaved] = useState<string[]>([]);
   const [activeListing, setActiveListing] = useState<Listing | null>(null);
-  useEffect(() => {
-    const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
-    if (storedLanguage && ['English', 'French', 'Kinyarwanda', 'Swahili'].includes(storedLanguage)) setLanguage(storedLanguage);
-  }, []);
+  const [databaseListings, setDatabaseListings] = useState<Listing[]>([]);
   const changeLanguage = (nextLanguage: Language) => {
     setLanguage(nextLanguage);
-    window.localStorage.setItem('umutungo-language', nextLanguage);
   };
+  useEffect(() => {
+    let cancelled = false;
+    const categoryName = rawCategory.name.toLowerCase().replace(/s$/, '');
+    void publicUmutungoApi<{ items: DatabaseListing[] }>(`/api/v1/listings?category=${encodeURIComponent(categoryName)}`)
+      .then((result) => { if (!cancelled) setDatabaseListings((result?.items ?? []).map((item) => toDatabaseListing(item, rawCategory))); })
+      .catch(() => { if (!cancelled) setDatabaseListings([]); });
+    return () => { cancelled = true; };
+  }, [rawCategory]);
   useEffect(() => {
     const readFavorites = () => {
       try {
@@ -90,7 +104,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     return () => window.removeEventListener('umutungo:favorites-changed', readFavorites);
   }, []);
   const translatedCategoryName = t(language, category.name);
-  const listings = useMemo(() => category.listings.filter((item) => {
+  const listings = useMemo(() => [...databaseListings, ...category.listings].filter((item) => {
     const matchesQuery = `${item.title} ${item.location} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
     const matchesLocation = !initialLocation || initialLocation === 'Kigali' || item.location.toLowerCase().includes(initialLocation.toLowerCase());
     const matchesIntent = !initialIntent || initialIntent === 'Buy or rent' || (initialIntent === 'Rent' && item.intent === 'For rent') || (initialIntent === 'Buy' && item.intent === 'For sale');
@@ -98,7 +112,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     const matchesPrice = !initialPriceRange || initialPriceRange === 'Any price' || (initialPriceRange === 'Under RWF 500,000' && numericPrice < 500000) || (initialPriceRange === 'RWF 500,000 - 1,000,000' && numericPrice >= 500000 && numericPrice <= 1000000) || (initialPriceRange === 'Over RWF 1,000,000' && numericPrice > 1000000);
     const matchesFilter = filter.startsWith('All') || (filter === 'For rent' && item.intent === 'For rent') || (filter === 'For sale' && item.intent === 'For sale') || (filter === 'Book now' && item.intent === 'Book') || ['Residential', 'Commercial', 'Private office', 'Open workspace'].includes(filter);
     return matchesQuery && matchesLocation && matchesIntent && matchesPrice && matchesFilter;
-  }), [category, filter, initialIntent, initialLocation, initialPriceRange, query]);
+  }), [category, databaseListings, filter, initialIntent, initialLocation, initialPriceRange, query]);
 
   const toggleListingFavorite = (item: Listing) => {
     const wasSaved = saved.includes(item.id);

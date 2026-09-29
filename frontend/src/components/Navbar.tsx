@@ -18,6 +18,8 @@ type NavbarProps = {
   onSignOut?: () => void;
   onAccount?: () => void;
   onLandingVisibilityChange?: (visible: boolean) => void;
+  autoOpenSignIn?: boolean;
+  authPlacement?: 'center' | 'right';
 };
 
 const authRoles = ['Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Admin'];
@@ -82,7 +84,7 @@ function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChang
   </div>;
 }
 
-export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, isSignedIn = false, onSignIn, onSignOut, onAccount, onLandingVisibilityChange }: NavbarProps) {
+export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, isSignedIn = false, onSignIn, onSignOut, onAccount, onLandingVisibilityChange, autoOpenSignIn = false, authPlacement = 'center' }: NavbarProps) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -234,6 +236,21 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     setIntendedPath(returnTo);
     setAuthOpen(true);
   };
+
+  useEffect(() => {
+    if (!autoOpenSignIn || signedIn || window.sessionStorage.getItem('umutungo-sign-in-prompt-seen') === 'true') return;
+    const timer = window.setTimeout(() => {
+      window.sessionStorage.setItem('umutungo-sign-in-prompt-seen', 'true');
+      openSignIn('Tenant');
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [autoOpenSignIn, signedIn]);
+
+  useEffect(() => {
+    if (!authOpen || authPlacement !== 'right') return;
+    document.body.dataset.authPlacement = 'right';
+    return () => { delete document.body.dataset.authPlacement; };
+  }, [authOpen, authPlacement]);
 
   useEffect(() => {
     const requestSignIn = (event: Event) => {

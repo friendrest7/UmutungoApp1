@@ -57,6 +57,7 @@ export type TenantBooking = {
 export type TenantDashboardData = {
   properties: Array<Record<string, unknown>>;
   applications: ApiApplication[];
+  notifications?: ApiNotification[];
   payments: ApiPayment[];
   messages: ApiMessage[];
   bookings: TenantBooking[];

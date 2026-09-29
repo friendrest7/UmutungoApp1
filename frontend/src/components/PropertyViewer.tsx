@@ -135,18 +135,20 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     const existing = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as typeof application[];
     window.localStorage.setItem('umutungo-rental-applications', JSON.stringify([application, ...existing]));
     const notification = { id: `notification-${application.id}`, type: 'application_received', title: 'New rental application', body: `${applicationName || 'A tenant'} applied for ${property.title}`, applicationId: application.id, status: 'pending', createdAt: application.createdAt };
-    const storedNotifications = JSON.parse(window.localStorage.getItem('umutungo-landlord-notifications') ?? '[]') as typeof notification[];
-    window.localStorage.setItem('umutungo-landlord-notifications', JSON.stringify([notification, ...storedNotifications]));
-    window.dispatchEvent(new CustomEvent('umutungo:landlord-data-changed'));
+    const commissionerListings = JSON.parse(window.localStorage.getItem('umutungo-commissioner-properties') ?? '[]') as Array<{ id?: string }>;
+    const ownerNotificationKey = commissionerListings.some((item) => item.id === property.id) ? 'umutungo-commissioner-notifications' : 'umutungo-landlord-notifications';
+    const storedNotifications = JSON.parse(window.localStorage.getItem(ownerNotificationKey) ?? '[]') as typeof notification[];
+    window.localStorage.setItem(ownerNotificationKey, JSON.stringify([notification, ...storedNotifications]));
+    window.dispatchEvent(new CustomEvent(ownerNotificationKey.includes('commissioner') ? 'umutungo:commissioner-data-changed' : 'umutungo:landlord-data-changed'));
     try {
       const result = await umutungoApi<{ id: string }>('/api/v1/listings/' + encodeURIComponent(property.id) + '/applications', { method: 'POST', body: JSON.stringify({ message: applicationMessage, applicant_info: { name: applicationName, phone: applicationPhone } }) });
       if (result?.id) {
         setApplicationId(result.id);
         const applications = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as Array<Record<string, unknown>>;
         window.localStorage.setItem('umutungo-rental-applications', JSON.stringify(applications.map((item) => item.id === application.id ? { ...item, id: result.id } : item)));
-        const notifications = JSON.parse(window.localStorage.getItem('umutungo-landlord-notifications') ?? '[]') as Array<Record<string, unknown>>;
-        window.localStorage.setItem('umutungo-landlord-notifications', JSON.stringify(notifications.map((item) => item.applicationId === application.id ? { ...item, applicationId: result.id } : item)));
-        window.dispatchEvent(new CustomEvent('umutungo:landlord-data-changed'));
+        const notifications = JSON.parse(window.localStorage.getItem(ownerNotificationKey) ?? '[]') as Array<Record<string, unknown>>;
+        window.localStorage.setItem(ownerNotificationKey, JSON.stringify(notifications.map((item) => item.applicationId === application.id ? { ...item, applicationId: result.id } : item)));
+        window.dispatchEvent(new CustomEvent(ownerNotificationKey.includes('commissioner') ? 'umutungo:commissioner-data-changed' : 'umutungo:landlord-data-changed'));
       }
     } catch { /* Keep the local application available for the demo workspace. */ }
     setPaymentError('');
@@ -198,7 +200,13 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     const payment = storedPayments.find((item) => item.related_id === property.id || item.related_id === applicationId);
     saveTenantBooking(payment?.status === 'successful' || payment?.status === 'paid' ? 'paid' : 'pending');
     const storedMessages = JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as Array<Record<string, string>>;
+    const commissionerListings = JSON.parse(window.localStorage.getItem('umutungo-commissioner-properties') ?? '[]') as Array<{ id?: string }>;
+    const ownerNotificationKey = commissionerListings.some((item) => item.id === property.id) ? 'umutungo-commissioner-notifications' : 'umutungo-landlord-notifications';
+    const storedLandlordNotifications = JSON.parse(window.localStorage.getItem(ownerNotificationKey) ?? '[]') as Array<Record<string, unknown>>;
+    window.localStorage.setItem(ownerNotificationKey, JSON.stringify([{ id: `notification-message-${Date.now()}`, type: 'message_received', title: 'New tenant message', body: `${applicationName || 'A tenant'} sent a message about ${property.title}`, createdAt: new Date().toISOString(), readAt: null }, ...storedLandlordNotifications]));
     window.localStorage.setItem('umutungo-tenant-messages', JSON.stringify([{ id: `message-${Date.now()}`, sender_id: 'me', sender_name: 'You', recipient_id: '', recipient_name: 'Eric N.', listing_id: property.id, listing_title: property.title, body: contactMessage, created_at: new Date().toISOString() }, ...storedMessages]));
+    window.dispatchEvent(new CustomEvent('umutungo:notifications-changed'));
+    window.dispatchEvent(new CustomEvent(ownerNotificationKey.includes('commissioner') ? 'umutungo:commissioner-data-changed' : 'umutungo:landlord-data-changed'));
     setMessageSent(true);
     window.location.assign('/tenant?view=Messages');
   };

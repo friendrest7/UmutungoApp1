@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
-import { ApiApplication, ApiMessage, TenantBooking, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
+import { ApiApplication, ApiMessage, ApiNotification, TenantBooking, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
 import { Language, t } from '../data/translations';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
@@ -25,13 +25,13 @@ const mapOwnerListing = (item: OwnerListingRecord): DashboardListing => {
 const configs: Record<DashboardRole, DashboardConfig> = {
   commissioner: {
     eyebrow: 'Commissioner workspace', greeting: 'Good morning', welcome: 'Keep every property conversation moving.', action: 'Add a listing', actionIcon: 'bookPen',
-    navigation: [{ label: 'Overview', icon: 'building' }, { label: 'My listings', icon: 'home' }, { label: 'Enquiries', icon: 'users' }, { label: 'Visits', icon: 'bookPen' }],
+    navigation: [{ label: 'Overview', icon: 'building' }, { label: 'My listings', icon: 'home' }, { label: 'Enquiries', icon: 'users' }, { label: 'Messages', icon: 'users' }, { label: 'Visits', icon: 'bookPen' }],
     metrics: [{ label: 'Active listings', value: '12', note: '+3 this month', icon: 'home', tone: 'green' }, { label: 'New enquiries', value: '24', note: '8 need a reply', icon: 'users', tone: 'amber' }, { label: 'Viewings this week', value: '8', note: '2 tomorrow', icon: 'bookPen', tone: 'blue' }, { label: 'Commission this month', value: 'RWF 2.4M', note: 'On track', icon: 'arrow', tone: 'dark' }],
     panelEyebrow: 'Stay responsive', panelTitle: 'Recent enquiries', activity: [{ name: 'Aline Mukamana', detail: 'Kacyiru apartment', time: '10 min ago', status: 'New', initials: 'AM' }, { name: 'Patrick Nshimiyimana', detail: 'Gisozi family home', time: '42 min ago', status: 'Follow up', initials: 'PN' }, { name: 'Grace Uwase', detail: 'Gacuriro residential plot', time: 'Yesterday', status: 'Viewing booked', initials: 'GU' }], sideEyebrow: 'Your calendar', sideTitle: 'Upcoming visits', sideItems: [{ title: 'Kacyiru apartment', detail: 'Today · 11:30 AM', icon: 'home' }, { title: 'Gisozi family home', detail: 'Friday · 2:00 PM', icon: 'bookPen' }],
   },
   tenant: {
     eyebrow: 'Client dashboard', greeting: 'Welcome back', welcome: 'Your next home is closer than you think.', action: 'Explore homes', actionIcon: 'search',
-    navigation: [{ label: 'Overview', icon: 'building' }, { label: 'Saved properties', icon: 'heart' }, { label: 'Applications', icon: 'bookPen' }, { label: 'Rent & utilities', icon: 'arrow' }, { label: 'Maintenance', icon: 'users' }, { label: 'Viewings', icon: 'bookPen' }, { label: 'Messages', icon: 'users' }],
+    navigation: [{ label: 'Overview', icon: 'building' }, { label: 'Saved properties', icon: 'heart' }, { label: 'Applications', icon: 'bookPen' }, { label: 'Notifications', icon: 'bell' }, { label: 'Rent & utilities', icon: 'arrow' }, { label: 'Maintenance', icon: 'users' }, { label: 'Viewings', icon: 'bookPen' }, { label: 'Messages', icon: 'users' }],
     metrics: [{ label: 'Saved properties', value: '8', note: '+2 this week', icon: 'heart', tone: 'green' }, { label: 'New matches', value: '14', note: 'Based on your search', icon: 'sparkles', tone: 'amber' }, { label: 'Upcoming viewings', value: '2', note: 'Next: tomorrow', icon: 'bookPen', tone: 'blue' }, { label: 'Monthly budget', value: 'RWF 1.5M', note: 'Your current range', icon: 'arrow', tone: 'dark' }],
     panelEyebrow: 'Worth a look', panelTitle: 'Recommended for you', activity: [{ name: 'Modern Kacyiru apartment', detail: '2 beds · Kacyiru · RWF 1.1M / month', time: 'New today', status: 'View', initials: 'KA' }, { name: 'Four-bedroom home', detail: 'Gisozi · RWF 1.25M / month', time: '92% match', status: 'View', initials: 'GH' }, { name: 'Light-filled apartment', detail: 'Kimihurura · RWF 1.65M / month', time: '88% match', status: 'View', initials: 'LA' }], sideEyebrow: 'Your shortlist', sideTitle: 'Saved properties', sideItems: [{ title: 'Kacyiru apartment', detail: 'Saved 2 hours ago', icon: 'heart' }, { title: 'Nyarutarama home', detail: 'Saved yesterday', icon: 'heart' }],
   },
@@ -81,14 +81,39 @@ function DashboardUtilityDock() {
   const { darkMode, toggleTheme } = usePersistentTheme();
   const { language, changeLanguage } = usePersistentLanguage();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<ApiNotification[]>([]);
 
   useEffect(() => {
     const dashboard = document.querySelector('.role-dashboard');
     dashboard?.classList.toggle('dashboard-dark', darkMode);
   }, [darkMode]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadNotifications = async () => {
+      try {
+        const result = await umutungoApi<{ items: ApiNotification[] }>('/api/v1/notifications');
+        if (cancelled) return;
+        if (result?.items) { setNotifications(result.items.filter((item) => !item.read_at)); return; }
+      } catch { /* Use the local notification queue when the API is unavailable. */ }
+      try {
+        const storedRole = window.localStorage.getItem('umutungo-demo-user')?.toLowerCase() ?? '';
+        const key = storedRole.includes('landlord') ? 'umutungo-landlord-notifications' : storedRole.includes('commissioner') ? 'umutungo-commissioner-notifications' : 'umutungo-tenant-notifications';
+        const local = JSON.parse(window.localStorage.getItem(key) ?? '[]') as Array<Record<string, string>>;
+        if (!cancelled) setNotifications(local.filter((item) => !item.readAt).map((item) => ({ id: item.id ?? `local-${Date.now()}`, type: item.type ?? 'update', title: item.title ?? 'New update', body: item.body ?? '', created_at: item.createdAt ?? new Date().toISOString() })));
+      } catch { if (!cancelled) setNotifications([]); }
+    };
+    void loadNotifications();
+    const refresh = () => { void loadNotifications(); };
+    const timer = window.setInterval(loadNotifications, 20000);
+    window.addEventListener('umutungo:notifications-changed', refresh);
+    window.addEventListener('umutungo:landlord-data-changed', refresh);
+    window.addEventListener('umutungo:tenant-data-changed', refresh);
+    window.addEventListener('umutungo:commissioner-data-changed', refresh);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener('umutungo:notifications-changed', refresh); window.removeEventListener('umutungo:landlord-data-changed', refresh); window.removeEventListener('umutungo:tenant-data-changed', refresh); window.removeEventListener('umutungo:commissioner-data-changed', refresh); };
+  }, []);
   return <div className={`dashboard-utility-dock ${darkMode ? 'is-dark' : ''}`} aria-label="Dashboard tools">
     <Link className="dashboard-header-tool" href="/#properties" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')}><Icon name="heart" size={17} /></Link>
-    <div className="dashboard-notification-wrap"><button className="dashboard-header-tool" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>{notificationsOpen && <div className="dashboard-notification-popover" role="status">{t(language, 'No new notifications')}</div>}</div>
+    <div className="dashboard-notification-wrap"><button className="dashboard-header-tool" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" size={17} />{notifications.length > 0 && <b>{notifications.length > 99 ? '99+' : notifications.length}</b>}</button>{notificationsOpen && <div className="dashboard-notification-popover" role="status">{notifications.length ? notifications.slice(0, 5).map((item) => <article key={item.id}><strong>{item.title}</strong><small>{item.body}</small></article>) : t(language, 'No new notifications')}</div>}</div>
     <button className="dashboard-header-tool" type="button" title={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} aria-label={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} onClick={toggleTheme}><Icon name={darkMode ? 'sun' : 'moon'} size={17} /></button>
     <label className="dashboard-language-select" title={t(language, 'Language')}><Icon name="globe" size={15} /><select value={language} aria-label={t(language, 'Language')} onChange={(event) => changeLanguage(event.target.value as Language)}>{dashboardLanguages.map((item) => <option key={item} value={item}>{dashboardLanguageCodes[item]}</option>)}</select></label>
   </div>;
@@ -105,9 +130,9 @@ function LegacyTenantWorkspaceSection({ view }: { view: string }) {
   return <section className="tenant-workspace-section"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">{panel.eyebrow}</span><h2>{panel.title}</h2><p>{panel.description}</p></div><span className="tenant-workspace-icon"><Icon name={panel.icon} size={22} /></span></div><div className="tenant-workspace-list">{rows.map((row) => <article key={row.title}><span className="tenant-workspace-row-icon"><Icon name={panel.icon} size={16} /></span><div><strong>{row.title}</strong><small>{row.detail}</small></div><button type="button">{row.action}<Icon name="arrow" size={14} /></button></article>)}</div><button className="role-dashboard-primary" type="button"><Icon name={view === 'Messages' ? 'bookPen' : 'search'} size={16} /> {view === 'Saved properties' ? 'Explore more properties' : view === 'Viewings' ? 'Find another viewing' : 'Start a new conversation'}</button></section>;
 }
 
-type TenantWorkspaceProps = { view: string; tenantData?: TenantDashboardData; onViewed?: (application: ApiApplication) => void; onPay?: (application: ApiApplication) => void; onContact?: (application: ApiApplication) => void; onReview?: (application: ApiApplication) => void; notice?: string };
+type TenantWorkspaceProps = { view: string; tenantData?: TenantDashboardData; notifications?: ApiNotification[]; onViewed?: (application: ApiApplication) => void; onPay?: (application: ApiApplication) => void; onContact?: (application: ApiApplication) => void; onReview?: (application: ApiApplication) => void; notice?: string };
 
-function LandlordMessageWorkspace({ messages, currentUserID, onSent }: { messages: ApiMessage[]; currentUserID: string; onSent: (message: ApiMessage) => void }) {
+function LandlordMessageWorkspace({ messages, currentUserID, onSent, contactLabel = 'tenant' }: { messages: ApiMessage[]; currentUserID: string; onSent: (message: ApiMessage) => void; contactLabel?: 'tenant' | 'client' }) {
   const [selectedID, setSelectedID] = useState(messages[0]?.id ?? '');
   const [draft, setDraft] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -142,9 +167,13 @@ function LandlordMessageWorkspace({ messages, currentUserID, onSent }: { message
     if (!selected || !targetID || !draft.trim()) return;
     try {
       const result = await umutungoApi<{ id: string }>('/api/v1/messages', { method: 'POST', body: JSON.stringify({ listing_id: selected.listing_id, recipient_id: targetID, body: draft.trim() }) });
-      onSent({ id: result?.id ?? `message-${Date.now()}`, sender_id: currentUserID, sender_name: 'You', recipient_id: targetID, recipient_name: selected.sender_name, listing_id: selected.listing_id, body: draft.trim(), created_at: new Date().toISOString() });
+      const sentMessage: ApiMessage = { id: result?.id ?? `message-${Date.now()}`, sender_id: currentUserID, sender_name: 'You', recipient_id: targetID, recipient_name: selected.sender_name, listing_id: selected.listing_id, body: draft.trim(), created_at: new Date().toISOString() };
+      onSent(sentMessage);
+      const localMessages = JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as ApiMessage[];
+      window.localStorage.setItem('umutungo-tenant-messages', JSON.stringify([sentMessage, ...localMessages]));
+      window.dispatchEvent(new CustomEvent('umutungo:tenant-data-changed'));
       setDraft('');
-      setNotice('Reply sent to the tenant.');
+      setNotice(result ? `Reply sent to the ${contactLabel}.` : `Reply saved locally. Connect the backend session to deliver it to the ${contactLabel}.`);
     } catch {
       setNotice('The reply could not be sent. Check that the backend session is connected.');
     }
@@ -173,7 +202,8 @@ function TenantMessageWorkspace({ tenantData }: { tenantData?: TenantDashboardDa
   return <section className="tenant-workspace-section tenant-message-workspace"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">Stay connected</span><h2>Messages</h2><p>Write to Umutungo support or continue a conversation about a property, viewing, or application.</p></div><span className="tenant-workspace-icon"><Icon name="users" size={22} /></span></div><div className="tenant-message-list">{messages.length ? messages.slice().reverse().map((message) => <article key={message.id}><span className="tenant-workspace-row-icon"><Icon name="users" size={16} /></span><div><strong>{message.sender_name}</strong><small>{message.body}</small></div><time>{new Date(message.created_at).toLocaleDateString()}</time></article>) : <div className="tenant-message-empty"><Icon name="bookPen" size={20} /><div><strong>No messages yet</strong><p>Start a conversation and keep your property questions in one place.</p></div></div>}</div><form className="tenant-message-composer" onSubmit={sendMessage}><label htmlFor="tenant-message-draft">Write a message</label><textarea id="tenant-message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about a property, viewing, or application" rows={4} /><div><small>{sentNotice || 'Your message stays in your tenant workspace.'}</small><button className="role-dashboard-primary" type="submit"><Icon name="arrow" size={15} /> Send message</button></div></form></section>;
 }
 
-function TenantWorkspaceSection({ view, tenantData, onViewed, onPay, onContact, onReview, notice }: TenantWorkspaceProps) {
+function TenantWorkspaceSection({ view, tenantData, notifications = [], onViewed, onPay, onContact, onReview, notice }: TenantWorkspaceProps) {
+  if (view === 'Notifications') return <TenantNotificationWorkspace notifications={notifications.length ? notifications : tenantData?.notifications ?? []} />;
   if (view === 'Messages') return <TenantMessageWorkspace tenantData={tenantData} />;
   const panels: Record<string, { eyebrow: string; title: string; description: string; icon: IconName }> = {
     Applications: { eyebrow: 'Rental applications', title: 'Applications', description: 'Track each application from submitted to accepted and keep the next step clear.', icon: 'bookPen' },
@@ -242,6 +272,9 @@ function LandlordDashboard() {
         ]);
         if (me?.user?.id) setCurrentUserID(me.user.id);
         if (apiMessages?.items) setMessages(apiMessages.items);
+        else {
+          try { setMessages(JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as ApiMessage[]); } catch { setMessages([]); }
+        }
       } catch {
         try { setMessages(JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as ApiMessage[]); } catch { setMessages([]); }
       }
@@ -261,6 +294,9 @@ function LandlordDashboard() {
       window.localStorage.setItem('umutungo-rental-applications', JSON.stringify(stored.map((item) => item.id === application.id ? { ...item, status: 'accepted', decisionAt: new Date().toISOString() } : item)));
       const storedNotifications = JSON.parse(window.localStorage.getItem('umutungo-landlord-notifications') ?? '[]') as Array<Record<string, unknown>>;
       window.localStorage.setItem('umutungo-landlord-notifications', JSON.stringify(storedNotifications.map((item) => item.applicationId === application.id ? { ...item, status: 'accepted', readAt: new Date().toISOString() } : item)));
+      const tenantNotifications = JSON.parse(window.localStorage.getItem('umutungo-tenant-notifications') ?? '[]') as Array<Record<string, unknown>>;
+      window.localStorage.setItem('umutungo-tenant-notifications', JSON.stringify([{ id: `notification-decision-${application.id}`, type: 'application_decision', title: 'Rental application accepted', body: `${application.listing_title} was accepted${agreedPrice ? ` at RWF ${agreedPrice.toLocaleString()} per month` : ''}.`, createdAt: new Date().toISOString(), readAt: null }, ...tenantNotifications]));
+      window.dispatchEvent(new CustomEvent('umutungo:notifications-changed'));
     } catch { /* Keep the in-memory approval visible if storage is unavailable. */ }
     window.dispatchEvent(new CustomEvent('umutungo:tenant-data-changed'));
     window.dispatchEvent(new CustomEvent('umutungo:landlord-data-changed'));
@@ -300,26 +336,51 @@ function CommissionerDashboard() {
   const config = configs.commissioner;
   const [active, setActive] = useState('Overview');
   const [listings, setListings] = useState<DashboardListing[]>([]);
+  const [messages, setMessages] = useState<ApiMessage[]>([]);
+  const [currentUserID, setCurrentUserID] = useState('');
   useEffect(() => {
-    try { setListings(JSON.parse(window.localStorage.getItem('umutungo-commissioner-properties') ?? '[]') as DashboardListing[]); } catch { setListings([]); }
+    const load = async () => {
+      try { setListings(JSON.parse(window.localStorage.getItem('umutungo-commissioner-properties') ?? '[]') as DashboardListing[]); } catch { setListings([]); }
+      try {
+        const [me, apiMessages] = await Promise.all([
+          umutungoApi<{ user?: { id?: string } }>('/api/v1/me'),
+          umutungoApi<{ items: ApiMessage[] }>('/api/v1/messages'),
+        ]);
+        if (me?.user?.id) setCurrentUserID(me.user.id);
+        if (apiMessages?.items) setMessages(apiMessages.items);
+        else setMessages(JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as ApiMessage[]);
+      } catch {
+        try { setMessages(JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as ApiMessage[]); } catch { setMessages([]); }
+      }
+    };
+    void load();
+    const refresh = () => { void load(); };
+    window.addEventListener('umutungo:commissioner-data-changed', refresh);
+    window.addEventListener('storage', refresh);
+    return () => { window.removeEventListener('umutungo:commissioner-data-changed', refresh); window.removeEventListener('storage', refresh); };
   }, []);
   const metrics = config.metrics.map((metric, index) => index === 0 && listings.length ? { ...metric, value: String(listings.length), note: 'Saved in your workspace' } : metric);
   const overview = <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">{config.greeting}</p><h2>{config.welcome}</h2><p>Add properties, manage enquiries, and keep every client conversation moving from one workspace.</p></div><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> Add a property</Link></section><section className="role-dashboard-metrics" aria-label="Commissioner metrics">{metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-panel landlord-overview-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">Latest uploads</span><h3>Property listings</h3></div><button type="button" onClick={() => setActive('My listings')}>View all <Icon name="arrow" size={14} /></button></div>{listings.slice(0, 3).map((listing) => <div className="role-dashboard-side-item" key={listing.id}><span><Icon name="home" size={16} /></span><div><strong>{listing.title}</strong><small>{listing.location} · {listing.status}</small></div><Icon name="arrow" size={14} /></div>)}{!listings.length && <p className="landlord-empty-note">No property listings yet. Add your first property to get started.</p>}</div></div>;
-  const body = active === 'Overview' ? overview : active === 'My listings' ? <div className="role-dashboard-content"><LandlordPropertiesSection listings={listings} title="My listings" actionLabel="Add a property" /></div> : <div className="role-dashboard-content"><TenantWorkspaceSection view={active} /></div>;
+  const body = active === 'Overview' ? overview : active === 'My listings' ? <div className="role-dashboard-content"><LandlordPropertiesSection listings={listings} title="My listings" actionLabel="Add a property" /></div> : active === 'Messages' ? <div className="role-dashboard-content"><LandlordMessageWorkspace messages={messages} currentUserID={currentUserID} contactLabel="client" onSent={(message) => setMessages((current) => [...current, message])} /></div> : <div className="role-dashboard-content"><TenantWorkspaceSection view={active} /></div>;
   return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label="Commissioner dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><Link href="/post-property"><Icon name="bookPen" size={16} /> Add a property</Link></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><div className="role-dashboard-profile"><span className="role-dashboard-avatar">CM</span><span><strong>My account</strong><small>Verified commissioner</small></span><Icon name="chevron" size={14} /></div></header>{body}</section></main>;
 }
 
-const emptyTenantData: TenantDashboardData = { properties: [], applications: [], payments: [], messages: [], bookings: [], reviews: [] };
+const emptyTenantData: TenantDashboardData = { properties: [], applications: [], notifications: [], payments: [], messages: [], bookings: [], reviews: [] };
 
 function TenantBookingSummary({ bookings }: { bookings: TenantBooking[] }) {
   if (!bookings.length) return null;
   return <section className="tenant-booking-summary" aria-label="Booked houses"><div className="tenant-booking-summary-heading"><span className="role-dashboard-eyebrow">Your booked house</span><Icon name="home" size={17} /></div>{bookings.map((booking) => <article key={booking.id}><div><strong>{booking.property_title}</strong><small>{booking.location} · {booking.price}</small></div><span className={`role-dashboard-status ${booking.payment_status === 'paid' ? 'new' : 'pending'}`}>{booking.payment_status === 'paid' ? 'Paid' : 'Pending payment'}</span></article>)}</section>;
 }
 
+function TenantNotificationWorkspace({ notifications }: { notifications: ApiNotification[] }) {
+  return <section className="tenant-workspace-section"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">Account updates</span><h2>Notifications</h2><p>See application decisions, landlord messages, and important updates about your property journey.</p></div><span className="tenant-workspace-icon"><Icon name="bell" size={22} /></span></div>{notifications.length ? <div className="tenant-workspace-list">{notifications.map((item) => <article key={item.id}><span className="tenant-workspace-row-icon"><Icon name="bell" size={16} /></span><div><strong>{item.title}</strong><small>{item.body}</small></div><time>{new Date(item.created_at).toLocaleString()}</time></article>)}</div> : <div className="tenant-message-empty"><Icon name="check" size={20} /><div><strong>No new notifications</strong><p>Application decisions and landlord replies will appear here.</p></div></div>}</section>;
+}
+
 function TenantDashboard() {
   const config = configs.tenant;
   const [active, setActive] = useState('Overview');
   const [tenantData, setTenantData] = useState<TenantDashboardData>(emptyTenantData);
+  const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [notice, setNotice] = useState('');
   const [selectedApplication, setSelectedApplication] = useState<ApiApplication | null>(null);
   const [dialog, setDialog] = useState<'payment' | 'contact' | 'review' | null>(null);
@@ -343,11 +404,17 @@ function TenantDashboard() {
       const localPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as TenantDashboardData['payments'];
       const localMessages = JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as ApiMessage[];
       const localBookings = JSON.parse(window.localStorage.getItem('umutungo-tenant-bookings') ?? '[]') as TenantBooking[];
-      if (!cancelled) setTenantData({ ...emptyTenantData, applications: localApplications, payments: localPayments, messages: localMessages, bookings: localBookings });
+      const localNotifications = JSON.parse(window.localStorage.getItem('umutungo-tenant-notifications') ?? '[]') as ApiNotification[];
+      if (!cancelled) setNotifications(localNotifications);
+      if (!cancelled) setTenantData({ ...emptyTenantData, applications: localApplications, notifications: localNotifications, payments: localPayments, messages: localMessages, bookings: localBookings });
       try {
         const apiData = await umutungoApi<TenantDashboardData>('/api/v1/tenant/dashboard');
-        if (apiData && !cancelled) setTenantData((current) => ({ ...apiData, applications: [...apiData.applications, ...current.applications.filter((local) => !apiData.applications.some((item) => item.id === local.id))], payments: [...apiData.payments, ...current.payments.filter((local) => !apiData.payments.some((item) => item.id === local.id))], messages: [...apiData.messages, ...current.messages.filter((local) => !apiData.messages.some((item) => item.id === local.id))], bookings: current.bookings }));
+        if (apiData && !cancelled) setTenantData((current) => ({ ...apiData, notifications: current.notifications, applications: [...apiData.applications, ...current.applications.filter((local) => !apiData.applications.some((item) => item.id === local.id))], payments: [...apiData.payments, ...current.payments.filter((local) => !apiData.payments.some((item) => item.id === local.id))], messages: [...apiData.messages, ...current.messages.filter((local) => !apiData.messages.some((item) => item.id === local.id))], bookings: current.bookings }));
       } catch { /* Keep the local workspace available when the API is not running. */ }
+      try {
+        const apiNotifications = await umutungoApi<{ items: ApiNotification[] }>('/api/v1/notifications');
+        if (apiNotifications && !cancelled) { const unread = apiNotifications.items.filter((item) => !item.read_at); setNotifications(unread); setTenantData((current) => ({ ...current, notifications: unread })); }
+      } catch { /* Keep local notifications available when the API is not running. */ }
     };
     load();
     const refresh = () => load();

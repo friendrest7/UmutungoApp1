@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
 import { ApiApplication, ApiMessage, TenantBooking, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
+import { Language, t } from '../data/translations';
 
 export type DashboardRole = 'tenant' | 'commissioner' | 'landlord' | 'admin';
 type Metric = { label: string; value: string; note: string; icon: IconName; tone: 'green' | 'amber' | 'blue' | 'dark' };
@@ -39,6 +40,51 @@ const configs: Record<DashboardRole, DashboardConfig> = {
     panelEyebrow: 'Needs attention', panelTitle: 'Latest activity', activity: [{ name: 'New listing submitted', detail: 'Commercial space · Remera', time: '8 min ago', status: 'Review', initials: 'RL' }, { name: 'Agent verification request', detail: 'Jean Claude N. · Kigali', time: '31 min ago', status: 'Open', initials: 'JV' }, { name: 'Listing reported', detail: 'House · Nyarutarama', time: 'Yesterday', status: 'Investigate', initials: 'LR' }], sideEyebrow: 'Platform health', sideTitle: 'Quick checks', sideItems: [{ title: 'Verification queue', detail: '17 accounts waiting', icon: 'check' }, { title: 'Reported listings', detail: '3 need review', icon: 'bell' }],
   },
 };
+
+const dashboardLanguages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
+const dashboardLanguageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
+
+function DashboardTopbar({ eyebrow, active, initials, accountLabel }: { eyebrow: string; active: string; initials: string; accountLabel: string }) {
+  const [darkMode, setDarkMode] = useState(false);
+  const [language, setLanguage] = useState<Language>('English');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  useEffect(() => {
+    const dashboard = document.querySelector('.role-dashboard');
+    const storedTheme = window.localStorage.getItem('umutungo-dashboard-theme') === 'dark';
+    const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
+    setDarkMode(storedTheme);
+    setLanguage(storedLanguage && dashboardLanguages.includes(storedLanguage) ? storedLanguage : 'English');
+    dashboard?.classList.toggle('dashboard-dark', storedTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    window.localStorage.setItem('umutungo-dashboard-theme', next ? 'dark' : 'light');
+    document.querySelector('.role-dashboard')?.classList.toggle('dashboard-dark', next);
+  };
+
+  const changeLanguage = (next: Language) => {
+    setLanguage(next);
+    window.localStorage.setItem('umutungo-language', next);
+    document.documentElement.lang = ({ English: 'en', French: 'fr', Kinyarwanda: 'rw', Swahili: 'sw' } as Record<Language, string>)[next];
+  };
+
+  return <header className="role-dashboard-topbar">
+    <div><span className="role-dashboard-eyebrow">{eyebrow}</span><h1>{active}</h1></div>
+    <div className="role-dashboard-header-actions">
+      <Link className="dashboard-header-tool" href="/#properties" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')}><Icon name="heart" size={17} /></Link>
+      <div className="dashboard-notification-wrap">
+        <button className="dashboard-header-tool" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>
+        {notificationsOpen && <div className="dashboard-notification-popover" role="status">{t(language, 'No new notifications')}</div>}
+      </div>
+      <button className="dashboard-header-tool" type="button" title={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} aria-label={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} onClick={toggleTheme}><Icon name={darkMode ? 'sun' : 'moon'} size={17} /></button>
+      <label className="dashboard-language-select" title={t(language, 'Language')}><Icon name="globe" size={15} /><select value={language} aria-label={t(language, 'Language')} onChange={(event) => changeLanguage(event.target.value as Language)}>{dashboardLanguages.map((item) => <option key={item} value={item}>{dashboardLanguageCodes[item]}</option>)}</select></label>
+      <div className="role-dashboard-profile"><span className="role-dashboard-avatar">{initials}</span><span><strong>My account</strong><small>{accountLabel}</small></span><Icon name="chevron" size={14} /></div>
+    </div>
+  </header>;
+}
 
 function LegacyTenantWorkspaceSection({ view }: { view: string }) {
   const panels: Record<string, { eyebrow: string; title: string; description: string; icon: IconName }> = {

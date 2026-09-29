@@ -298,6 +298,59 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
   50% { transform: translateY(-8px); }
 }
 
+/* Scroll-led landing story and always-available navigation. */
+.app-realistic { scroll-padding-top: 88px; }
+.app-realistic .topbar { position: fixed; top: 0; right: 0; left: 0; z-index: 50; width: 100%; height: 74px; transition: height .35s cubic-bezier(.22,.8,.24,1), box-shadow .35s ease, background .35s ease, border-color .35s ease; }
+.app-realistic .topbar.is-scrolled { height: 62px; }
+.app-realistic .topbar.is-scrolled .topbar-brand .brand-logo { width: 99px; }
+.app-realistic .topbar.is-scrolled .nav-link, .app-realistic .topbar.is-scrolled .nav-contact-link { min-height: 31px; }
+.app-realistic .topbar.is-scrolled .nav-post { min-height: 31px; }
+
+.scroll-story { position: relative; min-height: 350vh; overflow: clip; border-top: 1px solid rgba(25, 52, 32, .08); background: #e8eee7; color: #162319; }
+.scroll-story::before { position: absolute; inset: 0; background: radial-gradient(circle at 78% 24%, rgba(255,255,255,.82), transparent 27%), linear-gradient(115deg, rgba(255,255,255,.36), transparent 44%); content: ''; pointer-events: none; }
+.scroll-story-inner { position: relative; display: grid; grid-template-columns: minmax(250px, .76fr) minmax(420px, 1.24fr); grid-template-rows: auto 1fr; column-gap: clamp(42px, 8vw, 138px); padding-top: 16vh; padding-bottom: 18vh; }
+.scroll-story-intro { grid-column: 1; grid-row: 1; align-self: end; max-width: 340px; padding-bottom: 8vh; }
+.scroll-story-intro h2 { margin: 0 0 22px; font-family: Montserrat, Arial, sans-serif; font-size: clamp(39px, 5vw, 72px); font-weight: 500; letter-spacing: -.07em; line-height: .96; }
+.scroll-story-intro h2 em { color: #2f6940; font-style: normal; }
+.scroll-story-intro > p:last-of-type { max-width: 280px; margin: 0; color: #647066; font-size: 13px; line-height: 1.8; }
+.scroll-story-progress { display: flex; gap: 5px; margin-top: 36px; }
+.scroll-story-progress span { width: 27px; height: 3px; border-radius: 999px; background: rgba(29, 70, 38, .15); transition: width .35s ease, background .35s ease; }
+.scroll-story-progress span.is-active { width: 47px; background: #2f6940; }
+.scroll-story-steps { grid-column: 1; grid-row: 2; }
+.scroll-story-step { display: flex; min-height: 75vh; flex-direction: column; justify-content: center; padding: 42px 0; opacity: .22; transform: translateY(22px); transition: opacity .6s ease, transform .7s cubic-bezier(.22,.8,.24,1); }
+.scroll-story-step.is-active { opacity: 1; transform: translateY(0); }
+.scroll-story-step-index { margin-bottom: 18px; color: #477052; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.scroll-story-step h3 { max-width: 370px; margin: 0 0 17px; font-family: Montserrat, Arial, sans-serif; font-size: clamp(28px, 3vw, 47px); font-weight: 500; letter-spacing: -.06em; line-height: 1.02; }
+.scroll-story-step p { max-width: 300px; margin: 0; color: #647066; font-size: 12px; line-height: 1.8; }
+.scroll-story-visual-wrap { grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
+.scroll-story-visual { position: sticky; top: 108px; height: min(69vh, 720px); min-height: 440px; overflow: hidden; border-radius: 28px; background: #2d4632; box-shadow: 0 32px 80px rgba(31, 62, 38, .2); }
+.scroll-story-visual-image { position: absolute; inset: -4%; background-position: center; background-size: cover; filter: saturate(.74) brightness(.82); transform: scale(calc(1.02 + (var(--story-progress) * .035))); transition: background-image .7s ease, transform .9s cubic-bezier(.22,.8,.24,1), filter .7s ease; }
+.scroll-story-visual::after { position: absolute; inset: 0; border: 1px solid rgba(255,255,255,.24); border-radius: inherit; content: ''; pointer-events: none; }
+.scroll-story-visual-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 19, 11, .05) 15%, rgba(8, 19, 11, .72) 100%); }
+.scroll-story-visual-tag { position: absolute; top: 22px; left: 22px; padding: 8px 11px; border: 1px solid rgba(255,255,255,.34); border-radius: 999px; background: rgba(255,255,255,.13); color: #fff; backdrop-filter: blur(10px); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.scroll-story-visual-caption { position: absolute; right: 23px; bottom: 22px; left: 23px; display: flex; align-items: end; justify-content: space-between; gap: 14px; color: #fff; }
+.scroll-story-visual-caption span { font-family: Montserrat, Arial, sans-serif; font-size: 28px; font-weight: 500; letter-spacing: -.06em; }
+.scroll-story-visual-caption strong { color: rgba(255,255,255,.76); font-size: 10px; letter-spacing: .12em; }
+
+@media (max-width: 780px) {
+  .app-realistic .topbar { height: 66px; }
+  .app-realistic .topbar.is-scrolled { height: 58px; }
+  .app-realistic .topbar.is-scrolled .topbar-brand .brand-logo { width: 93px; }
+  .scroll-story { min-height: 285vh; }
+  .scroll-story-inner { display: grid; grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; gap: 0; padding-top: 94px; padding-bottom: 60px; }
+  .scroll-story-intro { grid-column: 1; grid-row: 1; max-width: 100%; padding-bottom: 38px; }
+  .scroll-story-intro h2 { font-size: clamp(42px, 12vw, 62px); }
+  .scroll-story-visual-wrap { grid-column: 1; grid-row: 2; }
+  .scroll-story-visual { top: 80px; height: min(64vh, 540px); min-height: 360px; border-radius: 20px; }
+  .scroll-story-steps { grid-column: 1; grid-row: 3; }
+  .scroll-story-step { min-height: 62vh; justify-content: center; padding: 38px 0; }
+  .scroll-story-step h3 { font-size: clamp(32px, 9vw, 45px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-realistic .topbar, .scroll-story-step, .scroll-story-progress span, .scroll-story-visual-image { transition: none; }
+}
+
 .landing-directory-search { display: flex; min-height: 45px; align-items: center; gap: 8px; padding: 0 7px 0 13px; border: 1px solid rgba(255,255,255,.58); border-radius: 999px; background: rgba(255,255,255,.12); color: #fff; backdrop-filter: blur(12px); }
 .hero-copy > .landing-directory-search { width: min(100%, 390px); margin-bottom: 28px; transform: translateX(2cm); }
 .landing-directory-search:focus-within { border-color: rgba(255,255,255,.95); background: rgba(255,255,255,.2); }
@@ -1704,4 +1757,505 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
   .tenant-workspace-icon { width: 43px; height: 43px; border-radius: 12px; }
   .tenant-workspace-list article { grid-template-columns: 34px minmax(0, 1fr); }
   .tenant-workspace-list article > button { grid-column: 2; justify-self: start; margin-bottom: 10px; }
+}
+
+/* Keep the landing navigation above the scroll experience at every depth. */
+.app-realistic .topbar { position: fixed; top: 0; right: 0; left: 0; z-index: 50; width: 100%; height: 74px; transition: height .35s cubic-bezier(.22,.8,.24,1), box-shadow .35s ease, background .35s ease, border-color .35s ease; }
+.app-realistic .topbar.is-scrolled { height: 62px; }
+.app-realistic .topbar.is-scrolled .topbar-brand .brand-logo { width: 99px; }
+.app-realistic .topbar.is-scrolled .nav-link, .app-realistic .topbar.is-scrolled .nav-contact-link { min-height: 31px; }
+.app-realistic .topbar.is-scrolled .nav-post { min-height: 31px; }
+
+@media (max-width: 780px) {
+  .app-realistic .topbar { height: 66px; }
+  .app-realistic .topbar.is-scrolled { height: 58px; }
+  .app-realistic .topbar.is-scrolled .topbar-brand .brand-logo { width: 93px; }
+}
+
+/* Compact landing header: preserve the brand and sign-in action before collapsing the links. */
+.app-realistic .topbar { height: 66px; }
+.app-realistic .topbar-inner { gap: 10px; padding: 0 18px; }
+.app-realistic .topbar-brand-group { gap: 8px; transform: none; }
+.app-realistic .topbar-brand .brand-logo { width: 96px; }
+.app-realistic .desktop-nav { max-width: none; margin-left: 12px; gap: 0; padding: 0; border: 0; background: transparent; }
+.app-realistic .desktop-nav .nav-link, .app-realistic .nav-contact-link { min-height: 32px; padding: 0 6px; font-size: 9px; }
+.app-realistic .nav-actions { gap: 4px; margin-left: auto; transform: none; }
+.app-realistic .nav-sign-in { min-height: 30px; margin-left: 0; padding: 0 8px; font-size: 10px; }
+.app-realistic .nav-saved, .app-realistic .nav-notifications { width: 29px; height: 29px; }
+.app-realistic .nav-utility-group { padding-left: 5px; }
+.app-realistic .nav-post { min-height: 30px; padding: 0 10px; font-size: 9px; }
+.app-realistic .topbar.is-scrolled { height: 56px; }
+.app-realistic .topbar.is-scrolled .topbar-brand .brand-logo { width: 90px; }
+
+@media (max-width: 1100px) {
+  .app-realistic .topbar-inner { padding: 0 14px; }
+  .app-realistic .desktop-nav { margin-left: 4px; }
+  .app-realistic .desktop-nav .nav-link, .app-realistic .nav-contact-link { padding: 0 4px; }
+  .app-realistic .nav-contact-link { display: none; }
+}
+
+@media (max-width: 920px) {
+  .app-realistic .topbar-inner { gap: 6px; }
+  .app-realistic .desktop-nav, .app-realistic .nav-home-link { display: none; }
+  .app-realistic .nav-actions .hover-hint, .app-realistic .nav-saved, .app-realistic .nav-notifications, .app-realistic .nav-utility-group { display: none; }
+  .app-realistic .nav-sign-in { display: inline-flex !important; }
+  .app-realistic .mobile-menu-button { display: grid; width: 30px; height: 30px; }
+}
+
+@media (max-width: 600px) {
+  .app-realistic .topbar { height: 58px; }
+  .app-realistic .topbar.is-scrolled { height: 52px; }
+  .app-realistic .topbar-inner { padding: 0 11px; }
+  .app-realistic .topbar-brand .brand-logo { width: 88px; }
+  .app-realistic .topbar.is-scrolled .topbar-brand .brand-logo { width: 82px; }
+  .app-realistic .nav-sign-in { min-height: 28px; padding: 0 7px; font-size: 9px; }
+  .app-realistic .mobile-menu-button { width: 29px; height: 29px; }
+}
+
+/* Match the search panel to the compact glass navigation language. */
+.app-realistic .property-search {
+  width: min(100%, 1050px);
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,.48);
+  border-radius: 20px;
+  background: rgba(255,255,255,.18);
+  box-shadow: 0 18px 45px rgba(18, 32, 21, .18), inset 0 1px 0 rgba(255,255,255,.22);
+  backdrop-filter: blur(18px) saturate(125%);
+}
+.app-realistic .search-control {
+  min-height: 45px;
+  padding: 6px 11px;
+  border: 1px solid rgba(255,255,255,.34);
+  border-radius: 13px;
+  background: rgba(255,255,255,.48);
+  color: #376145;
+  backdrop-filter: blur(12px);
+}
+.app-realistic .search-control:hover, .app-realistic .search-control:focus-within {
+  border-color: rgba(255,255,255,.86);
+  background: rgba(255,255,255,.68);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.14);
+}
+.app-realistic .search-control small { color: #5c6d60; font-size: 8px; letter-spacing: .11em; }
+.app-realistic .search-control select { color: #1d2c21; font-size: 10px; }
+.app-realistic .search-control > svg:first-child { color: #376145; }
+.app-realistic .search-control > svg:last-child { color: #637267; }
+.app-realistic .search-submit { min-height: 45px; padding: 10px 17px; border: 1px solid rgba(255,255,255,.28); box-shadow: 0 8px 18px rgba(8, 85, 39, .2); }
+
+@media (max-width: 780px) {
+  .app-realistic .property-search { width: 100%; border-radius: 17px; background: rgba(255,255,255,.28); }
+  .app-realistic .search-control { min-height: 43px; }
+}
+
+@media (max-width: 520px) {
+  .app-realistic .property-search { grid-template-columns: 1fr; padding: 7px; }
+  .app-realistic .search-submit { grid-column: auto; width: 100%; }
+}
+
+/* Editorial type system: system-first typography, black labels, and restrained contrast. */
+.app-realistic {
+  --paper: #f5f5f7;
+  --surface: #ffffff;
+  --ink: #111111;
+  --muted: rgba(17,17,17,.64);
+  --line: rgba(17,17,17,.14);
+  --green: #111111;
+  --green-dark: #111111;
+  --green-soft: #ececee;
+  color: #111111;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+}
+.app-realistic :is(h1, h2, h3, p, span, small, strong, a, button, label, input, select, textarea) { color: #111111; }
+.app-realistic h1, .app-realistic h2, .app-realistic h3,
+.app-realistic .section-heading h2, .app-realistic .scroll-story-intro h2,
+.app-realistic .scroll-story-step h3, .app-realistic .listing-cta h2,
+.app-realistic .about-panel h2, .app-realistic .contact-interface h2 {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 600;
+  letter-spacing: -.055em;
+}
+.app-realistic .eyebrow, .app-realistic .section-description,
+.app-realistic .hero-lead, .app-realistic .scroll-story-intro > p:last-of-type,
+.app-realistic .scroll-story-step p, .app-realistic .contact-interface-copy,
+.app-realistic .listing-cta > div:last-child p { color: rgba(17,17,17,.68) !important; }
+.app-realistic .hero-image::before { filter: grayscale(.18) saturate(.64) brightness(1.03); }
+.app-realistic .hero-image-overlay { display: block; background: linear-gradient(90deg, rgba(248,248,250,.97) 0%, rgba(248,248,250,.89) 29%, rgba(248,248,250,.45) 58%, rgba(248,248,250,.06) 100%); }
+.app-realistic .hero-content { text-align: left; }
+.app-realistic .hero-copy { margin-left: 0; }
+.app-realistic .hero-copy h1, .app-realistic .hero-copy h1 em { color: #111111 !important; }
+.app-realistic .hero-lead { color: rgba(17,17,17,.7) !important; }
+.app-realistic .hero-actions { justify-content: flex-start; margin-left: 0; transform: none; }
+.app-realistic .hero-actions .button-primary, .app-realistic .hero-actions .button-commissioner { border-color: rgba(17,17,17,.18); background: rgba(255,255,255,.78); color: #111111 !important; box-shadow: 0 8px 20px rgba(17,17,17,.1); }
+.app-realistic .hero-actions .button-primary:hover, .app-realistic .hero-actions .button-commissioner:hover { background: #ffffff; color: #111111 !important; }
+.app-realistic .landing-directory-search { border-color: rgba(17,17,17,.28); background: rgba(255,255,255,.6); color: #111111; }
+.app-realistic .landing-directory-search input, .app-realistic .landing-directory-search input::placeholder { color: rgba(17,17,17,.72); }
+.app-realistic .landing-directory-search button { background: #ffffff; color: #111111; }
+.app-realistic .topbar, .app-realistic .topbar.is-scrolled { color: #111111; }
+.app-realistic .topbar .nav-post { border-color: rgba(17,17,17,.18); background: rgba(255,255,255,.72); color: #111111; box-shadow: 0 8px 20px rgba(17,17,17,.08); }
+.app-realistic .topbar .nav-post:hover { background: #ffffff; color: #111111; }
+.app-realistic .nav-link:hover, .app-realistic .nav-link.active, .app-realistic .nav-dropdown-trigger.is-open { background: rgba(17,17,17,.07); color: #111111; }
+.app-realistic .nav-sign-in { border-color: rgba(17,17,17,.28); color: #111111; }
+.app-realistic .nav-sign-in:hover { background: #111111; color: #ffffff !important; }
+.app-realistic .scroll-story { background: #f0f0f2; color: #111111; }
+.app-realistic .scroll-story-intro h2 em { color: #111111; }
+.app-realistic .scroll-story-step-index { color: #111111; }
+.app-realistic .scroll-story-progress span.is-active { background-color: #111111; }
+.app-realistic .scroll-story-progress span { background: rgba(17,17,17,.16); }
+.app-realistic .scroll-story-visual-image { filter: grayscale(.2) saturate(.58) brightness(1.04); }
+.app-realistic .scroll-story-visual-shade { background: linear-gradient(180deg, rgba(255,255,255,.04) 15%, rgba(255,255,255,.86) 100%); }
+.app-realistic .scroll-story-visual-tag { border-color: rgba(17,17,17,.18); background: rgba(255,255,255,.72); color: #111111; }
+.app-realistic .scroll-story-visual-caption span, .app-realistic .scroll-story-visual-caption strong { color: #111111; }
+.app-realistic .premium-category-card::after, .app-realistic .neighbourhood-card { color: #111111; }
+.app-realistic .premium-category-card::after { background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.92) 100%); }
+.app-realistic .premium-category-copy, .app-realistic .premium-category-copy small { color: #111111; }
+.app-realistic .neighbourhood-card { background-blend-mode: multiply; }
+.app-realistic .stats-section { background: #f5f5f7; color: #111111; }
+.app-realistic .stats-grid > div { border-color: rgba(17,17,17,.14); }
+.app-realistic .stats-grid strong, .app-realistic .stats-grid span { color: #111111; }
+.app-realistic .about-section, .app-realistic .contact-interface, .app-realistic .site-footer { background: #ffffff; color: #111111; }
+.app-realistic .about-panel { border: 1px solid rgba(17,17,17,.12); background: #f0f0f2; color: #111111; box-shadow: 0 20px 50px rgba(17,17,17,.08); }
+.app-realistic .about-panel .eyebrow, .app-realistic .about-panel h2, .app-realistic .about-panel h2 em, .app-realistic .about-panel > p { color: #111111 !important; }
+.app-realistic .about-panel .button-primary { border-color: #111111; background: #111111; color: #ffffff !important; }
+.app-realistic .about-feature-list article, .app-realistic .contact-interface-form { border-color: rgba(17,17,17,.14); }
+.app-realistic .contact-interface-form { background: #f5f5f7; box-shadow: 0 20px 50px rgba(17,17,17,.06); }
+.app-realistic .contact-interface-form :is(input, textarea) { border-color: rgba(17,17,17,.18); background: #ffffff; color: #111111; }
+.app-realistic .contact-interface-form .button-primary { background: #111111; color: #ffffff !important; }
+.app-realistic .listing-cta h2 em, .app-realistic .neighbourhood-section h2 em { color: #111111; }
+.app-realistic .site-footer :is(p, span, small, strong, a, h2) { color: #111111; }
+.app-realistic :is(.button, .button-primary, .button-commissioner, .listing-cta-button, .search-submit) { border-color: rgba(17,17,17,.24); background: #ffffff; color: #111111 !important; }
+.app-realistic :is(.button, .button-primary, .button-commissioner, .listing-cta-button, .search-submit):hover { border-color: #111111; background: #f0f0f2; color: #111111 !important; }
+
+/* Neutral project-wide accent palette. Green remains available only inside imagery, never as UI copy. */
+:root { --green: #111111; --green-dark: #111111; --green-soft: #ececee; }
+.app.theme-dark { --green: #f3f3f3; --green-dark: #f3f3f3; --green-soft: #25282c; }
+body:not(.theme-dark) :is(.eyebrow, .property-type, .card-link, .text-link, .text-arrow-link, .contact-email, .footer-register-link, .footer-column > span, .professional-role, .professional-verified, .upgrade-eyebrow, .upgrade-intro h1 em, .upgrade-section-heading h2 em, .auth-eyebrow, .category-back, .category-map-button, .listing-intent, .category-empty button, .category-contact-button, .role-dashboard-primary, .tenant-overview-panel a, .landlord-property-copy > strong, .landlord-notification-empty, .viewer-request-success, .review-success, .workspace-action-notice) { color: #111111 !important; }
+body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dashboard-status.new, .role-dashboard-side-item > span, .role-dashboard-outline, .role-dashboard-metric-icon.green, .role-dashboard-metrics em, .role-dashboard-nav > svg, .role-dashboard-avatar, .role-dashboard-contact-avatar, .tenant-booking-summary-heading, .tenant-workspace-icon, .tenant-workspace-row-icon, .tenant-workspace-list button, .tenant-card-number, .landlord-property-image > span, .landlord-notification-count, .upgrade-header > div > a, .upgrade-trust svg, .upgrade-select-label, .auth-method-button, .auth-testing summary, .auth-testing b, .auth-form-back, .category-experience-header > div > a, .category-verified, .property-availability-badge, .property-landlord-view, .property-map-button, .property-review-open, .property-review-success, .payment-form label, .payment-success-mark, .property-landlord-avatar, .property-contact-button) { color: #111111 !important; }
+
+/* Restore the original full-colour landing photography while keeping text readable in a clean surface. */
+.app-realistic .hero-image::before { background-position: center 48%; filter: saturate(.68) brightness(.82); }
+.app-realistic .hero-image-overlay { display: none; }
+.app-realistic .hero-copy { padding: 28px 30px; border: 1px solid rgba(255,255,255,.62); border-radius: 18px; background: rgba(255,255,255,.86); box-shadow: 0 18px 45px rgba(17,17,17,.12); }
+.app-realistic .hero-copy h1, .app-realistic .hero-copy h1 em, .app-realistic .hero-lead { color: #111111 !important; }
+
+/* The process section now has a stable two-column heading and non-overlapping cards. */
+.app-realistic .how-it-works-section { background: #f5f5f7; }
+.app-realistic .how-it-works-section .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, .58fr); align-items: end; gap: clamp(30px, 7vw, 100px); }
+.app-realistic .how-it-works-section .section-heading > div, .app-realistic .how-it-works-section .section-description { min-width: 0; }
+.app-realistic .how-it-works-section .section-description { margin: 0 0 4px; }
+.app-realistic .process-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 30px; }
+.app-realistic .process-card { min-width: 0; min-height: 210px; padding: 26px; border: 1px solid rgba(17,17,17,.14); border-radius: 14px; background: #ffffff; box-shadow: 0 12px 30px rgba(17,17,17,.06); }
+.app-realistic .process-card > svg, .app-realistic .process-number { color: #111111; }
+.app-realistic .process-card h3, .app-realistic .process-card p { color: #111111 !important; }
+.app-realistic .process-card p { color: rgba(17,17,17,.64) !important; }
+
+@media (max-width: 900px) {
+  .app-realistic .how-it-works-section .section-heading { grid-template-columns: 1fr; gap: 18px; }
+  .app-realistic .how-it-works-section .section-description { max-width: 520px; margin: 0; }
+  .app-realistic .process-grid { grid-template-columns: 1fr; }
+  .app-realistic .process-card { min-height: 0; }
+}
+
+/* Final glass treatment: let the restored photography remain visible through the search panel. */
+.app-realistic .property-search {
+  border-color: rgba(255,255,255,.30) !important;
+  background: rgba(255,255,255,.09) !important;
+  box-shadow: 0 20px 50px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.24);
+  backdrop-filter: blur(24px) saturate(135%);
+  -webkit-backdrop-filter: blur(24px) saturate(135%);
+}
+.app-realistic .property-search .search-control {
+  border-color: rgba(255,255,255,.27) !important;
+  background: rgba(255,255,255,.22) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.app-realistic .property-search .search-control:hover,
+.app-realistic .property-search .search-control:focus-within { background: rgba(255,255,255,.36) !important; }
+.app-realistic .property-search .search-submit { background: rgba(255,255,255,.78) !important; }
+
+/* Keep the fixed navigation clear of the standalone How it works hero. */
+.app-realistic.info-page-shell .how-page-hero { padding-top: 66px; }
+.app-realistic.info-page-shell .how-page .standalone-hero-grid { min-height: calc(590px + 66px); padding-top: 80px; }
+
+@media (max-width: 760px) {
+  .app-realistic.info-page-shell .how-page-hero { padding-top: 58px; }
+  .app-realistic.info-page-shell .how-page .standalone-hero-grid { min-height: auto; padding-top: 82px; }
+}
+
+/* Complete dark-mode pass: every shell and shared surface follows the same readable palette. */
+.app.theme-dark,
+.app.theme-dark.app-realistic {
+  --paper: #0b0d10;
+  --surface: #15191f;
+  --ink: #f5f7fa;
+  --muted: rgba(245,247,250,.70);
+  --line: rgba(245,247,250,.16);
+  --green: #f5f7fa;
+  --green-dark: #f5f7fa;
+  --green-soft: #252a31;
+  background: var(--paper);
+  color: #f5f7fa;
+  color-scheme: dark;
+}
+.app.theme-dark :is(h1, h2, h3, h4, h5, h6, p, span, small, strong, em, a, button, label, legend, input, select, textarea, summary) { color: #f5f7fa !important; }
+.app.theme-dark :is(p, small, .muted, .section-description, .property-card p, .property-listed, .footer-bottom, .role-dashboard-muted, .role-dashboard-eyebrow, .upgrade-muted, .category-experience-eyebrow, .category-listing-meta, .category-listing-copy p, .category-detail-location, .category-detail-description, .category-detail-rating small) { color: rgba(245,247,250,.70) !important; }
+.app.theme-dark :is(svg, .eyebrow > span) { color: #f5f7fa; }
+.app.theme-dark :is(input, select, textarea) { border-color: rgba(245,247,250,.20); background: #11151a; color: #f5f7fa; }
+.app.theme-dark :is(input, select, textarea)::placeholder { color: rgba(245,247,250,.54); }
+.app.theme-dark :is(.topbar, .site-footer, .standalone-section, .info-section, .about-section, .contact-interface, .how-it-works-section, .scroll-story, .category-section, .section-property, .neighbourhood-section, .listing-cta) { background-color: #0b0d10; color: #f5f7fa; }
+.app.theme-dark .topbar, .app.theme-dark .topbar.is-scrolled { border-color: rgba(245,247,250,.15); background: rgba(11,13,16,.74); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.app.theme-dark .topbar .nav-link:hover, .app.theme-dark .topbar .nav-link.active, .app.theme-dark .topbar .nav-dropdown-trigger.is-open, .app.theme-dark .mobile-menu-link:hover { background: rgba(245,247,250,.10); color: #f5f7fa; }
+.app.theme-dark .topbar .nav-post, .app.theme-dark .nav-sign-in { border-color: rgba(245,247,250,.30); background: rgba(245,247,250,.10); color: #f5f7fa; }
+.app.theme-dark .nav-sign-in:hover { background: #f5f7fa; color: #111111 !important; }
+.app.theme-dark .mobile-menu, .app.theme-dark .mobile-menu-group { border-color: rgba(245,247,250,.14); background: #0b0d10; }
+.app.theme-dark .dropdown-panel, .app.theme-dark .account-panel { border-color: rgba(245,247,250,.16); background: #15191f; box-shadow: 0 18px 42px rgba(0,0,0,.34); }
+.app.theme-dark .dropdown-panel button:hover, .app.theme-dark .dropdown-panel button.selected, .app.theme-dark .account-panel-item:hover { background: rgba(245,247,250,.10); color: #f5f7fa; }
+.app.theme-dark.app-realistic .hero-image-overlay { display: block; background: linear-gradient(90deg, rgba(8,10,13,.86) 0%, rgba(8,10,13,.62) 46%, rgba(8,10,13,.18) 100%); }
+.app.theme-dark.app-realistic .hero-copy { border-color: rgba(245,247,250,.18); background: rgba(15,18,23,.72); box-shadow: 0 18px 45px rgba(0,0,0,.28); }
+.app.theme-dark.app-realistic .hero-copy h1, .app.theme-dark.app-realistic .hero-copy h1 em, .app.theme-dark.app-realistic .hero-lead { color: #f5f7fa !important; }
+.app.theme-dark.app-realistic .landing-directory-search { border-color: rgba(245,247,250,.34); background: rgba(15,18,23,.54); }
+.app.theme-dark.app-realistic .landing-directory-search input, .app.theme-dark.app-realistic .landing-directory-search input::placeholder { color: rgba(245,247,250,.84); }
+.app.theme-dark.app-realistic .property-search { border-color: rgba(245,247,250,.22) !important; background: rgba(15,18,23,.34) !important; }
+.app.theme-dark.app-realistic .property-search .search-control { border-color: rgba(245,247,250,.20) !important; background: rgba(245,247,250,.10) !important; }
+.app.theme-dark.app-realistic .property-search .search-control:hover, .app.theme-dark.app-realistic .property-search .search-control:focus-within { background: rgba(245,247,250,.16) !important; }
+.app.theme-dark.app-realistic .property-search .search-submit { background: #f5f7fa !important; color: #111111 !important; }
+.app.theme-dark.app-realistic .scroll-story { background: #11151a; }
+.app.theme-dark.app-realistic .scroll-story-visual-shade { background: linear-gradient(180deg, rgba(8,10,13,.02) 15%, rgba(8,10,13,.82) 100%); }
+.app.theme-dark.app-realistic .scroll-story-visual-tag { border-color: rgba(245,247,250,.24); background: rgba(8,10,13,.42); }
+.app.theme-dark.app-realistic .process-card, .app.theme-dark.app-realistic .property-card, .app.theme-dark.app-realistic .contact-interface-form, .app.theme-dark.app-realistic .about-panel { border-color: rgba(245,247,250,.15); background: #15191f; color: #f5f7fa; box-shadow: 0 18px 45px rgba(0,0,0,.20); }
+.app.theme-dark.app-realistic .stats-section { background: #15191f; color: #f5f7fa; }
+.app.theme-dark.app-realistic .premium-category-card::after { background: linear-gradient(180deg, rgba(8,10,13,.06), rgba(8,10,13,.82) 100%); }
+.app.theme-dark.app-realistic .premium-category-copy, .app.theme-dark.app-realistic .premium-category-copy small { color: #f5f7fa !important; }
+
+.app.theme-dark .role-dashboard { --dashboard-paper: #0b0d10; --dashboard-surface: #15191f; --dashboard-ink: #f5f7fa; --dashboard-muted: rgba(245,247,250,.68); --dashboard-line: rgba(245,247,250,.15); background: var(--dashboard-paper); color: var(--dashboard-ink); }
+.app.theme-dark .role-dashboard-sidebar, .app.theme-dark .role-dashboard-topbar, .app.theme-dark .role-dashboard-metrics article, .app.theme-dark .role-dashboard-panel, .app.theme-dark .tenant-workspace-section, .app.theme-dark .landlord-properties-section, .app.theme-dark .landlord-property-card { border-color: var(--dashboard-line); background: var(--dashboard-surface); color: var(--dashboard-ink); }
+.app.theme-dark .role-dashboard-topbar { background: rgba(21,25,31,.82); }
+.app.theme-dark .role-dashboard-nav, .app.theme-dark .role-dashboard-sidebar-bottom a, .app.theme-dark .role-dashboard-sidebar-bottom button, .app.theme-dark .role-dashboard-activity article > button { color: var(--dashboard-muted); }
+.app.theme-dark .role-dashboard-nav:hover, .app.theme-dark .role-dashboard-nav.active, .app.theme-dark .role-dashboard-sidebar-bottom a:hover, .app.theme-dark .role-dashboard-sidebar-bottom button:hover { background: rgba(245,247,250,.10); color: #f5f7fa; }
+
+.app.theme-dark .upgrade-page { --upgrade-paper: #0b0d10; --upgrade-surface: #15191f; --upgrade-ink: #f5f7fa; --upgrade-muted: rgba(245,247,250,.68); --upgrade-line: rgba(245,247,250,.15); background: var(--upgrade-paper); color: var(--upgrade-ink); }
+.app.theme-dark .upgrade-header, .app.theme-dark .upgrade-plan-card, .app.theme-dark .upgrade-payment-panel, .app.theme-dark .upgrade-order-summary, .app.theme-dark .upgrade-action-row { border-color: var(--upgrade-line); background: var(--upgrade-surface); color: var(--upgrade-ink); }
+.app.theme-dark .upgrade-premium-tools { background: #15191f; color: #f5f7fa; }
+.app.theme-dark .category-experience { --category-paper: #0b0d10; --category-surface: #15191f; --category-ink: #f5f7fa; --category-muted: rgba(245,247,250,.68); --category-line: rgba(245,247,250,.15); background: var(--category-paper); color: var(--category-ink); }
+.app.theme-dark .category-experience-header, .app.theme-dark .category-listing-card, .app.theme-dark .category-detail-panel { border-color: var(--category-line); background: var(--category-surface); color: var(--category-ink); }
+.app.theme-dark .category-filter-row button, .app.theme-dark .category-view-button, .app.theme-dark .category-map-button { border-color: var(--category-line); background: transparent; color: #f5f7fa; }
+.app.theme-dark .auth-modal, .app.theme-dark .tenant-dialog { border-color: rgba(245,247,250,.16); background: #15191f; color: #f5f7fa; }
+
+/* Hero: no copy panel; use the image as the surface and reserve green for actions only. */
+.app-realistic:not(.theme-dark) .hero-image-overlay { display: block; background: linear-gradient(90deg, rgba(7,17,10,.62) 0%, rgba(8,20,11,.36) 52%, rgba(8,20,11,.08) 100%); }
+.app-realistic:not(.theme-dark) .hero-copy { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.app-realistic:not(.theme-dark) .hero-copy h1, .app-realistic:not(.theme-dark) .hero-copy h1 em, .app-realistic:not(.theme-dark) .hero-lead { color: #ffffff !important; }
+.app-realistic:not(.theme-dark) .hero-actions .button-primary, .app-realistic:not(.theme-dark) .hero-actions .button-commissioner { border-color: #087d3d; background: #087d3d; color: #ffffff !important; box-shadow: 0 8px 20px rgba(8,125,61,.24); }
+.app-realistic:not(.theme-dark) .hero-actions .button-primary:hover, .app-realistic:not(.theme-dark) .hero-actions .button-commissioner:hover { border-color: #065a2b; background: #065a2b; color: #ffffff !important; }
+
+/* Keep the dark landing hero copy directly on the photography, without a card panel. */
+.app.theme-dark.app-realistic .hero-copy { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.app.theme-dark.app-realistic .landing-directory-search { border-color: rgba(17,17,17,.28); background: rgba(255,255,255,.6); color: #111111; box-shadow: none; }
+.app.theme-dark.app-realistic .landing-directory-search input, .app.theme-dark.app-realistic .landing-directory-search input::placeholder { color: rgba(17,17,17,.72); }
+.app.theme-dark.app-realistic .landing-directory-search button { background: #ffffff; color: #111111; }
+.app-realistic .ai-model-indicator { color: #087d3d; }
+.app-realistic .ai-model-indicator svg { color: #087d3d; }
+.app-realistic .ai-chat-toggle, .app-realistic .ai-chat-header, .app-realistic .ai-chat-form button { border-color: #087d3d; background: #087d3d; color: #ffffff; }
+.app-realistic .ai-chat-toggle:hover, .app-realistic .ai-chat-form button:hover { border-color: #065a2b; background: #065a2b; }
+
+/* Keep the full property filter below the opening landing view. */
+.app-realistic .hero-search-wrap { position: relative; right: auto; bottom: auto; left: auto; margin: 76px auto 0; }
+@media (max-width: 780px) {
+  .app-realistic .hero-search-wrap { margin-top: 58px; }
+}
+
+/* Keep every property-filter label and value readable after the panel moves below the hero. */
+.app-realistic .property-search .search-control { color: #111111; }
+.app-realistic .property-search .search-control small { color: #385342 !important; font-size: 9px; font-weight: 800; }
+.app-realistic .property-search .search-control select { color: #111111 !important; opacity: 1; font-size: 11px; font-weight: 700; }
+.app-realistic .property-search .search-control > svg:first-child { color: #087d3d !important; }
+.app-realistic .property-search .search-control > svg:last-child { color: #53645a !important; }
+.app.theme-dark.app-realistic .property-search .search-control { color: #f5f7fa; background: rgba(245,247,250,.10) !important; }
+.app.theme-dark.app-realistic .property-search .search-control small { color: rgba(245,247,250,.72) !important; }
+.app.theme-dark.app-realistic .property-search .search-control select { color: #f5f7fa !important; }
+.app.theme-dark.app-realistic .property-search .search-control > svg:first-child { color: #55c77c !important; }
+.app.theme-dark.app-realistic .property-search .search-control > svg:last-child { color: rgba(245,247,250,.68) !important; }
+
+/* Refined deep-green accent system for the landing experience. */
+.app-realistic:not(.theme-dark) {
+  --green: #0f4a36;
+  --green-dark: #083324;
+  --green-soft: #e4efe9;
+}
+.app.theme-dark.app-realistic {
+  --green: #164d3b;
+  --green-dark: #0d382a;
+  --green-soft: #1d362d;
+}
+.app-realistic:not(.theme-dark) .hero-actions .button-primary,
+.app-realistic:not(.theme-dark) .hero-actions .button-commissioner {
+  border-color: #0f4a36;
+  background: #0f4a36;
+}
+.app-realistic:not(.theme-dark) .hero-actions .button-primary:hover,
+.app-realistic:not(.theme-dark) .hero-actions .button-commissioner:hover {
+  border-color: #083324;
+  background: #083324;
+}
+.app-realistic .property-search .search-submit {
+  border-color: #0f4a36 !important;
+  background: #0f4a36 !important;
+  color: #ffffff !important;
+}
+.app-realistic .property-search .search-submit:hover {
+  border-color: #083324 !important;
+  background: #083324 !important;
+}
+.app-realistic .ai-model-indicator,
+.app-realistic .ai-model-indicator svg {
+  color: #0f4a36;
+}
+.app-realistic .ai-chat-toggle,
+.app-realistic .ai-chat-header,
+.app-realistic .ai-chat-form button {
+  border-color: #0f4a36;
+  background: #0f4a36;
+}
+.app-realistic .ai-chat-toggle:hover,
+.app-realistic .ai-chat-form button:hover {
+  border-color: #083324;
+  background: #083324;
+}
+.app.theme-dark.app-realistic .property-search .search-submit {
+  border-color: #164d3b !important;
+  background: #164d3b !important;
+  color: #ffffff !important;
+}
+.app.theme-dark.app-realistic .property-search .search-submit:hover {
+  border-color: #0d382a !important;
+  background: #0d382a !important;
+}
+.app.theme-dark.app-realistic .ai-model-indicator,
+.app.theme-dark.app-realistic .ai-model-indicator svg {
+  color: #6da88e;
+}
+.app-realistic .ai-chat-toggle,
+.app-realistic .ai-chat-toggle span,
+.app-realistic .ai-chat-toggle svg {
+  color: #ffffff !important;
+}
+
+/* Center the complete landing message as one deliberate hero composition. */
+.app-realistic .hero-content {
+  justify-content: center;
+  text-align: center;
+}
+.app-realistic .hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 auto;
+  transform: none;
+}
+.app-realistic .hero-copy h1 {
+  margin-right: auto;
+  margin-left: auto;
+}
+.app-realistic .hero-copy > .landing-directory-search {
+  margin-right: auto;
+  margin-left: auto;
+  transform: none;
+}
+.app-realistic .hero-lead {
+  margin-right: auto;
+  margin-left: auto;
+}
+.app-realistic .hero-actions {
+  justify-content: center;
+  margin-left: 0;
+  transform: none;
+}
+
+/* Final navigation spacing and scroll material. */
+.app-realistic .topbar { background: rgba(255,255,255,.84); border-bottom-color: rgba(17,17,17,.12); }
+.app-realistic .topbar.is-scrolled { background: rgba(255,255,255,.14); border-bottom-color: rgba(17,17,17,.10); box-shadow: 0 10px 30px rgba(17,17,17,.08); }
+.app.theme-dark.app-realistic .topbar { background: rgba(21,25,31,.86); border-bottom-color: rgba(245,247,250,.14); }
+.app.theme-dark.app-realistic .topbar.is-scrolled { background: rgba(21,25,31,.18); border-bottom-color: rgba(245,247,250,.10); }
+.app-realistic .topbar-inner { gap: 16px; padding-right: 26px; padding-left: 28px; }
+.app-realistic .topbar-brand-group { flex: 0 0 auto; gap: 14px; }
+.app-realistic .topbar-brand, .app-realistic .nav-home-link { flex: 0 0 auto; }
+.app.theme-dark.app-realistic .topbar-brand .brand-logo { filter: brightness(0) invert(1); opacity: 1; }
+.app-realistic .desktop-nav { flex: 1 1 auto; min-width: 0; margin-left: 0; justify-content: center; }
+.app-realistic .desktop-nav .nav-link, .app-realistic .nav-contact-link { flex: 0 0 auto; }
+.app-realistic .nav-actions { flex: 0 0 auto; }
+
+@media (max-width: 1100px) and (min-width: 921px) {
+  .app-realistic .topbar-inner { gap: 10px; padding-right: 16px; padding-left: 20px; }
+  .app-realistic .topbar-brand-group { gap: 10px; }
+  .app-realistic .desktop-nav { margin-left: 0; justify-content: center; }
+}
+
+/* Dark landing controls: one deep-green action language, with layered search surfaces. */
+.app.theme-dark.app-realistic :is(.button, .nav-post, .nav-sign-in, .search-submit, .ai-chat-toggle, .mobile-menu-button) {
+  border-color: #2b6b52 !important;
+  background: #164d3b !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(3, 22, 15, .28);
+}
+.app.theme-dark.app-realistic :is(.button, .nav-post, .nav-sign-in, .search-submit, .ai-chat-toggle, .mobile-menu-button):hover {
+  border-color: #3a8063 !important;
+  background: #0d382a !important;
+}
+.app.theme-dark.app-realistic .landing-directory-search {
+  border-color: rgba(123, 176, 150, .42) !important;
+  background: linear-gradient(145deg, rgba(21, 67, 50, .92), rgba(7, 28, 21, .94)) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255,255,255,.12);
+  color: #f5f7fa;
+}
+.app.theme-dark.app-realistic .landing-directory-search input,
+.app.theme-dark.app-realistic .landing-directory-search input::placeholder {
+  color: rgba(245,247,250,.86) !important;
+}
+.app.theme-dark.app-realistic .landing-directory-search:focus-within {
+  border-color: rgba(160, 210, 183, .74) !important;
+  background: linear-gradient(145deg, rgba(25, 78, 58, .96), rgba(8, 33, 24, .97)) !important;
+}
+.app.theme-dark.app-realistic .landing-directory-search button {
+  border: 1px solid rgba(123,176,150,.38);
+  background: #164d3b !important;
+  color: #ffffff !important;
+}
+.app.theme-dark.app-realistic .property-search {
+  border-color: rgba(123,176,150,.30) !important;
+  background: linear-gradient(145deg, rgba(20, 55, 42, .92), rgba(8, 26, 20, .96)) !important;
+  box-shadow: 0 22px 54px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.app.theme-dark.app-realistic .property-search .search-control {
+  border-color: rgba(123,176,150,.22) !important;
+  background: rgba(255,255,255,.08) !important;
+}
+.app.theme-dark.app-realistic .property-search .search-control:hover,
+.app.theme-dark.app-realistic .property-search .search-control:focus-within {
+  border-color: rgba(123,176,150,.50) !important;
+  background: rgba(255,255,255,.13) !important;
+}
+.app.theme-dark.app-realistic .ai-chat-header,
+.app.theme-dark.app-realistic .ai-chat-form button {
+  background: #164d3b !important;
+}
+
+/* Separate the property filters from the photography into a second content board. */
+.app-realistic .landing-search-board {
+  position: relative;
+  z-index: 2;
+  padding: 28px 0 32px;
+  border-bottom: 1px solid #e4e8e5;
+  background: #ffffff;
+}
+.app-realistic .landing-search-board .hero-search-wrap {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  margin: 0 auto;
+}
+.app.theme-dark.app-realistic .landing-search-board {
+  border-bottom-color: rgba(123,176,150,.18);
+  background: #0b1712;
 }

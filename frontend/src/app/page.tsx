@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
 import { Icon } from '../components/Icons';
@@ -37,6 +37,60 @@ const neighbourhoods = [
 ];
 
 const categoryTypes: Record<string, string> = { Homes: 'House', Apartments: 'Apartment', Land: 'Land', 'Commercial spaces': 'Commercial' };
+
+function ScrollStory({ copy }: { copy: (key: string) => string }) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [progress, setProgress] = useState(0);
+  const scenes = [
+    { eyebrow: '01 — Begin anywhere', title: 'Start with the feeling.', body: 'Tell us what home means to you, then let the right places rise to the surface.', image: '/properties/tour-living.jpg', tag: 'Homes · Kigali' },
+    { eyebrow: '02 — See it clearly', title: 'Every detail, in focus.', body: 'Move from the wide view to the small things that make a place feel like yours.', image: '/properties/tour-kitchen.jpg', tag: 'Thoughtful details' },
+    { eyebrow: '03 — Know your place', title: 'A neighbourhood with a rhythm.', body: 'Explore the streets, essentials and energy around every listing before you visit.', image: '/properties/kigali-neighborhood.jpg', tag: 'Explore Kigali' },
+    { eyebrow: '04 — Take the next step', title: 'Make it yours.', body: 'When it feels right, connect with a verified owner or agent and move forward with confidence.', image: '/properties/house-01.jpg', tag: 'Ready when you are' },
+  ];
+
+  useEffect(() => {
+    const updateProgress = () => {
+      const section = sectionRef.current;
+      if (!section) return;
+      const travel = Math.max(section.offsetHeight - window.innerHeight, 1);
+      const nextProgress = Math.min(1, Math.max(0, -section.getBoundingClientRect().top / travel));
+      setProgress((current) => Math.abs(current - nextProgress) > 0.002 ? nextProgress : current);
+    };
+    updateProgress();
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    window.addEventListener('resize', updateProgress);
+    return () => { window.removeEventListener('scroll', updateProgress); window.removeEventListener('resize', updateProgress); };
+  }, []);
+
+  const activeIndex = Math.min(scenes.length - 1, Math.floor(progress * scenes.length));
+  const activeScene = scenes[activeIndex];
+
+  return <section ref={sectionRef} className="scroll-story" id="story" style={{ '--story-progress': progress } as CSSProperties}>
+    <div className="scroll-story-inner container">
+      <div className="scroll-story-intro">
+        <p className="eyebrow">{copy('A better way to look')}</p>
+        <h2>{copy('The search')}<br /><em>{copy('comes alive.')}</em></h2>
+        <p>{copy('Scroll through a simpler way to find the place that feels like home.')}</p>
+        <div className="scroll-story-progress" aria-label="Story progress">{scenes.map((scene, index) => <span key={scene.eyebrow} className={index <= activeIndex ? 'is-active' : ''} />)}</div>
+      </div>
+      <div className="scroll-story-steps">
+        {scenes.map((scene, index) => <article className={`scroll-story-step ${index === activeIndex ? 'is-active' : ''}`} key={scene.eyebrow}>
+          <span className="scroll-story-step-index">{scene.eyebrow}</span>
+          <h3>{copy(scene.title)}</h3>
+          <p>{copy(scene.body)}</p>
+        </article>)}
+      </div>
+      <div className="scroll-story-visual-wrap">
+        <div className="scroll-story-visual">
+          <div className="scroll-story-visual-image" style={{ backgroundImage: `url(${activeScene.image})` }} />
+          <div className="scroll-story-visual-shade" />
+          <span className="scroll-story-visual-tag">{copy(activeScene.tag)}</span>
+          <div className="scroll-story-visual-caption"><span>Umutungo</span><strong>{String(activeIndex + 1).padStart(2, '0')} / {String(scenes.length).padStart(2, '0')}</strong></div>
+        </div>
+      </div>
+    </div>
+  </section>;
+}
 
 export default function HomePage() {
   const [darkMode, setDarkMode] = useState(false);
@@ -108,8 +162,11 @@ export default function HomePage() {
           <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Search landlords and commissioners" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Search landlords or commissioners" /><button type="submit" aria-label="Search directory"><Icon name="arrow" size={15} /></button></form>
           <p className="hero-lead">{copy('Browse verified homes, land and commercial spaces across Rwanda.')}</p>
           <div className="hero-actions"><a className="button button-primary" href="/categories/houses">{copy('Browse properties')} <Icon name="arrow" size={16} /></a><button className="button button-commissioner" type="button" onClick={() => requestSignIn('Commissioner / Komisiyoneri')}>{copy('Join as Commissioner')} <Icon name="arrow" size={16} /></button></div>
-        </div></div><div className="container hero-search-wrap"><PropertySearch language={language} location={location} type={type} intent={intent} priceRange={priceRange} onLocationChange={setLocation} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
+        </div></div></div>
+        <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} type={type} intent={intent} priceRange={priceRange} onLocationChange={setLocation} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
       </section>
+
+      <ScrollStory copy={copy} />
 
       <section className="section section-property container" id="properties">
         <div className="section-heading split-heading"><div><p className="eyebrow">{selectedCategory ? copy('Category view') : copy('Featured properties')}</p><h2>{selectedCategory ? copy(selectedCategory) : copy('Places worth')}<br /><em>{selectedCategory ? copy('properties.') : copy('a closer look.')}</em></h2></div><p className="section-description">{selectedCategory ? `${visibleProperties.length} ${copy('properties found in this category.')}` : copy('A small selection of homes currently available in Kigali.')}</p></div>

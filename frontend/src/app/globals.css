@@ -2569,6 +2569,8 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .app-realistic .scroll-story { background: var(--paper); }
 .app-realistic .scroll-story-visual { border-radius: 28px; box-shadow: var(--shadow-card); }
 .app-realistic .scroll-story-step.is-active { border-color: var(--green); }
+.app-realistic .scroll-story :is(.scroll-story-intro h2, .scroll-story-intro h2 em, .scroll-story-intro > p:last-of-type, .scroll-story-step-index, .scroll-story-step h3, .scroll-story-step p, .scroll-story-cta) { color: #000 !important; }
+.app.theme-dark.app-realistic .scroll-story :is(.scroll-story-intro h2, .scroll-story-intro h2 em, .scroll-story-intro > p:last-of-type, .scroll-story-step-index, .scroll-story-step h3, .scroll-story-step p, .scroll-story-cta) { color: #fff !important; }
 .app-realistic .process-card,
 .app-realistic .about-feature-list article,
 .app-realistic .contact-interface-form,
@@ -2805,6 +2807,16 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   background: #064c29 !important;
 }
 
+.app.theme-dark.app-realistic .topbar,
+.app.theme-dark.app-realistic .topbar.is-scrolled {
+  background: #000000 !important;
+  border-bottom-color: rgba(255,255,255,.16) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+.app.theme-dark.app-realistic .mobile-menu {
+  background: #000000 !important;
+}
+
 .landlord-property-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .landlord-property-actions button { min-height: 34px; }
 
@@ -2815,6 +2827,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 /* Keep mobile preferences in the top navigation, immediately before the menu control. */
 @media (max-width: 780px) {
   .app-realistic .nav-actions { gap: 5px; }
+  .app-realistic .topbar .nav-actions .nav-utility-group .nav-dropdown { transform: translateX(1cm); }
   .app-realistic .nav-actions .nav-saved,
   .app-realistic .nav-actions .nav-notifications,
   .app-realistic .mobile-post-action { display: none; }

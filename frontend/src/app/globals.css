@@ -2572,25 +2572,6 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .theme-dark.app-realistic .listing-cta h2 em { color: #a8e9b8; }
 .app-realistic .site-footer { background: var(--surface); border-top-color: var(--line); }
 
-/* Keep the landing navbar black in both themes. */
-.app-realistic:not(.theme-dark) .topbar,
-.app-realistic:not(.theme-dark) .topbar.is-scrolled { background: #000000; border-color: rgba(255,255,255,.16); color: #ffffff; }
-.app-realistic:not(.theme-dark) .nav-home-link,
-.app-realistic:not(.theme-dark) .desktop-nav .nav-link,
-.app-realistic:not(.theme-dark) .desktop-nav .nav-contact-link,
-.app-realistic:not(.theme-dark) .nav-saved,
-.app-realistic:not(.theme-dark) .nav-notifications,
-.app-realistic:not(.theme-dark) .topbar .nav-actions .nav-dropdown .nav-link,
-.app-realistic:not(.theme-dark) .nav-sign-in { color: #ffffff !important; }
-.app-realistic:not(.theme-dark) .nav-home-link { border-left-color: rgba(255,255,255,.2); }
-.app-realistic:not(.theme-dark) .nav-sign-in { border-color: rgba(255,255,255,.42); background: transparent; }
-.app-realistic:not(.theme-dark) .desktop-nav .nav-link:hover,
-.app-realistic:not(.theme-dark) .desktop-nav .nav-contact-link:hover,
-.app-realistic:not(.theme-dark) .nav-saved:hover,
-.app-realistic:not(.theme-dark) .nav-notifications:hover,
-.app-realistic:not(.theme-dark) .nav-sign-in:hover { background: rgba(255,255,255,.12); color: #ffffff !important; }
-.app-realistic:not(.theme-dark) .nav-utility-group { border-left-color: rgba(255,255,255,.2); }
-
 @media (max-width: 1120px) and (min-width: 781px) {
   .app-realistic .topbar-inner { gap: 10px; padding: 0 13px; }
   .app-realistic .topbar-brand .brand-logo { width: 94px; }

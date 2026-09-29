@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Language, t } from '../data/translations';
 
 type Review = { id: number; name: string; rating: number; message: string };
@@ -16,10 +16,22 @@ export function ReviewPanel({ language }: { language: Language }) {
   const [reviews, setReviews] = useState(starterReviews);
   const [submitted, setSubmitted] = useState(false);
 
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem('umutungo-reviews') ?? '[]') as Review[];
+      if (Array.isArray(stored)) setReviews([...stored, ...starterReviews.filter((review) => !stored.some((item) => item.id === review.id))]);
+    } catch { /* Keep the starter reviews available if storage is unavailable. */ }
+  }, []);
+
   const submitReview = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!name.trim() || !email.trim() || !message.trim()) return;
-    setReviews((current) => [{ id: Date.now(), name: name.trim(), rating, message: message.trim() }, ...current]);
+    const review = { id: Date.now(), name: name.trim(), rating, message: message.trim() };
+    setReviews((current) => {
+      const next = [review, ...current];
+      window.localStorage.setItem('umutungo-reviews', JSON.stringify(next));
+      return next;
+    });
     setName('');
     setEmail('');
     setMessage('');

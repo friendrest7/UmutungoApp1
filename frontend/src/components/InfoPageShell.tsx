@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { AiChatbot } from './AiChatbot';
 import { Footer } from './Footer';
@@ -18,6 +18,60 @@ const categoryCards = [
   { name: 'Offices', detail: 'Professional places to build your team.', slug: 'offices', image: '/properties/commercial-02.jpg', accent: 'slate' },
   { name: 'Hospitality', detail: 'Short stays with clear booking details.', slug: 'hospitality', image: '/properties/apartment-02.jpg', accent: 'rose' },
 ];
+
+function HowItWorksStory({ copy }: { copy: (key: string) => string }) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [progress, setProgress] = useState(0);
+  const scenes = [
+    { eyebrow: '01 — Begin anywhere', title: 'Start with the feeling.', body: 'Tell us what home means to you, then let the right places rise to the surface. The process is meant to feel fun and relieving—we care about your convenience, and we are genuinely happy to have you here.', cta: 'Tap Search and see the magic unfold.', image: '/properties/story-begin.jpg', tag: 'Homes · Kigali' },
+    { eyebrow: '02 — See it clearly', title: 'Every detail, in focus.', body: 'Move from the wide view to the small things that make a place feel like yours. We want you to live in the house of your dreams, work in the office of your dreams, and drive your dream car.', cta: '', image: '/properties/story-detail.jpg', tag: 'Thoughtful details' },
+    { eyebrow: '03 — Know your place', title: 'A neighbourhood with a rhythm.', body: 'Explore the streets, essentials and energy around every listing before you visit. Use your finger to move through the house, keep exploring each room, and enjoy the feeling of viewing your next home before you arrive.', cta: '', image: '/properties/kigali-neighborhood.jpg', tag: 'Explore Kigali' },
+    { eyebrow: '04 — Take the next step', title: 'Make it yours.', body: 'When it feels right, connect with a verified owner or agent and move forward with confidence. You will receive thoughtful service and a smooth, welcoming experience. If you want to become an agent or landlord on the platform, you are welcome here too—with the tools and support to get what you want from your property journey.', cta: '', image: '/properties/story-next-step.jpg', tag: 'Ready when you are' },
+  ];
+
+  useEffect(() => {
+    const updateProgress = () => {
+      const section = sectionRef.current;
+      if (!section) return;
+      const travel = Math.max(section.offsetHeight - window.innerHeight, 1);
+      const nextProgress = Math.min(1, Math.max(0, -section.getBoundingClientRect().top / travel));
+      setProgress((current) => Math.abs(current - nextProgress) > 0.002 ? nextProgress : current);
+    };
+    updateProgress();
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    window.addEventListener('resize', updateProgress);
+    return () => { window.removeEventListener('scroll', updateProgress); window.removeEventListener('resize', updateProgress); };
+  }, []);
+
+  const activeIndex = Math.min(scenes.length - 1, Math.floor(progress * scenes.length));
+  const activeScene = scenes[activeIndex];
+
+  return <section ref={sectionRef} className="scroll-story" id="story" style={{ '--story-progress': progress } as CSSProperties}>
+    <div className="scroll-story-inner container">
+      <div className="scroll-story-intro">
+        <p className="eyebrow">{copy('A better way to look')}</p>
+        <h2>{copy('The search')}<br /><em>{copy('comes alive.')}</em></h2>
+        <p>{copy('Scroll through a simpler way to find the place that feels like home.')}</p>
+        <div className="scroll-story-progress" aria-label="Story progress">{scenes.map((scene, index) => <span key={scene.eyebrow} className={index <= activeIndex ? 'is-active' : ''} />)}</div>
+      </div>
+      <div className="scroll-story-steps">
+        {scenes.map((scene, index) => <article className={`scroll-story-step ${index === activeIndex ? 'is-active' : ''}`} key={scene.eyebrow}>
+          <span className="scroll-story-step-index">{scene.eyebrow}</span>
+          <h3>{copy(scene.title)}</h3>
+          <p>{copy(scene.body)}{scene.cta && <> <a className="scroll-story-cta" href="/categories/houses">{copy(scene.cta)} <Icon name="arrow" size={13} /></a></>}</p>
+        </article>)}
+      </div>
+      <div className="scroll-story-visual-wrap">
+        <div className="scroll-story-visual">
+          <div className="scroll-story-visual-image" style={{ backgroundImage: `url(${activeScene.image})` }} />
+          <div className="scroll-story-visual-shade" />
+          <span className="scroll-story-visual-tag">{copy(activeScene.tag)}</span>
+          <div className="scroll-story-visual-caption"><span>Umutungo</span><strong>{String(activeIndex + 1).padStart(2, '0')} / {String(scenes.length).padStart(2, '0')}</strong></div>
+        </div>
+      </div>
+    </div>
+  </section>;
+}
 
 export function InfoPageShell({ page }: { page: InfoPage }) {
   const [language, setLanguage] = useState<Language>('English');
@@ -56,15 +110,9 @@ export function InfoPageShell({ page }: { page: InfoPage }) {
 }
 
 function HowItWorksPage({ copy }: { copy: (key: string) => string }) {
-  const steps = [
-    { number: '01', icon: 'search' as const, title: copy('Easy to explore'), text: copy('Clear places, clear next steps') },
-    { number: '02', icon: 'check' as const, title: copy('Built on trust'), text: copy('Better information for everyone') },
-    { number: '03', icon: 'users' as const, title: copy('Local agents'), text: copy('Speak to people who know the area and the market.') },
-  ];
-
   return <main className="standalone-page how-page">
     <section className="standalone-hero how-page-hero"><div className="container standalone-hero-grid"><div><p className="eyebrow">{copy('How Umutungo works')}</p><h1>{copy('Umutungo is a platform to help people get their dream living places and other properties.')}</h1><p>{copy('We are here for everyone who wants a place to live — the easy, trusted and comfortable way.')}</p><a className="button button-primary" href="/categories/houses">{copy('Explore spaces')} <Icon name="arrow" size={15} /></a></div><div className="journey-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><span className="orbit-center"><Icon name="home" size={28} /></span><span className="orbit-node orbit-node-one">Search</span><span className="orbit-node orbit-node-two">Compare</span><span className="orbit-node orbit-node-three">Move in</span></div></div></section>
-    <section className="standalone-section"><div className="container"><div className="standalone-heading"><p className="eyebrow">01 — {copy('Easy to explore')}</p><h2>{copy('A clearer search')}<br /><em>{copy('from the first step.')}</em></h2></div><div className="journey-steps">{steps.map((step) => <article className="journey-step" key={step.number}><span className="journey-step-number">{step.number}</span><Icon name={step.icon} size={22} /><h3>{step.title}</h3><p>{step.text}</p></article>)}</div></div></section>
+    <HowItWorksStory copy={copy} />
     <section className="journey-banner"><div className="container journey-banner-inner"><div><p className="eyebrow">{copy('Made for Rwanda')}</p><h2>{copy('Rooted in how we live')}</h2></div><Link className="text-arrow-link" href="/categories">{copy('Browse by category')} <Icon name="arrow" size={15} /></Link></div></section>
   </main>;
 }

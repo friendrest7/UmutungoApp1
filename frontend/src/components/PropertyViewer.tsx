@@ -185,6 +185,8 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     event.preventDefault();
     if (!reviewMessage.trim()) return;
     try { await umutungoApi('/api/v1/reviews', { method: 'POST', body: JSON.stringify({ listing_id: property.id, rating: reviewRating, body: reviewMessage }) }); } catch { /* Local/demo review */ }
+    const storedReviews = JSON.parse(window.localStorage.getItem('umutungo-property-reviews') ?? '[]') as Array<Record<string, unknown>>;
+    window.localStorage.setItem('umutungo-property-reviews', JSON.stringify([{ id: `review-${property.id}-${Date.now()}`, listing_id: property.id, listing_title: property.title, rating: reviewRating, body: reviewMessage.trim(), created_at: new Date().toISOString() }, ...storedReviews]));
     setReviewSubmitted(true);
     setReviewOpen(false);
   };

@@ -152,15 +152,15 @@ export default function HomePage() {
 
   const requestSignIn = (role: 'Tenant' | 'Commissioner / Komisiyoneri') => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role } }));
   const requestTenantSignIn = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Tenant', returnTo: '/tenant' } }));
+  const submitDirectorySearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    window.location.assign(`/directory${directoryQuery.trim() ? `?search=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
+  };
   const submitSearch = () => {
     if ((intent === 'Buy' || intent === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) { requestTenantSignIn(); return; }
     const categorySlugs: Record<string, string> = { House: 'houses', Apartment: 'apartments', Land: 'land', Commercial: 'commercial' };
     const shopSlug = categorySlugs[type] ?? 'houses';
     window.location.assign(`/categories/${shopSlug}?location=${encodeURIComponent(location)}&intent=${encodeURIComponent(intent)}&priceRange=${encodeURIComponent(priceRange)}`);
-  };
-  const submitDirectorySearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    window.location.assign(`/directory${directoryQuery.trim() ? `?search=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
   };
 
   const toggleFavorite = (property: PropertyPlaceholder) => {
@@ -195,14 +195,12 @@ export default function HomePage() {
       <section className="hero-section" id="home">
         <div className="hero-image"><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <h1>{copy('Here is the best choice for places that are personalised to you.')}</h1>
-          <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="I want a house near stadium" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form>
+          <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form>
           <p className="hero-lead">{copy('Every problem has a solution. We are here to reduce the stress of searching for a property.')}</p>
           <div className="hero-actions"><a className="button button-primary" href="/categories/houses">{copy('Browse properties')} <Icon name="arrow" size={16} /></a><button className="button button-commissioner" type="button" onClick={() => requestSignIn('Commissioner / Komisiyoneri')}>{copy('Join as Commissioner')} <Icon name="arrow" size={16} /></button></div>
         </div></div></div>
         <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} type={type} intent={intent} priceRange={priceRange} onLocationChange={setLocation} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
       </section>
-
-      <ScrollStory copy={copy} />
 
       <section className="section section-property container" id="properties">
         <div className="section-heading split-heading"><div><p className="eyebrow">{selectedCategory ? copy('Category view') : copy('Featured properties')}</p><h2>{selectedCategory ? copy(selectedCategory) : copy('Places worth')}<br /><em>{selectedCategory ? copy('properties.') : copy('a closer look.')}</em></h2></div><p className="section-description">{selectedCategory ? `${visibleProperties.length} ${copy('properties found in this category.')}` : copy('A small selection of homes currently available in Kigali.')}</p></div>

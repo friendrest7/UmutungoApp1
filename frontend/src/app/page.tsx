@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState, type CSSProperties } from 'react';
+import Image from 'next/image';
 import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
 import { Icon } from '../components/Icons';
@@ -78,7 +79,7 @@ function ScrollStory({ copy }: { copy: (key: string) => string }) {
       </div>
       <div className="scroll-story-steps">
         {scenes.map((scene, index) => <article className={`scroll-story-step ${index === activeIndex ? 'is-active' : ''}`} key={scene.eyebrow}>
-          <span className="scroll-story-step-index">{scene.eyebrow}</span>
+          <span className="scroll-story-step-index">{copy(scene.eyebrow)}</span>
           <h3>{copy(scene.title)}</h3>
           <p>{copy(scene.body)}{scene.cta && <> <a className="scroll-story-cta" href="/categories/houses">{copy(scene.cta)} <Icon name="arrow" size={13} /></a></>}</p>
         </article>)}
@@ -186,7 +187,7 @@ export default function HomePage() {
     <AiChatbot language={language} />
     <main>
       <section className="hero-section" id="home">
-        <div className="hero-image"><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
+        <div className="hero-image"><Image className="hero-image-photo" src="/landingog.png" alt="Kigali cityscape" fill priority quality={82} sizes="100vw" /><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <h1>{copy('Here is the best choice for places that are personalised to you.')}</h1>
           <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form>
           <p className="hero-lead">{copy('Every problem has a solution. We are here to reduce the stress of searching for a property.')}</p>

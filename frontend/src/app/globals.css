@@ -2182,8 +2182,8 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 /* Final navigation spacing and scroll material. */
 .app-realistic .topbar { background: rgba(255,255,255,.84); border-bottom-color: rgba(17,17,17,.12); }
 .app-realistic .topbar.is-scrolled { background: rgba(255,255,255,.14); border-bottom-color: rgba(17,17,17,.10); box-shadow: 0 10px 30px rgba(17,17,17,.08); }
-.app.theme-dark.app-realistic .topbar { background: #000000; border-bottom-color: rgba(245,247,250,.14); }
-.app.theme-dark.app-realistic .topbar.is-scrolled { background: #000000; border-bottom-color: rgba(245,247,250,.10); }
+.app.theme-dark.app-realistic .topbar { background: rgba(13,36,24,.94); border-bottom-color: rgba(177,224,190,.18); }
+.app.theme-dark.app-realistic .topbar.is-scrolled { background: rgba(13,36,24,.97); border-bottom-color: rgba(177,224,190,.14); }
 .app-realistic .topbar-inner { gap: 16px; padding-right: 26px; padding-left: 28px; }
 .app-realistic .topbar-brand-group { flex: 0 0 auto; gap: 14px; }
 .app-realistic .topbar-brand, .app-realistic .nav-home-link { flex: 0 0 auto; }
@@ -2485,7 +2485,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 }
 .theme-dark.app-realistic .topbar {
   border-color: rgba(177, 224, 190, .16);
-  background: #000000;
+  background: rgba(13, 36, 24, .94);
   box-shadow: 0 14px 36px rgba(0, 0, 0, .24);
 }
 .app-realistic .topbar.is-scrolled {
@@ -2493,7 +2493,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   border-color: rgba(11, 107, 58, .16);
   box-shadow: 0 10px 28px rgba(16, 45, 27, .06);
 }
-.theme-dark.app-realistic .topbar.is-scrolled { background: #000000; border-color: rgba(177, 224, 190, .14); }
+.theme-dark.app-realistic .topbar.is-scrolled { background: rgba(13, 36, 24, .97); border-color: rgba(177, 224, 190, .14); }
 .theme-dark.app-realistic .topbar-brand .brand-logo { filter: none; }
 .app-realistic .topbar-inner { width: min(100%, 1400px); margin: 0 auto; gap: 18px; padding: 0 18px; }
 .app-realistic .topbar-brand-group { gap: 16px; transform: none; }
@@ -2718,6 +2718,45 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .theme-dark .about-story-marker small, .theme-dark .about-story-copy p:nth-child(3), .theme-dark .about-section-heading > p { color: var(--muted); }
 .theme-dark .about-closing-section { background: #0d2418; }
 
+/* Keep the landing headline bright and prominent over the hero image. */
+.app-realistic .hero-copy h1,
+.app-realistic .hero-copy h1 em {
+  color: #ffffff !important;
+  width: 100%;
+  max-width: none !important;
+  margin-bottom: 32px;
+  font-size: clamp(24px, 2.56vw, 35.2px) !important;
+  line-height: 1.05;
+  transform: translate(-1.2cm, 1cm);
+  white-space: nowrap;
+}
+.app-realistic .hero-lead {
+  max-width: 620px;
+  font-size: 19px !important;
+  line-height: 1.5;
+  position: relative;
+  top: 1cm;
+}
+.app-realistic .hero-actions {
+  position: relative;
+  top: 1cm;
+}
+.app-realistic .hero-copy > .landing-directory-search {
+  position: relative;
+  top: 0.8cm;
+}
+@media (max-width: 780px) {
+  .app-realistic .hero-copy h1 {
+    font-size: clamp(21.6px, 6.4vw, 30.4px) !important;
+    transform: translate(-1.2cm, 1cm);
+    white-space: normal;
+  }
+  .app-realistic .hero-lead {
+    max-width: 500px;
+    font-size: 16px !important;
+  }
+}
+
 @media (max-width: 760px) {
   .about-section-heading { grid-template-columns: 1fr; gap: 18px; }
   .about-people-grid { grid-template-columns: 1fr; }
@@ -2827,3 +2866,18 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .tenant-message-empty p { margin: 4px 0 0; font-size: 11px; }
 .post-save-error { margin: 0 0 12px; border: 1px solid rgba(180, 55, 45, .3); border-radius: 8px; padding: 10px 12px; color: #a33b30; background: #fff4f2; font-size: 11px; }
 @media (max-width: 760px) { .landlord-message-layout { grid-template-columns: 1fr; } .landlord-message-inbox { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Let Next optimize the landing photograph instead of loading it as a raw CSS background. */
+.app-realistic .hero-image::before {
+  display: none;
+}
+.app-realistic .hero-image-photo {
+  z-index: 0;
+  object-fit: cover;
+  object-position: center 48%;
+  filter: saturate(.98) brightness(.96) contrast(1.04);
+  transform: scale(1.015);
+}
+.app.theme-dark.app-realistic .hero-image-photo {
+  filter: saturate(.82) brightness(.55) contrast(1.08);
+}

@@ -58,7 +58,7 @@ function HowItWorksStory({ copy }: { copy: (key: string) => string }) {
       </div>
       <div className="scroll-story-steps">
         {scenes.map((scene, index) => <article className={`scroll-story-step ${index === activeIndex ? 'is-active' : ''}`} key={scene.eyebrow}>
-          <span className="scroll-story-step-index">{scene.eyebrow}</span>
+          <span className="scroll-story-step-index">{copy(scene.eyebrow)}</span>
           <h3>{copy(scene.title)}</h3>
           <p>{copy(scene.body)}{scene.cta && <> <a className="scroll-story-cta" href="/categories/houses">{copy(scene.cta)} <Icon name="arrow" size={13} /></a></>}</p>
         </article>)}
@@ -103,7 +103,7 @@ export function InfoPageShell({ page }: { page: InfoPage }) {
 
 function HowItWorksPage({ copy }: { copy: (key: string) => string }) {
   return <main className="standalone-page how-page">
-    <section className="standalone-hero how-page-hero"><div className="container standalone-hero-grid"><div><p className="eyebrow">{copy('How Umutungo works')}</p><h1>{copy('Umutungo is a platform to help people get their dream living places and other properties.')}</h1><p>{copy('We are here for everyone who wants a place to live — the easy, trusted and comfortable way.')}</p><a className="button button-primary" href="/categories/houses">{copy('Explore spaces')} <Icon name="arrow" size={15} /></a></div><div className="journey-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><span className="orbit-center"><Icon name="home" size={28} /></span><span className="orbit-node orbit-node-one">Search</span><span className="orbit-node orbit-node-two">Compare</span><span className="orbit-node orbit-node-three">Move in</span></div></div></section>
+    <section className="standalone-hero how-page-hero"><div className="container standalone-hero-grid"><div><p className="eyebrow">{copy('How Umutungo works')}</p><h1>{copy('Umutungo is a platform to help people get their dream living places and other properties.')}</h1><p>{copy('We are here for everyone who wants a place to live — the easy, trusted and comfortable way.')}</p><a className="button button-primary" href="/categories/houses">{copy('Explore spaces')} <Icon name="arrow" size={15} /></a></div><div className="journey-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><span className="orbit-center"><Icon name="home" size={28} /></span><span className="orbit-node orbit-node-one">{copy('Search')}</span><span className="orbit-node orbit-node-two">{copy('Compare')}</span><span className="orbit-node orbit-node-three">{copy('Move in')}</span></div></div></section>
     <HowItWorksStory copy={copy} />
     <section className="journey-banner"><div className="container journey-banner-inner"><div><p className="eyebrow">{copy('Made for Rwanda')}</p><h2>{copy('Rooted in how we live')}</h2></div><Link className="text-arrow-link" href="/categories">{copy('Browse by category')} <Icon name="arrow" size={15} /></Link></div></section>
   </main>;

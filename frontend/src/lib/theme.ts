@@ -47,10 +47,11 @@ function applyThemeToDocument(theme: Theme) {
   document.querySelectorAll<HTMLElement>('.role-dashboard').forEach((element) => element.classList.toggle('dashboard-dark', darkMode));
 }
 
-function useThemeState(): ThemeContextValue {
+function useThemeState(active = true): ThemeContextValue {
   const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {
+    if (!active) return;
     const syncTheme = () => {
       const nextTheme = readStoredTheme();
       setTheme(nextTheme);
@@ -63,14 +64,11 @@ function useThemeState(): ThemeContextValue {
     syncTheme();
     window.addEventListener('storage', onStorage);
     window.addEventListener(THEME_CHANGED_EVENT, syncTheme);
-    const observer = new MutationObserver(() => applyThemeToDocument(readStoredTheme()));
-    observer.observe(document.documentElement, { childList: true, subtree: true });
     return () => {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener(THEME_CHANGED_EVENT, syncTheme);
-      observer.disconnect();
     };
-  }, []);
+  }, [active]);
 
   const toggleTheme = useCallback(() => {
     setTheme((currentTheme) => {
@@ -91,6 +89,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function usePersistentTheme() {
   const context = useContext(ThemeContext);
-  const localTheme = useThemeState();
+  // Keep fallback support for isolated consumers, but do not create a second
+  // storage listener or DOM observer when the shared provider is available.
+  const localTheme = useThemeState(context === null);
   return context ?? localTheme;
 }

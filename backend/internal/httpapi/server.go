@@ -631,7 +631,10 @@ func (s *Server) createApplication(w http.ResponseWriter, r *http.Request, listi
 		errorJSON(w, http.StatusBadRequest, "listing is not available for applications")
 		return
 	}
-	_, _ = s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_received','New rental application',$2)`, ownerID, fmt.Sprintf("%s applied to one of your properties", user.Name))
+	if _, err := s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_received','New rental application',$2)`, ownerID, fmt.Sprintf("%s applied to one of your properties", user.Name)); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create application notification")
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": appID, "status": "pending"})
 }
 
@@ -734,7 +737,10 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request, id st
 	if input.Status == "accepted" && input.RentAmount != nil {
 		decisionBody = fmt.Sprintf("Your rental application was accepted at RWF %.0f per month", *input.RentAmount)
 	}
-	_, _ = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_decision','Rental application update',$2)`, applicantID, decisionBody)
+	if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_decision','Rental application update',$2)`, applicantID, decisionBody); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create application notification")
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not finish application update")
 		return
@@ -935,7 +941,10 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "could not send message")
 		return
 	}
-	_, _ = s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'message_received','New landlord message',$2)`, input.RecipientID, fmt.Sprintf("%s sent you a message", user.Name))
+	if _, err = s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'message_received','New message',$2)`, input.RecipientID, fmt.Sprintf("%s sent you a message", user.Name)); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create message notification")
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "sent"})
 }
 

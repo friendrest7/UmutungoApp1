@@ -12,7 +12,7 @@ export function Footer({ language }: { language: Language }) {
           <a className="app-download-option" href="#" aria-disabled="true" title={t(language, 'Download links coming soon')} onClick={(event) => event.preventDefault()}><span className="app-download-icon"><Icon name="apple" size={19} /></span><span><small>{t(language, 'Download on')}</small><strong>{t(language, 'iOS app')}</strong></span></a>
         </div>
       </div>
-      <div className="container footer-main"><a className="footer-register-link" href="/register">Create an account <Icon name="arrow" size={14} /></a>
+      <div className="container footer-main"><a className="footer-register-link" href="/register">{t(language, 'Create an account')} <Icon name="arrow" size={14} /></a>
         <div className="footer-brand-block"><a href="#home"><Logo /></a><p>{t(language, 'Making the journey home')}<br />{t(language, 'feel a little more human.')}</p></div>
         <div className="footer-column"><span>{t(language, 'Explore')}</span><a href="/">{t(language, 'Home')}</a><a href="/categories">{t(language, 'Categories')}</a><a href="/how-it-works">{t(language, 'How it works')}</a></div>
         <div className="footer-column"><span>{t(language, 'For you')}</span><a href="/post-property">{t(language, 'Post a House')}</a><a href="/#rwanda">{t(language, 'Umutungo in Rwanda')}</a><a href="/about">{t(language, 'Our promise')}</a></div>

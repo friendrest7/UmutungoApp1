@@ -2,7 +2,7 @@ import { Language, t } from '../data/translations';
 import { Icon } from './Icons';
 import { Logo } from './Logo';
 
-export function Footer({ language }: { language: Language }) {
+export function Footer({ language, darkMode = false }: { language: Language; darkMode?: boolean }) {
   return (
     <footer className="site-footer" id="footer-contact">
       <div className="container app-download" id="app-download">
@@ -13,7 +13,7 @@ export function Footer({ language }: { language: Language }) {
         </div>
       </div>
       <div className="container footer-main"><a className="footer-register-link" href="/register">{t(language, 'Create an account')} <Icon name="arrow" size={14} /></a>
-        <div className="footer-brand-block"><a href="#home"><Logo /></a><p>{t(language, 'Making the journey home')}<br />{t(language, 'feel a little more human.')}</p></div>
+        <div className="footer-brand-block"><a href="#home"><Logo darkMode={darkMode} /></a><p>{t(language, 'Making the journey home')}<br />{t(language, 'feel a little more human.')}</p></div>
         <div className="footer-column"><span>{t(language, 'Explore')}</span><a href="/">{t(language, 'Home')}</a><a href="/categories">{t(language, 'Categories')}</a><a href="/how-it-works">{t(language, 'How it works')}</a></div>
         <div className="footer-column"><span>{t(language, 'For you')}</span><a href="/post-property">{t(language, 'Post a House')}</a><a href="/#rwanda">{t(language, 'Umutungo in Rwanda')}</a><a href="/about">{t(language, 'Our promise')}</a></div>
         <div className="footer-column"><span>{t(language, 'Connect')}</span><a href="mailto:hello@umutungo.rw">hello@umutungo.rw</a><a className="footer-social-link instagram-link" href="#home" aria-label="Instagram"><Icon name="instagram" size={22} />Instagram <span aria-hidden="true">↗</span></a><a className="footer-social-link linkedin-link" href="#home" aria-label="LinkedIn"><Icon name="linkedin" size={22} />LinkedIn <span aria-hidden="true">↗</span></a></div>

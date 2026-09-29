@@ -239,7 +239,7 @@ export default function HomePage() {
 
       <ReviewPanel language={language} />
     </main>
-    <Footer language={language} />
+    <Footer language={language} darkMode={darkMode} />
     {selectedProperty && <PropertyViewer language={language} property={selectedProperty} onClose={() => setSelectedProperty(null)} />}
   </div>;
 }

@@ -97,7 +97,7 @@ export function InfoPageShell({ page }: { page: InfoPage }) {
     {page === 'how' && <HowItWorksPage copy={copy} />}
     {page === 'about' && <AboutPage copy={copy} />}
     {page === 'categories' && <CategoriesPage copy={copy} />}
-    <Footer language={language} />
+    <Footer language={language} darkMode={darkMode} />
   </div>;
 }
 

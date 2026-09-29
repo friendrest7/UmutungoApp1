@@ -527,7 +527,7 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
   .nav-sign-in { display: none; }
   .account-menu-wrap { display: none; }
   .nav-utility-group { padding-left: 0; border-left: 0; }
-  .topbar .nav-actions .nav-dropdown { display: none; }
+  .topbar .nav-actions .nav-dropdown { display: block; }
   .theme-toggle { width: 34px; min-height: 34px; padding: 0; justify-content: center; }
   .theme-label { display: none; }
   .mobile-menu-button { display: grid; }
@@ -2305,6 +2305,12 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .dashboard-notification-popover article:last-child { border-bottom: 0; }
 .dashboard-notification-popover strong { color: #1d2d23; font-size: 10px; }
 .dashboard-notification-popover small { color: #627068; font-size: 9px; line-height: 1.45; }
+.admin-report-download-popover { display: grid; gap: 7px; width: 220px; }
+.admin-report-download-popover > div { display: flex; gap: 5px; margin-top: 4px; }
+.admin-report-download-popover button { display: inline-flex; min-height: 29px; align-items: center; justify-content: center; gap: 5px; flex: 1; padding: 0 7px; border: 1px solid #c9e4cc; border-radius: 7px; background: #f0f9f1; color: #087d3d; cursor: pointer; font-size: 9px; font-weight: 800; }
+.admin-report-download-popover button:hover { background: #dff1e2; }
+.admin-report-download-popover button:disabled { cursor: wait; opacity: .55; }
+.admin-report-download-popover em { color: #087d3d; font-size: 9px; font-style: normal; }
 .dashboard-utility-dock.is-dark { border-color: rgba(123,176,150,.24); background: rgba(16,42,31,.92); box-shadow: 0 12px 30px rgba(0,0,0,.25); }
 .dashboard-utility-dock.is-dark .dashboard-header-tool { color: rgba(245,247,250,.72); }
 .dashboard-utility-dock.is-dark .dashboard-header-tool:hover { background: rgba(123,176,150,.16); color: #fff; }
@@ -2838,7 +2844,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 /* Keep mobile preferences in the top navigation, immediately before the menu control. */
 @media (max-width: 780px) {
   .app-realistic .nav-actions { gap: 5px; }
-  .app-realistic .topbar .nav-actions .nav-utility-group .nav-dropdown { transform: translateX(1cm); }
+  .app-realistic .topbar .nav-actions .nav-utility-group .nav-dropdown { transform: none; }
   .app-realistic .nav-actions .nav-saved,
   .app-realistic .nav-actions .nav-notifications,
   .app-realistic .mobile-post-action { display: none; }

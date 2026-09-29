@@ -68,16 +68,16 @@ function FavoritesPanel({ language, items, onRemove, onClose }: { language: Lang
   </div>;
 }
 
-function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChange, onAccount, onFavorites, onSignOut }: { language: Language; role?: string; darkMode: boolean; onToggleTheme: () => void; onLanguageChange: (language: Language) => void; onAccount: () => void; onFavorites: () => void; onSignOut: () => void }) {
+function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChange, onAccount, onFavorites, onSignOut, showSettings = true }: { language: Language; role?: string; darkMode: boolean; onToggleTheme: () => void; onLanguageChange: (language: Language) => void; onAccount: () => void; onFavorites: () => void; onSignOut: () => void; showSettings?: boolean }) {
   return <div className="account-panel" role="menu">
     <div className="account-panel-heading"><Icon name="user" size={19} /><span><strong>{role ? t(language, role) : t(language, 'Account')}</strong><small>Umutungo account</small></span></div>
     <button className="account-panel-item" type="button" role="menuitem" onClick={onAccount}><Icon name="user" size={16} /><span>{t(language, 'Account')}</span><Icon name="arrow" size={14} /></button>
     <button className="account-panel-item" type="button" role="menuitem" onClick={onFavorites}><Icon name="heart" size={16} /><span>{t(language, 'Favorites')}</span><Icon name="arrow" size={14} /></button>
-    <div className="account-panel-divider" />
-    <span className="account-panel-label">{t(language, 'Settings')}</span>
-    <ThemeToggle darkMode={darkMode} onToggle={onToggleTheme} language={language} />
-    <label className="account-panel-language"><span><Icon name="globe" size={16} />{t(language, 'Language')}</span><select value={language} onChange={(event) => onLanguageChange(event.target.value as Language)}>{languages.map((item) => <option key={item} value={item}>{languageCodes[item]}</option>)}</select></label>
-    <div className="account-panel-divider" />
+    {showSettings && <><div className="account-panel-divider" />
+      <span className="account-panel-label">{t(language, 'Settings')}</span>
+      <ThemeToggle darkMode={darkMode} onToggle={onToggleTheme} language={language} />
+      <label className="account-panel-language"><span><Icon name="globe" size={16} />{t(language, 'Language')}</span><select value={language} onChange={(event) => onLanguageChange(event.target.value as Language)}>{languages.map((item) => <option key={item} value={item}>{languageCodes[item]}</option>)}</select></label>
+      <div className="account-panel-divider" /></>}
     <button className="account-panel-item account-panel-logout" type="button" role="menuitem" onClick={onSignOut}><Icon name="arrow" size={16} /><span>{t(language, 'Log out')}</span></button>
   </div>;
 }
@@ -88,7 +88,6 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [scrolled, setScrolled] = useState(false);
   const [landingVisible, setLandingVisible] = useState(true);
   const [mobileCategoryOpen, setMobileCategoryOpen] = useState(false);
-  const [mobileLanguageOpen, setMobileLanguageOpen] = useState(false);
   const [roleKey, setRoleKey] = useState('');
   const [authOpen, setAuthOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -324,9 +323,8 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <div className="mobile-menu-group"><button className="mobile-menu-link" type="button" onClick={() => setMobileCategoryOpen(!mobileCategoryOpen)}>{t(language, 'Categories')} <Icon name="chevron" size={14} /></button>{mobileCategoryOpen && <div className="mobile-submenu mobile-language-submenu">{categories.map((item) => <button key={item} type="button" onClick={() => openCategory(t(language, item))}>{t(language, item)}</button>)}</div>}</div>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>
           <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-expanded={signedIn ? accountMenuOpen : undefined} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setMobileOpen(false); onSignIn ? onSignIn() : openSignIn(); }}>{t(language, signedIn ? 'Account' : 'Sign in')}<Icon name={signedIn && accountMenuOpen ? 'chevron' : 'user'} size={15} /></button>
-          {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} />}
+          {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} showSettings={false} />}
         </div>
-        <div className="mobile-menu-group"><button className="mobile-menu-link" type="button" onClick={() => setMobileLanguageOpen(!mobileLanguageOpen)}>{t(language, 'Language')} <span><Icon name="globe" size={13} /> {languageCodes[language]}</span></button>{mobileLanguageOpen && <div className="mobile-submenu mobile-language-submenu">{languages.map((item) => <button key={item} type="button" onClick={() => { onLanguageChange(item); setMobileOpen(false); }}>{item}{language === item && <Icon name="check" size={14} />}</button>)}</div>}</div>
       </div>}
     </header>
     <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); const paths: Record<string, string> = { Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', Admin: '/admin' }; const destination = intendedPath ?? (pendingRole && paths[pendingRole]) ?? paths[accountRole] ?? '/'; setIntendedPath(undefined); router.push(destination); }} />

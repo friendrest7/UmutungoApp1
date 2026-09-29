@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
-import { ApiApplication, ApiMessage, ApiNotification, TenantBooking, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
+import { AdminReport, AdminReportsResponse, ApiApplication, ApiMessage, ApiNotification, TenantBooking, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
+import { downloadReportsExcel, downloadReportsImage, downloadReportsPdf } from '../lib/adminReportExports';
 import { Language, t } from '../data/translations';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
@@ -77,7 +78,44 @@ function DashboardTopbar({ eyebrow, active, initials, accountLabel }: { eyebrow:
   </header>;
 }
 
-function DashboardUtilityDock() {
+function getLocalAdminReports(): AdminReport[] {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('umutungo-listing-report') ?? 'null') as { listingId?: string; reason?: string; createdAt?: string } | null;
+    if (!stored?.reason) return [];
+    return [{ id: `local-${stored.listingId ?? 'report'}`, listing_id: stored.listingId ?? '', listing_title: 'Local listing report', reporter_name: 'Local session', reported_user_name: '', reason: stored.reason, details: `Listing ID: ${stored.listingId ?? 'unknown'}`, status: 'pending', created_at: stored.createdAt ?? new Date().toISOString() }];
+  } catch { return []; }
+}
+
+function AdminReportDownloadMenu() {
+  const [open, setOpen] = useState(false);
+  const [reports, setReports] = useState<AdminReport[]>([]);
+  const [busy, setBusy] = useState<'pdf' | 'excel' | 'image' | ''>('');
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const result = await umutungoApi<AdminReportsResponse>('/api/v1/admin/reports?limit=100');
+        if (!cancelled) setReports([...(result?.items ?? []), ...getLocalAdminReports().filter((local) => !(result?.items ?? []).some((item) => item.id === local.id))]);
+      } catch { if (!cancelled) setReports(getLocalAdminReports()); }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, []);
+  const download = async (format: 'pdf' | 'excel' | 'image') => {
+    setBusy(format);
+    try {
+      if (format === 'pdf') downloadReportsPdf(reports);
+      if (format === 'excel') downloadReportsExcel(reports);
+      if (format === 'image') await downloadReportsImage(reports);
+      setNotice(`${format === 'excel' ? 'Excel' : format[0].toUpperCase() + format.slice(1)} downloaded.`);
+    } catch { setNotice('The report could not be prepared. Please try again.'); }
+    finally { setBusy(''); }
+  };
+  return <div className="dashboard-notification-wrap admin-report-download-wrap"><button className="dashboard-header-tool" type="button" title="Download reports" aria-label="Download reports" aria-expanded={open} onClick={() => setOpen((current) => !current)}><Icon name="download" size={17} /></button>{open && <div className="dashboard-notification-popover admin-report-download-popover" role="dialog" aria-label="Download reports"><strong>Download reports</strong><small>{reports.length} report{reports.length === 1 ? '' : 's'} ready</small><div><button type="button" onClick={() => void download('pdf')} disabled={busy !== ''}><Icon name="download" size={13} /> {busy === 'pdf' ? 'Preparing...' : 'PDF'}</button><button type="button" onClick={() => void download('excel')} disabled={busy !== ''}><Icon name="download" size={13} /> {busy === 'excel' ? 'Preparing...' : 'Excel'}</button><button type="button" onClick={() => void download('image')} disabled={busy !== ''}><Icon name="download" size={13} /> {busy === 'image' ? 'Preparing...' : 'Image'}</button></div>{notice && <em role="status">{notice}</em>}</div>}</div>;
+}
+
+function DashboardUtilityDock({ isAdmin = false }: { isAdmin?: boolean }) {
   const { darkMode, toggleTheme } = usePersistentTheme();
   const { language, changeLanguage } = usePersistentLanguage();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -113,6 +151,7 @@ function DashboardUtilityDock() {
   }, []);
   return <div className={`dashboard-utility-dock ${darkMode ? 'is-dark' : ''}`} aria-label="Dashboard tools">
     <Link className="dashboard-header-tool" href="/#properties" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')}><Icon name="heart" size={17} /></Link>
+    {isAdmin && <AdminReportDownloadMenu />}
     <div className="dashboard-notification-wrap"><button className="dashboard-header-tool" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" size={17} />{notifications.length > 0 && <b>{notifications.length > 99 ? '99+' : notifications.length}</b>}</button>{notificationsOpen && <div className="dashboard-notification-popover" role="status">{notifications.length ? notifications.slice(0, 5).map((item) => <article key={item.id}><strong>{item.title}</strong><small>{item.body}</small></article>) : t(language, 'No new notifications')}</div>}</div>
     <button className="dashboard-header-tool" type="button" title={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} aria-label={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} onClick={toggleTheme}><Icon name={darkMode ? 'sun' : 'moon'} size={17} /></button>
     <label className="dashboard-language-select" title={t(language, 'Language')}><Icon name="globe" size={15} /><select value={language} aria-label={t(language, 'Language')} onChange={(event) => changeLanguage(event.target.value as Language)}>{dashboardLanguages.map((item) => <option key={item} value={item}>{dashboardLanguageCodes[item]}</option>)}</select></label>
@@ -485,7 +524,7 @@ export function RoleDashboard({ role }: { role: DashboardRole }) {
   if (role === 'tenant') return <><DashboardUtilityDock /><TenantDashboard /></>;
   if (role === 'commissioner') return <><DashboardUtilityDock /><CommissionerDashboard /></>;
   if (role === 'landlord') return <><DashboardUtilityDock /><LandlordDashboard /></>;
-  if (role === 'admin') return <><DashboardUtilityDock /><AdminDashboard /></>;
+  if (role === 'admin') return <><DashboardUtilityDock isAdmin /><AdminDashboard /></>;
 
   return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label={`${config.eyebrow} navigation`}><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><button type="button"><Icon name="user" size={16} /> Account</button></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><div className="role-dashboard-profile"><span className="role-dashboard-avatar">{initials}</span><span><strong>My account</strong><small>{accountLabel}</small></span><Icon name="chevron" size={14} /></div></header><div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">{config.greeting}</p><h2>{config.welcome}</h2><p>Manage your Umutungo activity in one clear, professional workspace.</p></div><button className="role-dashboard-primary" type="button"><Icon name={config.actionIcon} size={16} /> {config.action}</button></section><section className="role-dashboard-metrics" aria-label="Dashboard metrics">{config.metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-grid"><section className="role-dashboard-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">{config.panelEyebrow}</span><h3>{config.panelTitle}</h3></div><button type="button">View all <Icon name="arrow" size={14} /></button></div><div className="role-dashboard-activity">{config.activity.map((item) => <article key={`${item.name}-${item.time}`}><span className="role-dashboard-contact-avatar">{item.initials}</span><div><strong>{item.name}</strong><small>{item.detail} · {item.time}</small></div><span className={`role-dashboard-status ${item.status === 'New' ? 'new' : ''}`}>{item.status}</span><button type="button" aria-label={`Open ${item.name}`}><Icon name="arrow" size={14} /></button></article>)}</div></section><section className="role-dashboard-panel role-dashboard-side-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">{config.sideEyebrow}</span><h3>{config.sideTitle}</h3></div><Icon name="sparkles" size={17} /></div>{config.sideItems.map((item) => <div className="role-dashboard-side-item" key={item.title}><span><Icon name={item.icon} size={16} /></span><div><strong>{item.title}</strong><small>{item.detail}</small></div><Icon name="arrow" size={14} /></div>)}<button className="role-dashboard-outline" type="button">Open workspace</button></section></div></div></section></main>;
 }

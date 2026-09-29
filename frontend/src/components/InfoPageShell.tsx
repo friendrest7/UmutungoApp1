@@ -7,6 +7,7 @@ import { Footer } from './Footer';
 import { Icon } from './Icons';
 import { Navbar } from './Navbar';
 import { Language, t } from '../data/translations';
+import { usePersistentTheme } from '../lib/theme';
 
 type InfoPage = 'how' | 'about' | 'categories';
 
@@ -75,13 +76,12 @@ function HowItWorksStory({ copy }: { copy: (key: string) => string }) {
 
 export function InfoPageShell({ page }: { page: InfoPage }) {
   const [language, setLanguage] = useState<Language>('English');
-  const [darkMode, setDarkMode] = useState(false);
+  const { darkMode, toggleTheme } = usePersistentTheme();
   const copy = (key: string) => t(language, key);
 
   useEffect(() => {
     const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
     if (storedLanguage && ['English', 'French', 'Kinyarwanda', 'Swahili'].includes(storedLanguage)) setLanguage(storedLanguage);
-    if (window.localStorage.getItem('umutungo-theme') === 'dark') setDarkMode(true);
   }, []);
 
   useEffect(() => {
@@ -92,12 +92,6 @@ export function InfoPageShell({ page }: { page: InfoPage }) {
     setLanguage(nextLanguage);
     window.localStorage.setItem('umutungo-language', nextLanguage);
   };
-
-  const toggleTheme = () => setDarkMode((current) => {
-    const next = !current;
-    window.localStorage.setItem('umutungo-theme', next ? 'dark' : 'light');
-    return next;
-  });
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic info-page-shell`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
@@ -119,9 +113,11 @@ function HowItWorksPage({ copy }: { copy: (key: string) => string }) {
 
 function AboutPage({ copy }: { copy: (key: string) => string }) {
   return <main className="standalone-page about-page">
-    <section className="standalone-hero about-page-hero"><div className="container about-hero-layout"><div><p className="eyebrow">{copy('Why Umutungo')}</p><h1>{copy('Property search,')}<br /><em>{copy('made clearer.')}</em></h1><p>{copy('The useful details, in one place, so the next step feels easier.')}</p></div><div className="about-portrait" style={{ backgroundImage: "linear-gradient(180deg, transparent, rgba(10, 31, 17, .74)), url('/properties/kigali-neighborhood.jpg')" }}><span>{copy('Made for Rwanda')}</span><strong>01</strong></div></div></section>
-    <section className="standalone-section"><div className="container about-story-grid"><div className="standalone-heading"><p className="eyebrow">{copy('Our promise')}</p><h2>{copy('A place for every story')}</h2></div><div className="about-story-copy"><p>{copy('We are building a property experience where every person in the journey can move with more clarity and confidence.')}</p><p>{copy('Every place has a story.')}</p><a className="button button-primary" href="/#properties">{copy('Find a property')} <Icon name="arrow" size={15} /></a></div></div></section>
+    <section className="standalone-hero about-page-hero"><div className="container about-hero-layout"><div className="about-hero-copy"><p className="eyebrow">{copy('People first')}</p><h1>{copy('Property search,')}<br /><em>{copy('made clearer.')}</em></h1><p>{copy('We are building a more human way to discover homes, land and spaces in Rwanda — with the details people need before they make a decision.')}</p><div className="about-hero-actions"><a className="button button-primary" href="/#properties">{copy('Find a property')} <Icon name="arrow" size={15} /></a><a className="about-text-link" href="#about-story">{copy('Our story')} <Icon name="arrow" size={14} /></a></div><div className="about-hero-meta"><span>{copy('Made for Rwanda')}</span><span>Kigali · Rwanda</span><span>{copy('Homes · land · spaces')}</span></div></div><div className="about-portrait" style={{ backgroundImage: "linear-gradient(180deg, transparent, rgba(10, 31, 17, .74)), url('/properties/kigali-neighborhood.jpg')" }}><span>{copy('A clearer place to begin')}</span><strong>01</strong></div></div></section>
+    <section id="about-story" className="standalone-section about-story-section"><div className="container about-story-grid"><div className="standalone-heading"><p className="eyebrow">{copy('Our story')}</p><h2>{copy('A place for every story')}</h2><div className="about-story-marker"><span>U</span><small>{copy('Umutungo means property, belonging and possibility.')}</small></div></div><div className="about-story-copy"><p>{copy('Finding a home is never only about walls, rooms or an address. It is about the morning routine, the people nearby, the budget that has to work, and the feeling that a place could become yours.')}</p><p>{copy('That is why Umutungo is designed around real decisions, not just listings. We bring the useful details closer together so renters, buyers, owners and commissioners can have better conversations from the start.')}</p><p>{copy('We are still building, listening and learning. Every clearer listing, honest question and confident next step helps shape the platform we want to share with Rwanda.')}</p><a className="button button-primary" href="/#properties">{copy('Start exploring')} <Icon name="arrow" size={15} /></a></div></div></section>
+    <section className="about-people-section"><div className="container"><div className="about-section-heading"><div><p className="eyebrow">{copy('Who Umutungo is for')}</p><h2>{copy('One place, different journeys.')}</h2></div><p>{copy('A good property experience should feel useful whether you are searching, sharing a space, or helping someone move forward.')}</p></div><div className="about-people-grid"><article><span className="about-people-icon"><Icon name="search" size={18} /></span><small>01</small><h3>{copy('For people searching')}</h3><p>{copy('Compare homes, land and spaces with clearer information about location, price and the details that matter to your everyday life.')}</p></article><article><span className="about-people-icon"><Icon name="home" size={18} /></span><small>02</small><h3>{copy('For owners and landlords')}</h3><p>{copy('Share a property in a way that answers the important questions early and brings more prepared enquiries to you.')}</p></article><article><span className="about-people-icon"><Icon name="users" size={18} /></span><small>03</small><h3>{copy('For commissioners')}</h3><p>{copy('Keep property conversations organised, guide clients with confidence and make each viewing more useful.')}</p></article></div></div></section>
     <section className="values-section"><div className="container"><div className="standalone-heading"><p className="eyebrow">{copy('The Umutungo promise')}</p><h2>{copy('Better together')}</h2></div><div className="values-grid"><article><span>01</span><h3>{copy('Easier discovery')}</h3><p>{copy('Spend less time searching and more time finding possibilities that feel right for you.')}</p></article><article><span>02</span><h3>{copy('Information you can trust')}</h3><p>{copy('Clear property details and thoughtful verification will help you take the next step with confidence.')}</p></article><article><span>03</span><h3>{copy('Better together')}</h3><p>{copy('Clients, Komisiyoneri and owners work more effectively when everyone has a clearer view.')}</p></article></div></div></section>
+    <section className="about-closing-section"><div className="container about-closing-inner"><div><p className="eyebrow">{copy('Your next chapter starts here')}</p><h2>{copy('Making the journey home')}<br /><em>{copy('feel a little more human.')}</em></h2></div><a className="button button-primary" href="/#properties">{copy('Explore')} <Icon name="arrow" size={15} /></a></div></section>
   </main>;
 }
 

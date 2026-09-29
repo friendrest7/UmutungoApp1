@@ -11,6 +11,7 @@ import { PropertySearch } from '../components/PropertySearch';
 import { ReviewPanel } from '../components/ReviewPanel';
 import { Language, t } from '../data/translations';
 import { listFavorites, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
+import { usePersistentTheme } from '../lib/theme';
 
 const properties: PropertyPlaceholder[] = [
   { id: 'gisozi-home', title: 'Four-bedroom home with garden', type: 'House', location: 'Gisozi - Kigali', price: 'RWF 1,250,000', priceNote: '/ month', bedrooms: 4, bathrooms: 3, area: 220, accent: '#087d3d', image: '/properties/house-01.jpg', images: ['/properties/house-01.jpg', '/properties/house-02.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg'], listed: 'Listed 4 days ago' },
@@ -94,7 +95,7 @@ function ScrollStory({ copy }: { copy: (key: string) => string }) {
 }
 
 export default function HomePage() {
-  const [darkMode, setDarkMode] = useState(false);
+  const { darkMode, toggleTheme } = usePersistentTheme();
   const [language, setLanguage] = useState<Language>('English');
   const [location, setLocation] = useState('Kigali');
   const [type, setType] = useState('Any type');
@@ -109,7 +110,6 @@ export default function HomePage() {
   const copy = (key: string) => t(language, key);
 
   useEffect(() => {
-    if (window.localStorage.getItem('umutungo-theme') === 'dark') setDarkMode(true);
     const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
     if (storedLanguage && ['English', 'French', 'Kinyarwanda', 'Swahili'].includes(storedLanguage)) setLanguage(storedLanguage);
   }, []);
@@ -143,12 +143,6 @@ export default function HomePage() {
     }).catch(() => undefined);
     return () => window.removeEventListener('umutungo:favorites-changed', onFavoritesChanged);
   }, []);
-
-  const toggleTheme = () => setDarkMode((current) => {
-    const next = !current;
-    window.localStorage.setItem('umutungo-theme', next ? 'dark' : 'light');
-    return next;
-  });
 
   const requestSignIn = (role: 'Tenant' | 'Commissioner / Komisiyoneri') => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role } }));
   const requestTenantSignIn = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Tenant', returnTo: '/tenant' } }));

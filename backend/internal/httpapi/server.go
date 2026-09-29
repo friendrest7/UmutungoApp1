@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +59,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/admin/reports", s.adminReports)
 	mux.HandleFunc("/api/v1/admin/reports/", s.adminReportRoute)
 	mux.HandleFunc("/api/v1/notifications", s.notifications)
+	mux.HandleFunc("/api/v1/favorites", s.favorites)
+	mux.HandleFunc("/api/v1/favorites/", s.favoriteRoute)
 	mux.HandleFunc("/api/v1/owner/dashboard", s.ownerDashboard)
 	mux.HandleFunc("/api/v1/tenant/dashboard", s.tenantDashboard)
 	mux.HandleFunc("/api/v1/maintenance", s.maintenance)
@@ -318,6 +321,10 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 			"tags": rawJSON(tags), "amenities": rawJSON(amenities), "created_at": createdAt,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not read listings")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 }
 
@@ -406,7 +413,11 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		limit = 10
 	}
 	var monthlyCount int
-	if err := s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listings WHERE owner_id=$1 AND created_at >= date_trunc('month', NOW()) AND status <> 'cancelled'`, user.ID).Scan(&monthlyCount); err == nil && monthlyCount >= limit {
+	if err := s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listings WHERE owner_id=$1 AND created_at >= date_trunc('month', NOW()) AND status <> 'cancelled'`, user.ID).Scan(&monthlyCount); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not check listing quota")
+		return
+	}
+	if monthlyCount >= limit {
 		errorJSON(w, http.StatusConflict, "monthly listing quota reached")
 		return
 	}
@@ -420,8 +431,15 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 	}
 	tags, _ := json.Marshal(input.Tags)
 	amenities, _ := json.Marshal(input.Amenities)
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not start listing creation")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	var id string
-	err := s.db.QueryRow(r.Context(), `
+	err = tx.QueryRow(r.Context(), `
 		INSERT INTO listings(owner_id, category, transaction_type, title, description, price, currency,
 		province, district, sector, cell, village, latitude, longitude, status, publish_at, expires_at,
 		tags, amenities, contact_method)
@@ -434,15 +452,33 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for index, media := range input.Media {
-		mediaType := media.Type
+		mediaType := strings.ToLower(strings.TrimSpace(media.Type))
 		if mediaType == "" {
 			mediaType = "photo"
 		}
-		_, _ = s.db.Exec(r.Context(), `INSERT INTO listing_media(listing_id, media_type, url, sort_order) VALUES($1,$2,$3,$4)`, id, mediaType, media.URL, index)
+		if strings.TrimSpace(media.URL) == "" || !validMediaType(mediaType) {
+			errorJSON(w, http.StatusBadRequest, "media entries require a valid type and URL")
+			return
+		}
+		if _, err := tx.Exec(r.Context(), `INSERT INTO listing_media(listing_id, media_type, url, sort_order) VALUES($1,$2,$3,$4)`, id, mediaType, strings.TrimSpace(media.URL), index); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not save listing media")
+			return
+		}
 	}
 	if input.Measurements != nil {
-		measurementJSON, _ := json.Marshal(input.Measurements)
-		_, _ = s.db.Exec(r.Context(), `INSERT INTO measurements(listing_id, room_dimensions) VALUES($1,$2)`, id, measurementJSON)
+		measurementJSON, err := json.Marshal(input.Measurements)
+		if err != nil {
+			errorJSON(w, http.StatusBadRequest, "measurements must be valid JSON")
+			return
+		}
+		if _, err := tx.Exec(r.Context(), `INSERT INTO measurements(listing_id, room_dimensions) VALUES($1,$2)`, id, measurementJSON); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not save listing measurements")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not finish listing creation")
+		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "expires_at": expires})
 }
@@ -481,7 +517,7 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 	var latitude, longitude *float64
 	var tags, amenities []byte
 	var createdAt, expiresAt time.Time
-	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.expires_at FROM listings l JOIN users u ON u.id=l.owner_id WHERE l.id=$1 AND l.deleted_at IS NULL`, id).
+	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.expires_at FROM listings l JOIN users u ON u.id=l.owner_id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
 		Scan(&ownerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &expiresAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -492,17 +528,25 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	item = map[string]any{"id": id, "owner": map[string]string{"id": ownerID, "name": ownerName, "role": ownerRole}, "category": category, "transaction_type": transactionType, "title": title, "description": description, "price": price, "currency": currency, "province": province, "district": district, "sector": sector, "cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status, "tags": rawJSON(tags), "amenities": rawJSON(amenities), "created_at": createdAt, "expires_at": expiresAt}
-	rows, _ := s.db.Query(r.Context(), `SELECT media_type,url,sort_order FROM listing_media WHERE listing_id=$1 ORDER BY sort_order`, id)
+	rows, err := s.db.Query(r.Context(), `SELECT media_type,url,sort_order FROM listing_media WHERE listing_id=$1 ORDER BY sort_order`, id)
 	media := make([]map[string]any, 0)
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
-			var mediaType, url string
-			var order int
-			if rows.Scan(&mediaType, &url, &order) == nil {
-				media = append(media, map[string]any{"type": mediaType, "url": url, "sort_order": order})
-			}
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load listing media")
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var mediaType, mediaURL string
+		var order int
+		if err := rows.Scan(&mediaType, &mediaURL, &order); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not read listing media")
+			return
 		}
+		media = append(media, map[string]any{"type": mediaType, "url": mediaURL, "sort_order": order})
+	}
+	if err := rows.Err(); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not read listing media")
+		return
 	}
 	item["media"] = media
 	writeJSON(w, http.StatusOK, item)
@@ -524,10 +568,10 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	var input struct {
-		Title       string  `json:"title"`
-		Description string  `json:"description"`
-		Price       float64 `json:"price"`
-		Status      string  `json:"status"`
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		Price       *float64 `json:"price"`
+		Status      string   `json:"status"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -536,7 +580,11 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		errorJSON(w, http.StatusBadRequest, "invalid listing status")
 		return
 	}
-	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=CASE WHEN $3 >= 0 THEN $3 ELSE price END, status=COALESCE(NULLIF($4,''),status), updated_at=NOW() WHERE id=$5`, input.Title, input.Description, input.Price, input.Status, id)
+	if input.Price != nil && *input.Price < 0 {
+		errorJSON(w, http.StatusBadRequest, "price cannot be negative")
+		return
+	}
+	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=COALESCE($3,price), status=COALESCE(NULLIF($4,''),status), updated_at=NOW() WHERE id=$5`, input.Title, input.Description, input.Price, input.Status, id)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not update listing")
 		return
@@ -1096,6 +1144,84 @@ func (s *Server) adminReportRoute(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": input.Status})
 }
 
+func (s *Server) favorites(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := s.db.Query(r.Context(), `SELECT property_key,title,property_type,location,price,image_url,created_at FROM favorites WHERE user_id=$1 ORDER BY created_at DESC`, user.ID)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load favorites")
+			return
+		}
+		defer rows.Close()
+		items := make([]map[string]any, 0)
+		for rows.Next() {
+			var propertyKey, title, propertyType, location, price, imageURL string
+			var createdAt time.Time
+			if err := rows.Scan(&propertyKey, &title, &propertyType, &location, &price, &imageURL, &createdAt); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not read favorites")
+				return
+			}
+			items = append(items, map[string]any{"property_id": propertyKey, "title": title, "type": propertyType, "location": location, "price": price, "image": imageURL, "saved_at": createdAt})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	case http.MethodPost:
+		var input struct {
+			PropertyID string `json:"property_id"`
+			Title      string `json:"title"`
+			Type       string `json:"type"`
+			Location   string `json:"location"`
+			Price      string `json:"price"`
+			Image      string `json:"image"`
+		}
+		if !decodeJSON(w, r, &input) || strings.TrimSpace(input.PropertyID) == "" || strings.TrimSpace(input.Title) == "" {
+			errorJSON(w, http.StatusBadRequest, "property_id and title are required")
+			return
+		}
+		var id string
+		err := s.db.QueryRow(r.Context(), `INSERT INTO favorites(user_id,property_key,title,property_type,location,price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(user_id,property_key) DO UPDATE SET title=EXCLUDED.title,property_type=EXCLUDED.property_type,location=EXCLUDED.location,price=EXCLUDED.price,image_url=EXCLUDED.image_url RETURNING id`, user.ID, strings.TrimSpace(input.PropertyID), strings.TrimSpace(input.Title), strings.TrimSpace(input.Type), strings.TrimSpace(input.Location), strings.TrimSpace(input.Price), strings.TrimSpace(input.Image)).Scan(&id)
+		if err != nil {
+			errorJSON(w, http.StatusBadRequest, "could not save favorite")
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]string{"id": id, "property_id": strings.TrimSpace(input.PropertyID)})
+	default:
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET or POST /api/v1/favorites")
+	}
+}
+
+func (s *Server) favoriteRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		errorJSON(w, http.StatusMethodNotAllowed, "use DELETE /api/v1/favorites/{property_id}")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	propertyKey, err := url.PathUnescape(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/favorites/"), "/"))
+	if err != nil || strings.TrimSpace(propertyKey) == "" {
+		errorJSON(w, http.StatusBadRequest, "property_id is required")
+		return
+	}
+	result, err := s.db.Exec(r.Context(), `DELETE FROM favorites WHERE user_id=$1 AND property_key=$2`, user.ID, propertyKey)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not remove favorite")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		errorJSON(w, http.StatusNotFound, "favorite not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"property_id": propertyKey, "status": "removed"})
+}
+
 func (s *Server) notifications(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1354,6 +1480,10 @@ func validTransaction(value string) bool {
 	default:
 		return false
 	}
+}
+
+func validMediaType(value string) bool {
+	return value == "photo" || value == "video" || value == "tour_3d"
 }
 
 func validListingStatus(value string) bool {

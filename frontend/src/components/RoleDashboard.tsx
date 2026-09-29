@@ -6,6 +6,7 @@ import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
 import { ApiApplication, ApiMessage, TenantBooking, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
 import { Language, t } from '../data/translations';
+import { usePersistentTheme } from '../lib/theme';
 
 export type DashboardRole = 'tenant' | 'commissioner' | 'landlord' | 'admin';
 type Metric = { label: string; value: string; note: string; icon: IconName; tone: 'green' | 'amber' | 'blue' | 'dark' };
@@ -45,25 +46,16 @@ const dashboardLanguages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swa
 const dashboardLanguageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
 
 function DashboardTopbar({ eyebrow, active, initials, accountLabel }: { eyebrow: string; active: string; initials: string; accountLabel: string }) {
-  const [darkMode, setDarkMode] = useState(false);
+  const { darkMode, toggleTheme } = usePersistentTheme();
   const [language, setLanguage] = useState<Language>('English');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
     const dashboard = document.querySelector('.role-dashboard');
-    const storedTheme = window.localStorage.getItem('umutungo-dashboard-theme') === 'dark';
     const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
-    setDarkMode(storedTheme);
     setLanguage(storedLanguage && dashboardLanguages.includes(storedLanguage) ? storedLanguage : 'English');
-    dashboard?.classList.toggle('dashboard-dark', storedTheme);
-  }, []);
-
-  const toggleTheme = () => {
-    const next = !darkMode;
-    setDarkMode(next);
-    window.localStorage.setItem('umutungo-dashboard-theme', next ? 'dark' : 'light');
-    document.querySelector('.role-dashboard')?.classList.toggle('dashboard-dark', next);
-  };
+    dashboard?.classList.toggle('dashboard-dark', darkMode);
+  }, [darkMode]);
 
   const changeLanguage = (next: Language) => {
     setLanguage(next);
@@ -87,25 +79,16 @@ function DashboardTopbar({ eyebrow, active, initials, accountLabel }: { eyebrow:
 }
 
 function DashboardUtilityDock() {
-  const [darkMode, setDarkMode] = useState(false);
+  const { darkMode, toggleTheme } = usePersistentTheme();
   const [language, setLanguage] = useState<Language>('English');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
     const dashboard = document.querySelector('.role-dashboard');
-    const storedTheme = window.localStorage.getItem('umutungo-dashboard-theme') === 'dark';
     const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
-    setDarkMode(storedTheme);
     setLanguage(storedLanguage && dashboardLanguages.includes(storedLanguage) ? storedLanguage : 'English');
-    dashboard?.classList.toggle('dashboard-dark', storedTheme);
-  }, []);
-
-  const toggleTheme = () => {
-    const next = !darkMode;
-    setDarkMode(next);
-    window.localStorage.setItem('umutungo-dashboard-theme', next ? 'dark' : 'light');
-    document.querySelector('.role-dashboard')?.classList.toggle('dashboard-dark', next);
-  };
+    dashboard?.classList.toggle('dashboard-dark', darkMode);
+  }, [darkMode]);
   const changeLanguage = (next: Language) => {
     setLanguage(next);
     window.localStorage.setItem('umutungo-language', next);

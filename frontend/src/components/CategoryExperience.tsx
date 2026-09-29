@@ -6,6 +6,7 @@ import { AiChatbot } from './AiChatbot';
 import { Icon } from './Icons';
 import { Navbar } from './Navbar';
 import { Language, t } from '../data/translations';
+import { usePersistentTheme } from '../lib/theme';
 import type { PropertyPlaceholder } from './PropertyCard';
 import { PropertyViewer } from './PropertyViewer';
 import { listFavorites, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
@@ -55,7 +56,7 @@ const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlac
 
 export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialIntent = '', initialPriceRange = '' }: { slug: string; initialQuery?: string; initialLocation?: string; initialIntent?: string; initialPriceRange?: string }) {
   const [language, setLanguage] = useState<Language>('English');
-  const [darkMode, setDarkMode] = useState(false);
+  const { darkMode, toggleTheme } = usePersistentTheme();
   const rawCategory = categoryConfigs[slug] ?? categoryConfigs.houses;
   const category = { ...rawCategory, name: t(language, rawCategory.name), eyebrow: t(language, rawCategory.eyebrow), description: t(language, rawCategory.description) };
   const [query, setQuery] = useState(initialQuery);
@@ -65,17 +66,11 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   useEffect(() => {
     const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
     if (storedLanguage && ['English', 'French', 'Kinyarwanda', 'Swahili'].includes(storedLanguage)) setLanguage(storedLanguage);
-    setDarkMode(window.localStorage.getItem('umutungo-theme') === 'dark');
   }, []);
   const changeLanguage = (nextLanguage: Language) => {
     setLanguage(nextLanguage);
     window.localStorage.setItem('umutungo-language', nextLanguage);
   };
-  const toggleTheme = () => setDarkMode((current) => {
-    const next = !current;
-    window.localStorage.setItem('umutungo-theme', next ? 'dark' : 'light');
-    return next;
-  });
   useEffect(() => {
     const readFavorites = () => {
       try {

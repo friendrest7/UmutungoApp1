@@ -23,6 +23,7 @@ export function AiChatbot({ language }: { language: Language }) {
   const [messages, setMessages] = useState<Message[]>([{ id: 1, sender: 'assistant', text: t(language, 'Hello! I can help you find a place in Rwanda. Ask me about renting, buying, locations, or property types.') }]);
   const chatbotRef = useRef<HTMLElement>(null);
   const dragStartRef = useRef({ x: 0, y: 0, originX: 0, originY: 0 });
+  const dragPositionRef = useRef(dragPosition);
   const dragMovedRef = useRef(false);
 
   useEffect(() => {
@@ -33,17 +34,23 @@ export function AiChatbot({ language }: { language: Language }) {
   }, []);
 
   useEffect(() => {
+    dragPositionRef.current = dragPosition;
+  }, [dragPosition]);
+
+  useEffect(() => {
     if (!isDragging) return;
     const move = (event: PointerEvent) => {
       const deltaX = event.clientX - dragStartRef.current.x;
       const deltaY = event.clientY - dragStartRef.current.y;
       if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) dragMovedRef.current = true;
       const next = { x: dragStartRef.current.originX + deltaX, y: dragStartRef.current.originY + deltaY };
-      setDragPosition({ x: Math.max(-window.innerWidth + 70, Math.min(window.innerWidth - 70, next.x)), y: Math.max(-window.innerHeight + 100, Math.min(window.innerHeight - 100, next.y)) });
+      const bounded = { x: Math.max(-window.innerWidth + 70, Math.min(window.innerWidth - 70, next.x)), y: Math.max(-window.innerHeight + 100, Math.min(window.innerHeight - 100, next.y)) };
+      dragPositionRef.current = bounded;
+      setDragPosition(bounded);
     };
     const stop = () => {
       setIsDragging(false);
-      window.localStorage.setItem('umutungo-ai-position', JSON.stringify(dragPosition));
+      window.localStorage.setItem('umutungo-ai-position', JSON.stringify(dragPositionRef.current));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
@@ -95,7 +102,7 @@ export function AiChatbot({ language }: { language: Language }) {
     }
   };
 
-  const startDragging = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const startDragging = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
     dragMovedRef.current = false;
     dragStartRef.current = { x: event.clientX, y: event.clientY, originX: dragPosition.x, originY: dragPosition.y };
@@ -104,7 +111,7 @@ export function AiChatbot({ language }: { language: Language }) {
   };
 
   return <aside ref={chatbotRef} className={`ai-chatbot ${open ? 'is-open' : ''} ${isDragging ? 'is-dragging' : ''}`} style={{ transform: `translate3d(${dragPosition.x}px, ${dragPosition.y}px, 0)` }} aria-label={t(language, 'Umutungo help')}>
-    {open && <div className="ai-chat-panel"><div className="ai-chat-header"><div><strong>{t(language, 'Umutungo Assistant')}</strong></div><button type="button" aria-label={t(language, 'Close chat')} onClick={() => setOpen(false)}><Icon name="x" size={17} /></button></div><div className="ai-chat-messages" aria-live="polite">{messages.map((message) => <div className={`ai-chat-message ${message.sender}`} key={message.id}>{message.text}</div>)}{isSending && <div className="ai-chat-status" role="status">{t(language, 'Thinking...')}</div>}</div><form className="ai-chat-form" onSubmit={sendMessage}><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t(language, 'Ask Umutungo...')} aria-label={t(language, 'Ask Umutungo')} disabled={isSending} /><button type="submit" aria-label={t(language, 'Send message')} disabled={isSending || !value.trim()}><Icon name="arrow" size={15} /></button></form></div>}
+    {open && <div className="ai-chat-panel"><div className="ai-chat-header" onPointerDown={startDragging}><div><strong>{t(language, 'Umutungo Assistant')}</strong><small>Drag to move</small></div><button type="button" aria-label={t(language, 'Close chat')} onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)}><Icon name="x" size={17} /></button></div><div className="ai-chat-messages" aria-live="polite">{messages.map((message) => <div className={`ai-chat-message ${message.sender}`} key={message.id}>{message.text}</div>)}{isSending && <div className="ai-chat-status" role="status">{t(language, 'Thinking...')}</div>}</div><form className="ai-chat-form" onSubmit={sendMessage}><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t(language, 'Ask Umutungo...')} aria-label={t(language, 'Ask Umutungo')} disabled={isSending} /><button type="submit" aria-label={t(language, 'Send message')} disabled={isSending || !value.trim()}><Icon name="arrow" size={15} /></button></form></div>}
     {!open && <button className="ai-chat-toggle" type="button" onPointerDown={startDragging} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { if (dragMovedRef.current) { event.preventDefault(); dragMovedRef.current = false; return; } setOpen(true); }} aria-expanded={false} aria-label={t(language, 'Open chat')}><Icon name="sparkles" size={17} /><span>{t(language, 'Need help?')}</span></button>}
   </aside>;
 }

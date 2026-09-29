@@ -100,7 +100,7 @@ export default function PostPropertyPage() {
   const [priceRange, setPriceRange] = useState('Any price');
   const [publicationMode, setPublicationMode] = useState<'Draft' | 'Scheduled'>('Draft');
   const [scheduledFor, setScheduledFor] = useState('');
-  const [ownerTier, setOwnerTier] = useState('Silver Â· 90 days');
+  const [ownerTier, setOwnerTier] = useState('Silver · 90 days');
   const [address, setAddress] = useState('');
   const [price, setPrice] = useState('1,250,000');
   const [bedrooms, setBedrooms] = useState('4');

@@ -6,6 +6,7 @@ import { Icon } from './Icons';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { AuthModal, AuthRole } from './AuthModal';
+import { removeFavorite, type FavoriteItem } from '../lib/umutungoApi';
 
 type NavbarProps = {
   darkMode: boolean;
@@ -60,6 +61,13 @@ function Dropdown({ label, items, onSelect, active, icon }: { label: string; ite
   return <div className="nav-dropdown" ref={ref}><button className={`nav-link nav-dropdown-trigger ${open ? 'is-open' : ''}`} type="button" aria-expanded={open} onClick={toggleMenu}>{icon && <Icon name={icon} size={16} />}<span>{label}</span><Icon name="chevron" size={12} /></button>{open && <div className="dropdown-panel" style={menuPosition ? { position: 'fixed', top: menuPosition.top, right: menuPosition.right } : undefined}>{items.map((item) => <button key={item} className={active === item ? 'selected' : ''} type="button" onClick={() => { onSelect(item); setOpen(false); }}>{item}{active === item && <Icon name="check" size={15} />}</button>)}</div>}</div>;
 }
 
+function FavoritesPanel({ language, items, onRemove, onClose }: { language: Language; items: FavoriteItem[]; onRemove: (propertyID: string) => void; onClose: () => void }) {
+  return <div className="favorites-panel" role="dialog" aria-label={t(language, 'Favorites')}>
+    <div className="favorites-panel-heading"><div><span className="favorites-panel-eyebrow">{t(language, 'Your shortlist')}</span><h2>{t(language, 'Favorites')}</h2></div><span className="favorites-panel-count">{items.length}</span></div>
+    {items.length ? <div className="favorites-panel-list">{items.map((item) => <article className="favorites-panel-item" key={item.property_id}><img src={item.image} alt={t(language, item.title)} /><div><strong>{t(language, item.title)}</strong><small>{t(language, item.location)}</small><span>{item.price}</span><a href="/#properties" onClick={onClose}>{t(language, 'View property')} <Icon name="arrow" size={12} /></a></div><button type="button" aria-label={`${t(language, 'Remove property from favorites')}: ${t(language, item.title)}`} onClick={() => onRemove(item.property_id)}><Icon name="x" size={14} /></button></article>)}</div> : <div className="favorites-panel-empty"><Icon name="heart" size={20} /><strong>{t(language, 'No saved properties yet')}</strong><p>{t(language, 'Tap the heart on a property to keep it here.')}</p><a href="/#properties" onClick={onClose}>{t(language, 'Browse properties')} <Icon name="arrow" size={13} /></a></div>}
+  </div>;
+}
+
 function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChange, onAccount, onFavorites, onSignOut }: { language: Language; role?: string; darkMode: boolean; onToggleTheme: () => void; onLanguageChange: (language: Language) => void; onAccount: () => void; onFavorites: () => void; onSignOut: () => void }) {
   return <div className="account-panel" role="menu">
     <div className="account-panel-heading"><Icon name="user" size={19} /><span><strong>{role ? t(language, role) : t(language, 'Account')}</strong><small>Umutungo account</small></span></div>
@@ -92,11 +100,15 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [notificationCount, setNotificationCount] = useState(0);
   const [notifications, setNotifications] = useState<Array<{ title?: string; message?: string; createdAt?: string }>>([]);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
+  const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
+  const favoritesRef = useRef<HTMLDivElement>(null);
   const signedIn = isSignedIn || demoSignedIn;
   const isTenant = roleKey === 'Tenant';
   const postActionLabel = isTenant ? 'Upgrade to Post' : 'Post a Property';
   const postActionHint = isTenant ? 'Post (Upgrade)' : 'Share a property with people looking.';
   const goTo = (id: string) => { setMobileOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); };
+  const openFavorites = () => { setFavoritesPanelOpen((open) => !open); setAccountMenuOpen(false); setMobileOpen(false); };
   const openCategory = (value: string) => {
     const category = categories.find((item) => t(language, item) === value) ?? value;
     const slugs: Record<string, string> = { Houses: 'houses', Apartments: 'apartments', Land: 'land', Commercial: 'commercial', Offices: 'offices', Equipment: 'equipment', Hospitality: 'hospitality' };
@@ -154,6 +166,29 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
       element.style.setProperty('display', notificationCount > 0 ? 'grid' : 'none', 'important');
     });
   }, [notificationCount]);
+
+  useEffect(() => {
+    const readFavorites = () => {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem('umutungo-favorites') ?? '[]') as FavoriteItem[];
+        setFavoriteItems(Array.isArray(stored) ? stored : []);
+      } catch {
+        setFavoriteItems([]);
+      }
+    };
+    readFavorites();
+    window.addEventListener('umutungo:favorites-changed', readFavorites);
+    return () => window.removeEventListener('umutungo:favorites-changed', readFavorites);
+  }, []);
+
+  useEffect(() => {
+    if (!favoritesPanelOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => { if (!favoritesRef.current?.contains(event.target as Node)) setFavoritesPanelOpen(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setFavoritesPanelOpen(false); };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
+  }, [favoritesPanelOpen]);
 
   useEffect(() => {
     if (!signedIn) {
@@ -223,6 +258,14 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     onSignOut?.();
   };
 
+  const removeFromFavorites = (propertyID: string) => {
+    const next = favoriteItems.filter((item) => item.property_id !== propertyID);
+    setFavoriteItems(next);
+    window.localStorage.setItem('umutungo-favorites', JSON.stringify(next));
+    window.dispatchEvent(new Event('umutungo:favorites-changed'));
+    void removeFavorite(propertyID).catch(() => undefined);
+  };
+
   const openAccount = () => {
     setAccountMenuOpen(false);
     if (onAccount) { onAccount(); return; }
@@ -241,7 +284,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <a className="sidebar-nav-link sidebar-market-link" href="#properties" onClick={openMarket}><Icon name="home" size={17} /><span>{t(language, 'Rent')}</span></a>
         <a className="sidebar-nav-link sidebar-market-link" href="#properties" onClick={openMarket}><Icon name="building" size={17} /><span>{t(language, 'Buy')}</span></a>
         <a className="sidebar-nav-link sidebar-market-link" href="#post-property"><Icon name="arrow" size={17} /><span>{t(language, 'Commercial')}</span></a>
-        <HoverHint text={t(language, 'View your saved properties.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} onClick={() => goTo('properties')}><Icon name="heart" size={17} /><span>{t(language, 'Favorites')}</span></button></HoverHint>
+        <HoverHint text={t(language, 'View your saved properties.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} onClick={openFavorites}><Icon name="heart" size={17} /><span>{t(language, 'Favorites')}</span></button></HoverHint>
         <HoverHint text={t(language, 'Check your latest updates.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action notification-action" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')}><Icon name="bell" size={17} /><span>{t(language, 'Notifications')}</span><b>0</b></button></HoverHint>
       </nav><div className="sidebar-account"><HoverHint text={t(language, 'Access your Umutungo account.')} placement="right"><button className={`sidebar-nav-link ${signedIn ? 'sidebar-account-link' : 'sidebar-sign-in'}`} type="button" title={t(language, signedIn ? 'Log out' : 'Sign in')} aria-label={t(language, signedIn ? 'Log out' : 'Sign in')} onClick={signedIn ? signOut : () => (onSignIn ? onSignIn() : openSignIn())}>{signedIn && <Icon name="user" size={17} />}<span>{t(language, signedIn ? 'Log out' : 'Sign in')}</span></button></HoverHint></div></div>
     </aside>
@@ -249,7 +292,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     <header className={`topbar ${scrolled ? 'is-scrolled' : ''}`}>
       <div className="topbar-inner">
         <div className="topbar-brand-group">
-          <a className="topbar-brand" href="/" aria-label="Umutungo home"><Logo /></a>
+          <a className="topbar-brand" href="/" aria-label="Umutungo home"><Logo darkMode={darkMode} /></a>
           <a className="nav-home-link" href="/"><span>{t(language, 'Home')}</span></a>
         </div>
         <nav className="desktop-nav" aria-label="Primary navigation">
@@ -261,12 +304,12 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
 
         <div className="nav-actions">
           <HoverHint text={t(language, postActionHint)} placement="bottom">{postAction}</HoverHint>
-          <button className="nav-saved" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} onClick={() => goTo('properties')}><Icon name="heart" size={17} /></button>
+          <div className="nav-favorites-wrap" ref={favoritesRef}><button className="nav-saved" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} aria-expanded={favoritesPanelOpen} onClick={openFavorites}><Icon name="heart" size={17} />{favoriteItems.length > 0 && <b>{favoriteItems.length > 9 ? '9+' : favoriteItems.length}</b>}</button>{favoritesPanelOpen && <FavoritesPanel language={language} items={favoriteItems} onRemove={removeFromFavorites} onClose={() => setFavoritesPanelOpen(false)} />}</div>
           <button className="nav-notifications" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')}><Icon name="bell" size={17} /><b>0</b></button>
           <div className="nav-utility-group" aria-label="Site preferences"><Dropdown label={languageCodes[language]} items={languages} active={language} onSelect={(value) => onLanguageChange(value as Language)} icon="globe" /><ThemeToggle darkMode={darkMode} onToggle={onToggleTheme} language={language} /></div>
           <div className="account-menu-wrap" ref={accountMenuRef}>
             <button className={`nav-sign-in ${signedIn ? 'nav-account' : ''}`} type="button" title={t(language, signedIn ? 'Account' : 'Sign in')} aria-label={t(language, signedIn ? 'Account' : 'Sign in')} aria-expanded={signedIn ? accountMenuOpen : undefined} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => (onSignIn ? onSignIn() : openSignIn())}>{signedIn && <Icon name="user" size={16} />}{t(language, signedIn ? 'Account' : 'Sign in')}{signedIn && <Icon name="chevron" size={12} />}</button>
-            {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); goTo('properties'); }} onSignOut={signOut} />}
+            {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} />}
           </div>
           <span className="mobile-post-action">{postAction}</span>
           <button className="mobile-menu-button" type="button" aria-expanded={mobileOpen} aria-controls="mobile-menu" aria-label={mobileOpen ? 'Close menu' : 'Open menu'} onClick={() => setMobileOpen(!mobileOpen)}><Icon name={mobileOpen ? 'x' : 'menu'} size={22} /></button>
@@ -281,7 +324,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <div className="mobile-menu-group"><button className="mobile-menu-link" type="button" onClick={() => setMobileCategoryOpen(!mobileCategoryOpen)}>{t(language, 'Categories')} <Icon name="chevron" size={14} /></button>{mobileCategoryOpen && <div className="mobile-submenu mobile-language-submenu">{categories.map((item) => <button key={item} type="button" onClick={() => openCategory(t(language, item))}>{t(language, item)}</button>)}</div>}</div>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>
           <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-expanded={signedIn ? accountMenuOpen : undefined} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setMobileOpen(false); onSignIn ? onSignIn() : openSignIn(); }}>{t(language, signedIn ? 'Account' : 'Sign in')}<Icon name={signedIn && accountMenuOpen ? 'chevron' : 'user'} size={15} /></button>
-          {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); goTo('properties'); }} onSignOut={signOut} />}
+          {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} />}
         </div>
         <div className="mobile-menu-group"><button className="mobile-menu-link" type="button" onClick={() => setMobileLanguageOpen(!mobileLanguageOpen)}>{t(language, 'Language')} <span><Icon name="globe" size={13} /> {languageCodes[language]}</span></button>{mobileLanguageOpen && <div className="mobile-submenu mobile-language-submenu">{languages.map((item) => <button key={item} type="button" onClick={() => { onLanguageChange(item); setMobileOpen(false); }}>{item}{language === item && <Icon name="check" size={14} />}</button>)}</div>}</div>
       </div>}

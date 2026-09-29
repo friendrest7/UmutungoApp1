@@ -10,6 +10,7 @@ import { PropertyViewer } from '../components/PropertyViewer';
 import { PropertySearch } from '../components/PropertySearch';
 import { ReviewPanel } from '../components/ReviewPanel';
 import { Language, t } from '../data/translations';
+import { listFavorites, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 
 const properties: PropertyPlaceholder[] = [
   { id: 'gisozi-home', title: 'Four-bedroom home with garden', type: 'House', location: 'Gisozi - Kigali', price: 'RWF 1,250,000', priceNote: '/ month', bedrooms: 4, bathrooms: 3, area: 220, accent: '#087d3d', image: '/properties/house-01.jpg', images: ['/properties/house-01.jpg', '/properties/house-02.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg'], listed: 'Listed 4 days ago' },
@@ -42,10 +43,10 @@ function ScrollStory({ copy }: { copy: (key: string) => string }) {
   const sectionRef = useRef<HTMLElement>(null);
   const [progress, setProgress] = useState(0);
   const scenes = [
-    { eyebrow: '01 — Begin anywhere', title: 'Start with the feeling.', body: 'Tell us what home means to you, then let the right places rise to the surface.', image: '/properties/tour-living.jpg', tag: 'Homes · Kigali' },
-    { eyebrow: '02 — See it clearly', title: 'Every detail, in focus.', body: 'Move from the wide view to the small things that make a place feel like yours.', image: '/properties/tour-kitchen.jpg', tag: 'Thoughtful details' },
-    { eyebrow: '03 — Know your place', title: 'A neighbourhood with a rhythm.', body: 'Explore the streets, essentials and energy around every listing before you visit.', image: '/properties/kigali-neighborhood.jpg', tag: 'Explore Kigali' },
-    { eyebrow: '04 — Take the next step', title: 'Make it yours.', body: 'When it feels right, connect with a verified owner or agent and move forward with confidence.', image: '/properties/house-01.jpg', tag: 'Ready when you are' },
+    { eyebrow: '01 — Begin anywhere', title: 'Start with the feeling.', body: 'Tell us what home means to you, then let the right places rise to the surface. The process is meant to feel fun and relieving—we care about your convenience, and we are genuinely happy to have you here.', cta: 'Tap Search and see the magic unfold.', image: '/properties/story-begin.jpg', tag: 'Homes · Kigali' },
+    { eyebrow: '02 — See it clearly', title: 'Every detail, in focus.', body: 'Move from the wide view to the small things that make a place feel like yours. We want you to live in the house of your dreams, work in the office of your dreams, and drive your dream car.', cta: '', image: '/properties/story-detail.jpg', tag: 'Thoughtful details' },
+    { eyebrow: '03 — Know your place', title: 'A neighbourhood with a rhythm.', body: 'Explore the streets, essentials and energy around every listing before you visit. Use your finger to move through the house, keep exploring each room, and enjoy the feeling of viewing your next home before you arrive.', cta: '', image: '/properties/kigali-neighborhood.jpg', tag: 'Explore Kigali' },
+    { eyebrow: '04 — Take the next step', title: 'Make it yours.', body: 'When it feels right, connect with a verified owner or agent and move forward with confidence. You will receive thoughtful service and a smooth, welcoming experience. If you want to become an agent or landlord on the platform, you are welcome here too—with the tools and support to get what you want from your property journey.', cta: '', image: '/properties/story-next-step.jpg', tag: 'Ready when you are' },
   ];
 
   useEffect(() => {
@@ -77,7 +78,7 @@ function ScrollStory({ copy }: { copy: (key: string) => string }) {
         {scenes.map((scene, index) => <article className={`scroll-story-step ${index === activeIndex ? 'is-active' : ''}`} key={scene.eyebrow}>
           <span className="scroll-story-step-index">{scene.eyebrow}</span>
           <h3>{copy(scene.title)}</h3>
-          <p>{copy(scene.body)}</p>
+          <p>{copy(scene.body)}{scene.cta && <> <a className="scroll-story-cta" href="/categories/houses">{copy(scene.cta)} <Icon name="arrow" size={13} /></a></>}</p>
         </article>)}
       </div>
       <div className="scroll-story-visual-wrap">
@@ -102,6 +103,7 @@ export default function HomePage() {
   const [directoryQuery, setDirectoryQuery] = useState('');
   const [searchMessage, setSearchMessage] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedProperty, setSelectedProperty] = useState<PropertyPlaceholder | null>(null);
   const copy = (key: string) => t(language, key);
@@ -116,6 +118,31 @@ export default function HomePage() {
     const localeMap: Record<string, string> = { English: 'en', French: 'fr', Kinyarwanda: 'rw', Swahili: 'sw' };
     document.documentElement.lang = localeMap[language] ?? 'en';
   }, [language]);
+
+  useEffect(() => {
+    const readLocalFavorites = () => {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem('umutungo-favorites') ?? '[]') as FavoriteItem[];
+        const items = Array.isArray(stored) ? stored : [];
+        setFavoriteItems(items);
+        setFavorites(items.map((item) => item.property_id));
+      } catch {
+        setFavoriteItems([]);
+        setFavorites([]);
+      }
+    };
+    readLocalFavorites();
+    const onFavoritesChanged = () => readLocalFavorites();
+    window.addEventListener('umutungo:favorites-changed', onFavoritesChanged);
+    void listFavorites().then((remote) => {
+      if (remote === null) return;
+      setFavoriteItems(remote);
+      setFavorites(remote.map((item) => item.property_id));
+      window.localStorage.setItem('umutungo-favorites', JSON.stringify(remote));
+      window.dispatchEvent(new Event('umutungo:favorites-changed'));
+    }).catch(() => undefined);
+    return () => window.removeEventListener('umutungo:favorites-changed', onFavoritesChanged);
+  }, []);
 
   const toggleTheme = () => setDarkMode((current) => {
     const next = !current;
@@ -136,7 +163,16 @@ export default function HomePage() {
     window.location.assign(`/directory${directoryQuery.trim() ? `?search=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
   };
 
-  const toggleFavorite = (id: string) => setFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleFavorite = (property: PropertyPlaceholder) => {
+    const item: FavoriteItem = { property_id: property.id, title: property.title, type: property.type, location: property.location, price: `${property.price} ${property.priceNote}`, image: property.image };
+    const wasSaved = favorites.includes(property.id);
+    const nextItems = wasSaved ? favoriteItems.filter((favorite) => favorite.property_id !== property.id) : [...favoriteItems, item];
+    setFavoriteItems(nextItems);
+    setFavorites(nextItems.map((favorite) => favorite.property_id));
+    window.localStorage.setItem('umutungo-favorites', JSON.stringify(nextItems));
+    window.dispatchEvent(new Event('umutungo:favorites-changed'));
+    void (wasSaved ? removeFavorite(property.id) : saveFavorite(item)).catch(() => undefined);
+  };
   const selectCategory = (category: string) => {
     const categorySlugs: Record<string, string> = { Homes: 'houses', Apartments: 'apartments', Land: 'land', 'Commercial spaces': 'commercial' };
     window.location.assign(`/categories/${categorySlugs[category] ?? 'houses'}`);
@@ -158,9 +194,9 @@ export default function HomePage() {
     <main>
       <section className="hero-section" id="home">
         <div className="hero-image"><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
-          <h1>{copy('Find a place')} <em>{copy('that feels like home.')}</em></h1>
-          <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Search landlords and commissioners" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Search landlords or commissioners" /><button type="submit" aria-label="Search directory"><Icon name="arrow" size={15} /></button></form>
-          <p className="hero-lead">{copy('Browse verified homes, land and commercial spaces across Rwanda.')}</p>
+          <h1>{copy('Here is the best choice for places that are personalised to you.')}</h1>
+          <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="I want a house near stadium" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form>
+          <p className="hero-lead">{copy('Every problem has a solution. We are here to reduce the stress of searching for a property.')}</p>
           <div className="hero-actions"><a className="button button-primary" href="/categories/houses">{copy('Browse properties')} <Icon name="arrow" size={16} /></a><button className="button button-commissioner" type="button" onClick={() => requestSignIn('Commissioner / Komisiyoneri')}>{copy('Join as Commissioner')} <Icon name="arrow" size={16} /></button></div>
         </div></div></div>
         <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} type={type} intent={intent} priceRange={priceRange} onLocationChange={setLocation} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
@@ -171,7 +207,7 @@ export default function HomePage() {
       <section className="section section-property container" id="properties">
         <div className="section-heading split-heading"><div><p className="eyebrow">{selectedCategory ? copy('Category view') : copy('Featured properties')}</p><h2>{selectedCategory ? copy(selectedCategory) : copy('Places worth')}<br /><em>{selectedCategory ? copy('properties.') : copy('a closer look.')}</em></h2></div><p className="section-description">{selectedCategory ? `${visibleProperties.length} ${copy('properties found in this category.')}` : copy('A small selection of homes currently available in Kigali.')}</p></div>
         {searchMessage && <div className="search-feedback" role="status"><Icon name="check" size={16} /> {searchMessage}</div>}
-        <div className="property-grid">{visibleProperties.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property.id)} onView={() => setSelectedProperty(property)} />)}</div>
+        <div className="property-grid">{visibleProperties.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />)}</div>
         {selectedCategory && <button className="category-reset" type="button" onClick={() => { setSelectedCategory(''); setType('Any type'); }}>{copy('Show all properties')}</button>}
       </section>
 

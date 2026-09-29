@@ -7,6 +7,7 @@ import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
 import type { PropertyPlaceholder } from './PropertyCard';
 import { PropertyViewer } from './PropertyViewer';
+import { listFavorites, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 
 type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'Book'; detail: string; rating: string; image: string; verified?: boolean };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[]; listings: Listing[] };
@@ -63,6 +64,24 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
     if (storedLanguage && ['English', 'French', 'Kinyarwanda', 'Swahili'].includes(storedLanguage)) setLanguage(storedLanguage);
   }, []);
+  useEffect(() => {
+    const readFavorites = () => {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem('umutungo-favorites') ?? '[]') as FavoriteItem[];
+        setSaved(Array.isArray(stored) ? stored.map((item) => item.property_id) : []);
+      } catch {
+        setSaved([]);
+      }
+    };
+    readFavorites();
+    window.addEventListener('umutungo:favorites-changed', readFavorites);
+    void listFavorites().then((remote) => {
+      if (remote === null) return;
+      window.localStorage.setItem('umutungo-favorites', JSON.stringify(remote));
+      window.dispatchEvent(new Event('umutungo:favorites-changed'));
+    }).catch(() => undefined);
+    return () => window.removeEventListener('umutungo:favorites-changed', readFavorites);
+  }, []);
   const translatedCategoryName = t(language, category.name);
   const listings = useMemo(() => category.listings.filter((item) => {
     const matchesQuery = `${item.title} ${item.location} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
@@ -74,10 +93,24 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     return matchesQuery && matchesLocation && matchesIntent && matchesPrice && matchesFilter;
   }), [category, filter, initialIntent, initialLocation, initialPriceRange, query]);
 
+  const toggleListingFavorite = (item: Listing) => {
+    const wasSaved = saved.includes(item.id);
+    const favorite: FavoriteItem = { property_id: item.id, title: item.title, type: category.name, location: item.location.replace(/\s*·\s*/g, ' - '), price: item.price, image: item.image };
+    let currentItems: FavoriteItem[] = [];
+    try {
+      const stored = JSON.parse(window.localStorage.getItem('umutungo-favorites') ?? '[]') as FavoriteItem[];
+      currentItems = Array.isArray(stored) ? stored : [];
+    } catch { currentItems = []; }
+    const nextItems = wasSaved ? currentItems.filter((savedItem) => savedItem.property_id !== item.id) : [...currentItems, favorite];
+    window.localStorage.setItem('umutungo-favorites', JSON.stringify(nextItems));
+    window.dispatchEvent(new Event('umutungo:favorites-changed'));
+    void (wasSaved ? removeFavorite(item.id) : saveFavorite(favorite)).catch(() => undefined);
+  };
+
   return <><main className="category-experience" style={{ '--category-accent': category.accent } as React.CSSProperties}>
     <header className="category-experience-header"><Link href="/" className="category-back"><Icon name="home" size={15} /> {t(language, 'Home')}</Link><nav className="category-shop-nav" aria-label={t(language, 'Property shop categories')}>{shopCategories.map((item) => <Link className={item.slug === slug ? 'is-active' : ''} href={`/categories/${item.slug}`} key={item.slug}><Icon name={item.icon} size={14} />{t(language, item.label)}</Link>)}</nav><div><span>{translatedCategoryName}</span><Link href="/">Umutungo <Icon name="arrow" size={14} /></Link></div></header>
     <section className="category-experience-hero" style={{ backgroundImage: `linear-gradient(90deg, rgba(8, 18, 10, .78), rgba(8, 18, 10, .2)), url(${category.cover})` }}><div><span className="category-experience-eyebrow">{t(language, category.eyebrow)}</span><h1>{t(language, 'Find your next')}<br /><em>{translatedCategoryName.toLowerCase()} {t(language, 'space.')}</em></h1><p>{t(language, category.description)}</p></div><div className="category-search-box"><Icon name="search" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`${t(language, 'Search')} ${translatedCategoryName.toLowerCase()} ${t(language, 'by location or feature')}`} /><button type="button" aria-label={t(language, 'Search category')} onClick={() => setQuery(query.trim())}><Icon name="arrow" size={15} /></button></div></section>
-    <section className="category-experience-body"><div className="category-results-heading"><div><span className="category-experience-eyebrow">{listings.length} available now</span><h2>Explore {category.name.toLowerCase()}</h2></div><button className="category-map-button" type="button"><Icon name="pin" size={15} /> Map view</button></div><div className="category-filter-row">{category.filters.map((item) => <button className={filter === item ? 'active' : ''} key={item} type="button" onClick={() => setFilter(item)}>{item}</button>)}</div>{listings.length ? <div className="category-listing-grid">{listings.map((item) => <article className="category-listing-card" key={item.id} onClick={() => setActiveListing(item)}><div className="category-listing-image" style={{ backgroundImage: `linear-gradient(180deg, transparent 45%, rgba(5, 15, 8, .64)), url(${item.image})` }}><button className={`category-save ${saved.includes(item.id) ? 'saved' : ''}`} type="button" aria-label={`Save ${item.title}`} onClick={(event) => { event.stopPropagation(); setSaved((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]); }}><Icon name="heart" size={16} filled={saved.includes(item.id)} /></button>{item.verified && <span className="category-verified"><Icon name="check" size={12} /> Verified</span>}</div><div className="category-listing-copy"><div className="category-listing-meta"><span className={`listing-intent ${item.intent === 'For sale' ? 'for-sale' : item.intent === 'For rent' ? 'for-rent' : ''}`}>{item.intent}</span><span className="category-stars">★ {item.rating}</span></div><h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p><div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><button className="category-view-button" type="button" onClick={(event) => { event.stopPropagation(); setActiveListing(item); }}>View property <Icon name="arrow" size={13} /></button></div></div></article>)}</div> : <div className="category-empty"><Icon name="search" size={21} /><h3>No listings match that search</h3><p>Try another neighbourhood, property type, or clear the filter.</p><button type="button" onClick={() => { setQuery(''); setFilter(category.filters[0]); }}>Clear search</button></div>}</section>
+    <section className="category-experience-body"><div className="category-results-heading"><div><span className="category-experience-eyebrow">{listings.length} available now</span><h2>Explore {category.name.toLowerCase()}</h2></div><button className="category-map-button" type="button"><Icon name="pin" size={15} /> Map view</button></div><div className="category-filter-row">{category.filters.map((item) => <button className={filter === item ? 'active' : ''} key={item} type="button" onClick={() => setFilter(item)}>{item}</button>)}</div>{listings.length ? <div className="category-listing-grid">{listings.map((item) => <article className="category-listing-card" key={item.id} onClick={() => setActiveListing(item)}><div className="category-listing-image" style={{ backgroundImage: `linear-gradient(180deg, transparent 45%, rgba(5, 15, 8, .64)), url(${item.image})` }}><button className={`category-save ${saved.includes(item.id) ? 'saved' : ''}`} type="button" aria-label={`Save ${item.title}`} onClick={(event) => { event.stopPropagation(); toggleListingFavorite(item); }}><Icon name="heart" size={16} filled={saved.includes(item.id)} /></button>{item.verified && <span className="category-verified"><Icon name="check" size={12} /> Verified</span>}</div><div className="category-listing-copy"><div className="category-listing-meta"><span className={`listing-intent ${item.intent === 'For sale' ? 'for-sale' : item.intent === 'For rent' ? 'for-rent' : ''}`}>{item.intent}</span><span className="category-stars">★ {item.rating}</span></div><h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p><div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><button className="category-view-button" type="button" onClick={(event) => { event.stopPropagation(); setActiveListing(item); }}>View property <Icon name="arrow" size={13} /></button></div></div></article>)}</div> : <div className="category-empty"><Icon name="search" size={21} /><h3>No listings match that search</h3><p>Try another neighbourhood, property type, or clear the filter.</p><button type="button" onClick={() => { setQuery(''); setFilter(category.filters[0]); }}>Clear search</button></div>}</section>
     {activeListing && <PropertyViewer language={language} property={toViewerProperty(activeListing, rawCategory)} onClose={() => setActiveListing(null)} />}
   </main><AiChatbot language={language} /></>;
 }

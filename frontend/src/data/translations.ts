@@ -202,6 +202,20 @@ const actionTranslations: Record<Language, TranslationMap> = {
   Swahili: { 'Upgrade to Post': 'Panda ili uchapishe' },
 };
 
+const systemTranslations: Record<Language, TranslationMap> = {
+  English: { 'Here is the best choice for places that are personalised to you.': 'Here is the best choice for places that are personalised to you.', 'Every problem has a solution. We are here to reduce the stress of searching for a property.': 'Every problem has a solution. We are here to reduce the stress of searching for a property.', 'Your shortlist': 'Your shortlist', 'No saved properties yet': 'No saved properties yet', 'Tap the heart on a property to keep it here.': 'Tap the heart on a property to keep it here.' },
+  French: { 'Here is the best choice for places that are personalised to you.': 'Voici les meilleurs endroits, personnalisés pour vous.', 'Every problem has a solution. We are here to reduce the stress of searching for a property.': 'Chaque problème a une solution. Nous sommes là pour réduire le stress de la recherche d’un bien.', 'Your shortlist': 'Votre sélection', 'No saved properties yet': 'Aucun bien enregistré', 'Tap the heart on a property to keep it here.': 'Touchez le cœur d’un bien pour le garder ici.' },
+  Kinyarwanda: { 'Here is the best choice for places that are personalised to you.': 'Aha ni ho hantu heza hatoranyijwe hakubereye.', 'Every problem has a solution. We are here to reduce the stress of searching for a property.': 'Buri kibazo kigira igisubizo. Turi hano kugira ngo tugabanye umunaniro wo gushaka umutungo.', 'Your shortlist': 'Ibyo watoranyije', 'No saved properties yet': 'Nta mutungo wabitswe', 'Tap the heart on a property to keep it here.': 'Kanda ku mutima w’umutungo kugira ngo uwubike hano.' },
+  Swahili: { 'Here is the best choice for places that are personalised to you.': 'Hapa kuna chaguo bora la maeneo yaliyobinafsishwa kwa ajili yako.', 'Every problem has a solution. We are here to reduce the stress of searching for a property.': 'Kila tatizo lina suluhisho. Tuko hapa kupunguza msongo wa kutafuta mali.', 'Your shortlist': 'Orodha yako', 'No saved properties yet': 'Bado hakuna mali zilizohifadhiwa', 'Tap the heart on a property to keep it here.': 'Bonyeza moyo kwenye mali ili kuiweka hapa.' },
+};
+
+const storyTranslations: Record<Language, TranslationMap> = {
+  English: { 'Tell us what home means to you, then let the right places rise to the surface. The process is meant to feel fun and relieving—we care about your convenience, and we are genuinely happy to have you here. Tap Search and see the magic unfold.': 'Tell us what home means to you, then let the right places rise to the surface. The process is meant to feel fun and relieving—we care about your convenience, and we are genuinely happy to have you here. Tap Search and see the magic unfold.', 'Move from the wide view to the small things that make a place feel like yours. We want you to live in the house of your dreams, work in the office of your dreams, and drive your dream car.': 'Move from the wide view to the small things that make a place feel like yours. We want you to live in the house of your dreams, work in the office of your dreams, and drive your dream car.' },
+  French: { 'Tell us what home means to you, then let the right places rise to the surface. The process is meant to feel fun and relieving—we care about your convenience, and we are genuinely happy to have you here. Tap Search and see the magic unfold.': 'Dites-nous ce que signifie un chez-vous pour vous, puis laissez les bons lieux apparaître. La recherche doit être agréable et apaisante : votre confort compte pour nous. Appuyez sur Rechercher et laissez la magie opérer.', 'Move from the wide view to the small things that make a place feel like yours. We want you to live in the house of your dreams, work in the office of your dreams, and drive your dream car.': 'Passez de la vue d’ensemble aux détails qui rendent un lieu vraiment vôtre. Nous voulons vous aider à vivre dans la maison de vos rêves, à travailler dans le bureau de vos rêves et à conduire la voiture de vos rêves.' },
+  Kinyarwanda: { 'Tell us what home means to you, then let the right places rise to the surface. The process is meant to feel fun and relieving—we care about your convenience, and we are genuinely happy to have you here. Tap Search and see the magic unfold.': 'Tubwire icyo urugo rusobanura kuri wowe, maze ahantu hakubereye higaragare. Gushaka bigomba kuba bishimishije kandi bikaruhura. Kanda kuri Shaka ubone ubumaji butangira.', 'Move from the wide view to the small things that make a place feel like yours. We want you to live in the house of your dreams, work in the office of your dreams, and drive your dream car.': 'Va ku ishusho rusange ugere ku tuntu duto dutuma ahantu haba ahawe. Turifuza ko uba mu nzu y’inzozi zawe, ugakorera mu biro by’inzozi zawe kandi ukagenda mu modoka y’inzozi zawe.' },
+  Swahili: { 'Tell us what home means to you, then let the right places rise to the surface. The process is meant to feel fun and relieving—we care about your convenience, and we are genuinely happy to have you here. Tap Search and see the magic unfold.': 'Tuambie nyumba ina maana gani kwako, kisha maeneo yanayokufaa yataonekana. Mchakato huu unapaswa kuwa wa kufurahisha na wenye utulivu. Bonyeza Tafuta uone uchawi ukianza.', 'Move from the wide view to the small things that make a place feel like yours. We want you to live in the house of your dreams, work in the office of your dreams, and drive your dream car.': 'Toka kwenye mwonekano mpana hadi maelezo madogo yanayofanya mahali pawe pako. Tunataka uishi katika nyumba ya ndoto zako, ufanye kazi katika ofisi ya ndoto zako na uendeshe gari la ndoto zako.' },
+};
+
 const categoryViewTranslations: Record<Language, TranslationMap> = {
   English: { 'Category view': 'Category view', 'properties.': 'properties.', 'properties found in this category.': 'properties found in this category.', 'Show all properties': 'Show all properties', 'Commercial spaces': 'Commercial spaces', 'Trusted agents': 'Trusted agents', 'Secure enquiries': 'Secure enquiries' },
   French: { 'Category view': 'Vue par categorie', 'properties.': 'biens.', 'properties found in this category.': 'biens trouves dans cette categorie.', 'Show all properties': 'Voir tous les biens', 'Commercial spaces': 'Espaces commerciaux', 'Trusted agents': 'Agents de confiance', 'Secure enquiries': 'Demandes securisees' },
@@ -228,6 +242,21 @@ const landingTranslations: Record<Language, TranslationMap> = {
   },
 };
 
+const platformTranslations: Record<Language, TranslationMap> = {
+  English: {
+    'Umutungo is a platform to help people get their dream living places and other properties.': 'Umutungo is a platform to help people get their dream living places and other properties.',
+  },
+  French: {
+    'Umutungo is a platform to help people get their dream living places and other properties.': 'Umutungo est une plateforme qui aide chacun à trouver le lieu de vie et les biens de ses rêves.',
+  },
+  Kinyarwanda: {
+    'Umutungo is a platform to help people get their dream living places and other properties.': 'Umutungo ni urubuga rufasha abantu kubona aho gutura h’inzozi zabo n’indi mitungo.',
+  },
+  Swahili: {
+    'Umutungo is a platform to help people get their dream living places and other properties.': 'Umutungo ni jukwaa linalowasaidia watu kupata maeneo ya kuishi ya ndoto zao na mali nyingine.',
+  },
+};
+
 export function t(language: Language, key: string) {
-  return actionTranslations[language]?.[key] ?? categoryViewTranslations[language]?.[key] ?? landingTranslations[language]?.[key] ?? navHintTranslations[language]?.[key] ?? appTranslations[language]?.[key] ?? chatTranslations[language]?.[key] ?? formTranslations[language]?.[key] ?? uiTranslations[language]?.[key] ?? dictionaries[language]?.[key] ?? english[key] ?? key;
+  return platformTranslations[language]?.[key] ?? systemTranslations[language]?.[key] ?? storyTranslations[language]?.[key] ?? actionTranslations[language]?.[key] ?? categoryViewTranslations[language]?.[key] ?? landingTranslations[language]?.[key] ?? navHintTranslations[language]?.[key] ?? appTranslations[language]?.[key] ?? chatTranslations[language]?.[key] ?? formTranslations[language]?.[key] ?? uiTranslations[language]?.[key] ?? dictionaries[language]?.[key] ?? english[key] ?? key;
 }

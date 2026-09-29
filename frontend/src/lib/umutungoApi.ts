@@ -73,6 +73,16 @@ export type DirectoryProfile = {
   published_listings: number;
 };
 
+export type FavoriteItem = {
+  property_id: string;
+  title: string;
+  type: string;
+  location: string;
+  price: string;
+  image: string;
+  saved_at?: string;
+};
+
 export type AdminReport = {
   id: string;
   listing_id: string;
@@ -124,4 +134,17 @@ export async function publicUmutungoApi<T>(path: string, init: RequestInit = {})
   const body = await response.json().catch(() => ({})) as T & { error?: string };
   if (!response.ok) throw new Error(body.error ?? 'Umutungo request failed');
   return body as T;
+}
+
+export async function listFavorites() {
+  const result = await umutungoApi<{ items: FavoriteItem[] }>('/api/v1/favorites');
+  return result?.items ?? null;
+}
+
+export async function saveFavorite(item: FavoriteItem) {
+  return umutungoApi<{ id: string; property_id: string }>('/api/v1/favorites', { method: 'POST', body: JSON.stringify(item) });
+}
+
+export async function removeFavorite(propertyID: string) {
+  return umutungoApi<{ property_id: string; status: string }>(`/api/v1/favorites/${encodeURIComponent(propertyID)}`, { method: 'DELETE' });
 }

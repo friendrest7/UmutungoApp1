@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const query = new URLSearchParams({ where: filters.length ? filters.join(' AND ') : '1=1', outFields: 'province,district,sector,cell,village', returnGeometry: 'false', orderByFields: level, f: 'json' });
 
   try {
-    const response = await fetch(`${boundaryService}/${layerByLevel[level]}/query?${query.toString()}`, { next: { revalidate: 86400 } });
+    const response = await fetch(`${boundaryService}/${layerByLevel[level]}/query?${query.toString()}`, { next: { revalidate: 86400 }, signal: AbortSignal.timeout(8000) });
     if (!response.ok) return NextResponse.json({ error: 'The national location directory is temporarily unavailable.' }, { status: 502 });
     const data = await response.json() as { features?: Array<{ attributes?: Record<string, string | null> }>; error?: { message?: string } };
     if (data.error) return NextResponse.json({ error: data.error.message ?? 'Location lookup failed.' }, { status: 502 });

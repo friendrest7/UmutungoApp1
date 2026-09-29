@@ -86,6 +86,40 @@ function DashboardTopbar({ eyebrow, active, initials, accountLabel }: { eyebrow:
   </header>;
 }
 
+function DashboardUtilityDock() {
+  const [darkMode, setDarkMode] = useState(false);
+  const [language, setLanguage] = useState<Language>('English');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  useEffect(() => {
+    const dashboard = document.querySelector('.role-dashboard');
+    const storedTheme = window.localStorage.getItem('umutungo-dashboard-theme') === 'dark';
+    const storedLanguage = window.localStorage.getItem('umutungo-language') as Language | null;
+    setDarkMode(storedTheme);
+    setLanguage(storedLanguage && dashboardLanguages.includes(storedLanguage) ? storedLanguage : 'English');
+    dashboard?.classList.toggle('dashboard-dark', storedTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    window.localStorage.setItem('umutungo-dashboard-theme', next ? 'dark' : 'light');
+    document.querySelector('.role-dashboard')?.classList.toggle('dashboard-dark', next);
+  };
+  const changeLanguage = (next: Language) => {
+    setLanguage(next);
+    window.localStorage.setItem('umutungo-language', next);
+    document.documentElement.lang = ({ English: 'en', French: 'fr', Kinyarwanda: 'rw', Swahili: 'sw' } as Record<Language, string>)[next];
+  };
+
+  return <div className={`dashboard-utility-dock ${darkMode ? 'is-dark' : ''}`} aria-label="Dashboard tools">
+    <Link className="dashboard-header-tool" href="/#properties" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')}><Icon name="heart" size={17} /></Link>
+    <div className="dashboard-notification-wrap"><button className="dashboard-header-tool" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>{notificationsOpen && <div className="dashboard-notification-popover" role="status">{t(language, 'No new notifications')}</div>}</div>
+    <button className="dashboard-header-tool" type="button" title={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} aria-label={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} onClick={toggleTheme}><Icon name={darkMode ? 'sun' : 'moon'} size={17} /></button>
+    <label className="dashboard-language-select" title={t(language, 'Language')}><Icon name="globe" size={15} /><select value={language} aria-label={t(language, 'Language')} onChange={(event) => changeLanguage(event.target.value as Language)}>{dashboardLanguages.map((item) => <option key={item} value={item}>{dashboardLanguageCodes[item]}</option>)}</select></label>
+  </div>;
+}
+
 function LegacyTenantWorkspaceSection({ view }: { view: string }) {
   const panels: Record<string, { eyebrow: string; title: string; description: string; icon: IconName }> = {
     'Saved properties': { eyebrow: 'Your shortlist', title: 'Saved properties', description: 'Keep the homes, apartments, and spaces you want to compare close at hand.', icon: 'heart' },
@@ -99,7 +133,28 @@ function LegacyTenantWorkspaceSection({ view }: { view: string }) {
 
 type TenantWorkspaceProps = { view: string; tenantData?: TenantDashboardData; onViewed?: (application: ApiApplication) => void; onPay?: (application: ApiApplication) => void; onContact?: (application: ApiApplication) => void; onReview?: (application: ApiApplication) => void; notice?: string };
 
+function TenantMessageWorkspace({ tenantData }: { tenantData?: TenantDashboardData }) {
+  const [draft, setDraft] = useState('');
+  const [sentNotice, setSentNotice] = useState('');
+  const messages = tenantData?.messages ?? [];
+  const sendMessage = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const body = draft.trim();
+    if (!body) return;
+    const message: ApiMessage = { id: `message-${Date.now()}`, sender_id: 'me', sender_name: 'You', recipient_id: '', recipient_name: 'Umutungo support', listing_id: '', body, created_at: new Date().toISOString() };
+    try {
+      const stored = JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as ApiMessage[];
+      window.localStorage.setItem('umutungo-tenant-messages', JSON.stringify([...stored, message]));
+    } catch { /* Keep the composer usable when storage is unavailable. */ }
+    window.dispatchEvent(new Event('storage'));
+    setDraft('');
+    setSentNotice('Message saved to your tenant workspace.');
+  };
+  return <section className="tenant-workspace-section tenant-message-workspace"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">Stay connected</span><h2>Messages</h2><p>Write to Umutungo support or continue a conversation about a property, viewing, or application.</p></div><span className="tenant-workspace-icon"><Icon name="users" size={22} /></span></div><div className="tenant-message-list">{messages.length ? messages.slice().reverse().map((message) => <article key={message.id}><span className="tenant-workspace-row-icon"><Icon name="users" size={16} /></span><div><strong>{message.sender_name}</strong><small>{message.body}</small></div><time>{new Date(message.created_at).toLocaleDateString()}</time></article>) : <div className="tenant-message-empty"><Icon name="bookPen" size={20} /><div><strong>No messages yet</strong><p>Start a conversation and keep your property questions in one place.</p></div></div>}</div><form className="tenant-message-composer" onSubmit={sendMessage}><label htmlFor="tenant-message-draft">Write a message</label><textarea id="tenant-message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about a property, viewing, or application" rows={4} /><div><small>{sentNotice || 'Your message stays in your tenant workspace.'}</small><button className="role-dashboard-primary" type="submit"><Icon name="arrow" size={15} /> Send message</button></div></form></section>;
+}
+
 function TenantWorkspaceSection({ view, tenantData, onViewed, onPay, onContact, onReview, notice }: TenantWorkspaceProps) {
+  if (view === 'Messages') return <TenantMessageWorkspace tenantData={tenantData} />;
   const panels: Record<string, { eyebrow: string; title: string; description: string; icon: IconName }> = {
     Applications: { eyebrow: 'Rental applications', title: 'Applications', description: 'Track each application from submitted to accepted and keep the next step clear.', icon: 'bookPen' },
     'Rent & utilities': { eyebrow: 'Payments and reminders', title: 'Rent & utilities', description: 'See what is due, review payment history, and keep utility obligations visible.', icon: 'arrow' },
@@ -304,10 +359,10 @@ export function RoleDashboard({ role }: { role: DashboardRole }) {
   const initials = role === 'admin' ? 'AD' : role === 'tenant' ? 'TN' : role === 'landlord' ? 'LL' : 'CM';
   const accountLabel = role === 'admin' ? 'Platform administrator' : `Verified ${role}`;
 
-  if (role === 'tenant') return <TenantDashboard />;
-  if (role === 'commissioner') return <CommissionerDashboard />;
-  if (role === 'landlord') return <LandlordDashboard />;
-  if (role === 'admin') return <AdminDashboard />;
+  if (role === 'tenant') return <><DashboardUtilityDock /><TenantDashboard /></>;
+  if (role === 'commissioner') return <><DashboardUtilityDock /><CommissionerDashboard /></>;
+  if (role === 'landlord') return <><DashboardUtilityDock /><LandlordDashboard /></>;
+  if (role === 'admin') return <><DashboardUtilityDock /><AdminDashboard /></>;
 
   return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label={`${config.eyebrow} navigation`}><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><button type="button"><Icon name="user" size={16} /> Account</button></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><div className="role-dashboard-profile"><span className="role-dashboard-avatar">{initials}</span><span><strong>My account</strong><small>{accountLabel}</small></span><Icon name="chevron" size={14} /></div></header><div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">{config.greeting}</p><h2>{config.welcome}</h2><p>Manage your Umutungo activity in one clear, professional workspace.</p></div><button className="role-dashboard-primary" type="button"><Icon name={config.actionIcon} size={16} /> {config.action}</button></section><section className="role-dashboard-metrics" aria-label="Dashboard metrics">{config.metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-grid"><section className="role-dashboard-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">{config.panelEyebrow}</span><h3>{config.panelTitle}</h3></div><button type="button">View all <Icon name="arrow" size={14} /></button></div><div className="role-dashboard-activity">{config.activity.map((item) => <article key={`${item.name}-${item.time}`}><span className="role-dashboard-contact-avatar">{item.initials}</span><div><strong>{item.name}</strong><small>{item.detail} · {item.time}</small></div><span className={`role-dashboard-status ${item.status === 'New' ? 'new' : ''}`}>{item.status}</span><button type="button" aria-label={`Open ${item.name}`}><Icon name="arrow" size={14} /></button></article>)}</div></section><section className="role-dashboard-panel role-dashboard-side-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">{config.sideEyebrow}</span><h3>{config.sideTitle}</h3></div><Icon name="sparkles" size={17} /></div>{config.sideItems.map((item) => <div className="role-dashboard-side-item" key={item.title}><span><Icon name={item.icon} size={16} /></span><div><strong>{item.title}</strong><small>{item.detail}</small></div><Icon name="arrow" size={14} /></div>)}<button className="role-dashboard-outline" type="button">Open workspace</button></section></div></div></section></main>;
 }

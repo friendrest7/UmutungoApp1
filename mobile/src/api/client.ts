@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import type { ApiApplication, ApiListing, ApiMessage, ApiNotification, ApiUser, FavoriteItem, ListingQuery, UserRole } from './types';
+import type { ApiApplication, ApiListing, ApiMessage, ApiNotification, ApiProfile, ApiUser, FavoriteItem, ListingQuery, UserRole } from './types';
 
 const TOKEN_KEY = 'umutungo-access-token';
 const baseUrl = () => (process.env.EXPO_PUBLIC_API_URL ?? '').trim().replace(/\/$/, '');
@@ -33,7 +33,15 @@ export async function verifyOtp(phone: string, code: string) {
   return result;
 }
 export async function registerAccount(input: { name: string; email: string; phone: string; role: UserRole }) { return request<{ user: ApiUser; message: string; development_code?: string }>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(input) }); }
-export async function getMe() { return request<{ user: ApiUser }>('/api/v1/me', {}, true); }
+export async function getMe() { return request<{ user: ApiUser; profile: ApiProfile }>('/api/v1/me', {}, true); }
+export async function updateProfile(input: { name?: string; email?: string; bio?: string; photo_url?: string; language?: string }) {
+  return request<{ user: ApiUser; profile: ApiProfile }>('/api/v1/me', { method: 'PATCH', body: JSON.stringify(input) }, true);
+}
+export async function signInWithGoogle(input: { access_token: string; client_id?: string; role?: 'client' | 'tenant' }) {
+  const result = await request<{ user: ApiUser; profile: ApiProfile; access_token: string }>('/api/v1/auth/google', { method: 'POST', body: JSON.stringify(input) });
+  await SecureStore.setItemAsync(TOKEN_KEY, result.access_token);
+  return result;
+}
 
 export async function listListings(query: ListingQuery = {}) {
   const params = new URLSearchParams(Object.entries(query).filter(([, value]) => Boolean(value)) as string[][]);
@@ -66,6 +74,22 @@ export type CreateListingInput = {
   media?: Array<{ type: string; url: string }>;
 };
 export async function createListing(input: CreateListingInput) { return request<{ id: string; status: string; expires_at: string }>('/api/v1/listings', { method: 'POST', body: JSON.stringify(input) }, true); }
+export async function uploadListingMedia(listingId: string, input: { uri: string; name: string; type: string }) {
+  const base = baseUrl();
+  if (!base) throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env before connecting to Umutungo.');
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (!token) throw new ApiError('Sign in is required before uploading listing photos.', 401);
+  const form = new FormData();
+  form.append('file', { uri: input.uri, name: input.name, type: input.type } as unknown as Blob);
+  const response = await fetch(`${base}/api/v1/listings/${encodeURIComponent(listingId)}/media`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const body = await response.json().catch(() => ({})) as { error?: string; url?: string; id?: string };
+  if (!response.ok) throw new ApiError(body.error ?? `Image upload failed (${response.status})`, response.status);
+  return body as { id: string; type: string; url: string; size_bytes: number };
+}
 export async function updateListing(id: string, input: { title?: string; description?: string; price?: number; status?: string }) { return request<{ id: string; status: string }>(`/api/v1/listings/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }, true); }
 export async function deleteListing(id: string) { return request<{ id: string; status: string }>(`/api/v1/listings/${encodeURIComponent(id)}`, { method: 'DELETE' }, true); }
 export async function listOwnerListings() { return request<{ items: ApiListing[]; count: number }>('/api/v1/owner/listings', {}, true); }

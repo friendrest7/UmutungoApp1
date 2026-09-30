@@ -57,3 +57,25 @@ func TestCORSPreflight(t *testing.T) {
 		t.Fatalf("allow-methods = %q, want POST", got)
 	}
 }
+
+func TestMediaURLValidation(t *testing.T) {
+	valid := []string{"https://cdn.example.com/property.jpg", "http://localhost:8080/uploads/a.jpg"}
+	for _, value := range valid {
+		if !validMediaURL(value) {
+			t.Errorf("validMediaURL(%q) = false, want true", value)
+		}
+	}
+	invalid := []string{"", "data:image/png;base64,abc", "javascript:alert(1)", "https:///missing-host", "https://" + strings.Repeat("a", 2050)}
+	for _, value := range invalid {
+		if validMediaURL(value) {
+			t.Errorf("validMediaURL(%q) = true, want false", value)
+		}
+	}
+}
+
+func TestConfiguredGoogleClientIDs(t *testing.T) {
+	got := configuredGoogleClientIDs(" android.apps.googleusercontent.com, web.apps.googleusercontent.com,android.apps.googleusercontent.com ")
+	if len(got) != 2 || got[0] != "android.apps.googleusercontent.com" || got[1] != "web.apps.googleusercontent.com" {
+		t.Fatalf("configuredGoogleClientIDs() = %#v, want two unique trimmed IDs", got)
+	}
+}

@@ -10,7 +10,7 @@ From this folder:
 docker compose up --build
 ```
 
-The API is available at `http://localhost:8080` and PostgreSQL at port `5432`. The API runs `migrations/001_init.sql` automatically on startup.
+The API is available at `http://localhost:8080` and PostgreSQL at port `5432`. The API runs all SQL migrations in the `migrations` directory automatically on startup.
 
 ## Run locally
 
@@ -36,10 +36,13 @@ The default development OTP is `111111`. It is returned only in development mode
 | POST | `/api/v1/auth/register` | Register a client, tenant, broker, or owner |
 | POST | `/api/v1/auth/request-otp` | Request phone OTP |
 | POST | `/api/v1/auth/verify-otp` | Verify OTP and receive bearer token |
+| POST | `/api/v1/auth/google` | Verify a Google access token and receive a bearer token |
+| GET/PATCH | `/api/v1/me` | Read or update the authenticated profile |
 | GET | `/api/v1/listings` | Public listing search |
 | GET | `/api/v1/directory` | Public landlord and commissioner directory search |
 | POST | `/api/v1/listings` | Create a listing as broker/owner |
 | GET/PATCH/DELETE | `/api/v1/listings/{id}` | View or manage a listing |
+| POST | `/api/v1/listings/{id}/media` | Upload an owned listing image (JPEG, PNG, or WebP; max 10 MB) |
 | POST | `/api/v1/listings/{id}/applications` | Apply to rent a listing |
 | GET | `/api/v1/applications` | View submitted/received applications |
 | POST | `/api/v1/applications/{id}/decision` | Accept, reject, or request information |
@@ -59,6 +62,8 @@ The default development OTP is `111111`. It is returned only in development mode
 | POST | `/api/v1/maintenance` | Submit a maintenance request |
 
 Use `Authorization: Bearer <access_token>` for protected routes.
+
+Uploaded listing images are written to `MEDIA_UPLOAD_DIR` and served from `/uploads/`. Set `MEDIA_PUBLIC_BASE_URL` to the public API origin in production. Set `GOOGLE_CLIENT_IDS` to a comma-separated allowlist of Google Android, iOS, and web client IDs before enabling mobile Google sign-in. The backend never receives a Google client secret.
 
 ## Production follow-up
 

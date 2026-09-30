@@ -16,11 +16,11 @@ From `C:\Users\CNS Technologies\Documents\UmutungoApp\mobile`:
 copy .env.example .env
 npm install
 npm run typecheck
-npx expo doctor
+npm test
 npm start
 ```
 
-Set `EXPO_PUBLIC_API_URL` in `.env` before starting. Use `http://10.0.2.2:8080` for an Android emulator, `http://127.0.0.1:8080` for an iOS simulator, or the Windows computer's LAN IP for a physical phone. The Go backend must be running and its CORS/network configuration must allow the device to reach it.
+Set `EXPO_PUBLIC_API_URL` in `.env` before starting. For Google sign-in, also set the Android, iOS, and web Google client IDs. Use `http://10.0.2.2:8080` for an Android emulator, `http://127.0.0.1:8080` for an iOS simulator, or the Windows computer's LAN IP for a physical phone. The Go backend must be running and its CORS/network configuration must allow the device to reach it.
 
 ## Implemented
 
@@ -28,20 +28,22 @@ Set `EXPO_PUBLIC_API_URL` in `.env` before starting. Use `http://10.0.2.2:8080` 
 - Live published listing search through `GET /api/v1/listings`, with search, category, transaction filters, loading, retry, empty, and client-side result paging.
 - Property details and photo gallery using listing media returned by `GET /api/v1/listings/{id}`.
 - Phone OTP registration and sign-in through the existing Go API; bearer token restoration and sign-out use `expo-secure-store`.
+- Google mobile sign-in through `expo-auth-session`, verified by `POST /api/v1/auth/google`, which creates or restores a real Umutungo bearer session.
 - Save and remove listings through the existing favorites endpoints.
+- Profile editing through `PATCH /api/v1/me` for name, email, bio, and language.
 - Owner/komisiyoneri listing creation and management through the existing listing endpoints.
-- Native photo-library selection for listing photos, with an honest limitation described below for binary upload.
+- Native photo-library selection followed by real multipart uploads to `POST /api/v1/listings/{id}/media`; the backend enforces owner/admin access, image type, and a 10 MB limit.
 - Owner contact messaging through `POST /api/v1/messages`.
 - English, French, Kinyarwanda, and Swahili labels for the core navigation and states.
 - Safe-area-aware scrolling, keyboard avoidance on forms, Android/iOS-compatible navigation, and photo-library permission handling.
 
-## Known backend limitations
+## Backend changes and remaining limitations
 
-These are limitations of the inspected existing backend, not mocked mobile behavior:
+The backend changes are in `backend/internal/httpapi/server.go`, `backend/migrations/004_mobile_auth_profile.sql`, and the backend configuration files. No secrets are included in the mobile app.
 
-1. `GET /api/v1/me` exists, but there is no profile update endpoint. Profile details are viewable; editing is intentionally disabled until a real PATCH profile contract is added.
-2. Listing creation accepts hosted media URLs in JSON but has no binary/object-storage upload endpoint. The app lets an owner select photos for review and optionally submit an already hosted image URL. It does not claim that a local photo was uploaded.
-3. The current Go API exposes phone OTP, not a mobile Google or Apple OAuth exchange. Google and Apple are therefore not presented as fake-success buttons. A secure backend exchange endpoint and provider configuration are required before enabling them.
+1. Uploaded media is stored in the configured `MEDIA_UPLOAD_DIR` and served under `/uploads/`. Docker uses the named `umutungo_media` volume for local persistence. Production should use a persistent disk or an approved object-storage adapter; do not rely on ephemeral container storage.
+2. Google verification requires `GOOGLE_CLIENT_IDS` on the backend and matching platform client IDs in the mobile environment. The backend verifies the Google access token and verified email before issuing an Umutungo session.
+3. Apple sign-in and account deletion remain follow-up work because no Apple backend/provider configuration exists yet.
 4. Listing search currently returns a maximum of 100 records and has no cursor/page query contract. "Load more" pages the already returned live result set on-device; server pagination requires a backend contract change.
 5. No push-notification registration endpoint was found, so this release uses on-demand API loading rather than claiming push support.
 
@@ -53,7 +55,9 @@ Start the Go API, set the computer LAN IP in `.env`, then run:
 npm start
 ```
 
-Install Expo Go for a quick browse-only check and scan the QR code. Phone OTP, SecureStore, image permissions, and OAuth callbacks require a development build with the configured `umutungo` scheme:
+For the local backend, from `backend` copy `.env.example` to `.env`, set `GOOGLE_CLIENT_IDS` if Google sign-in is needed, and start PostgreSQL plus the API. Migrations run on API startup.
+
+Install Expo Go for a quick browse-only check and scan the QR code. Phone OTP, SecureStore, image permissions, Google callbacks, and multipart uploads require a development build with the configured `umutungo` scheme:
 
 ```cmd
 npx expo install
@@ -79,14 +83,34 @@ npx expo run:ios
 
 The iOS simulator can reach a local backend using `http://127.0.0.1:8080`; a physical iPhone needs the computer's LAN IP and the backend must listen on the LAN interface.
 
-## Builds
+## Android preview build
 
 No APK, AAB, or iOS binary has been generated in this environment. EAS project initialization and signing are intentionally not fabricated.
 
-After installing/configuring EAS CLI and running `eas init` once in this folder:
+From `mobile`, install or invoke EAS CLI and initialize the project once:
+
+```cmd
+npx eas-cli login
+npx eas-cli init
+```
+
+Create the preview environment variable without committing its value:
+
+```cmd
+npx eas-cli env:create --environment preview --name EXPO_PUBLIC_API_URL --value https://YOUR-API-HOST --visibility plaintext
+npx eas-cli env:create --environment preview --name EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID --value YOUR-ANDROID-CLIENT-ID.apps.googleusercontent.com --visibility plaintext
+npx eas-cli env:create --environment preview --name EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID --value YOUR-WEB-CLIENT-ID.apps.googleusercontent.com --visibility plaintext
+```
+
+Then build the installable Android preview APK:
 
 ```cmd
 npx eas-cli build --platform android --profile preview
+```
+
+Other configured builds:
+
+```cmd
 npx eas-cli build --platform android --profile production
 npx eas-cli build --platform ios --profile ios-simulator
 npx eas-cli build --platform ios --profile production
@@ -100,12 +124,12 @@ The profiles are configured as follows:
 
 EAS cloud builds can be started from Windows. iOS production/TestFlight still requires an Apple Developer account, App Store Connect access, bundle-ID registration, signing certificates, and provisioning profiles. EAS can manage credentials interactively, but no Apple team ID or signing credentials are stored here.
 
-## OAuth and backend setup still required
+## Google, Apple, and backend setup
 
-- Add a backend mobile OAuth exchange that accepts a verified Google authorization-code or ID-token flow, then issues the same Umutungo bearer session. Configure Google Android package/SHA-1, iOS bundle ID, and `umutungo://auth/callback` only after that endpoint exists.
-- Add Apple Sign in with Apple support on the backend, configure the Apple Service ID / native app identifier, and implement the required account-deletion/revocation flow before App Store submission. Apple requires apps offering third-party account login to provide the corresponding Apple login experience and account deletion.
-- Add authenticated profile update and media upload/storage endpoints if those features must be enabled natively.
+- In Google Cloud Console, create Android, iOS, and web OAuth client IDs. Register package `rw.umutungo.mobile` with the Android SHA-1 from the EAS/development build, and register bundle ID `rw.umutungo.mobile` for iOS.
+- Put all accepted client IDs in backend `GOOGLE_CLIENT_IDS`; put the platform IDs in mobile `.env` or EAS environment variables.
 - Configure production API TLS, CORS/network access, SMS delivery, and provider credentials outside this repository.
+- Add Apple Sign in with Apple on the backend, configure the Apple Service ID/native app identifier, and implement account deletion/revocation before App Store submission.
 
 ## Verification
 
@@ -113,8 +137,20 @@ Run:
 
 ```cmd
 npm run typecheck
-npx expo doctor
 npm test
+npx expo export --platform android
+npx expo export --platform ios
 ```
 
-This Windows environment verified TypeScript, focused tests, Expo configuration, and Android/iOS JavaScript bundle exports. `npx expo-doctor` could not be downloaded because npm registry access was denied during this run. `npm run lint` also could not auto-configure ESLint because the same registry connection returned Windows `EACCES`. It cannot launch an iOS simulator; Android device/emulator verification requires Android SDK/device access, and cloud builds require an initialized EAS project and signing setup.
+The Android and iOS JavaScript bundles, TypeScript, focused mobile tests, and backend Go tests were verified locally. This Windows environment has no `adb`, Xcode, or initialized EAS project, so an Android device/emulator and installable APK remain untested here. `npx expo-doctor` and automatic ESLint setup were blocked by npm registry access returning Windows `EACCES`.
+
+## Android manual test checklist
+
+1. Set `EXPO_PUBLIC_API_URL` to a reachable backend address and start PostgreSQL/API.
+2. Open the preview APK or development build on an Android phone.
+3. Browse Home, Search, property details, and gallery images.
+4. Register or use an existing phone account, request OTP, verify, close/reopen the app, and confirm the session restores.
+5. Save and remove a property, then confirm Saved updates.
+6. Edit name/email/bio/language in Profile and confirm the values persist after refresh.
+7. As a property owner/komisiyoneri, create a listing, select a JPEG/PNG/WebP image under 10 MB, submit, and confirm the image URL opens in the property gallery.
+8. Confirm a non-owner cannot upload media to another owner's listing and that oversized/non-image files are rejected.

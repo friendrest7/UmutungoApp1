@@ -64,7 +64,7 @@ const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Lis
   return listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, category.cover, 'New', true);
 };
 
-export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialIntent = '', initialPriceRange = '' }: { slug: string; initialQuery?: string; initialLocation?: string; initialIntent?: string; initialPriceRange?: string }) {
+export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialDistrict = '', initialSector = '', initialIntent = '', initialPriceRange = '' }: { slug: string; initialQuery?: string; initialLocation?: string; initialDistrict?: string; initialSector?: string; initialIntent?: string; initialPriceRange?: string }) {
   const { language, changeLanguage: setLanguage } = usePersistentLanguage();
   const { darkMode, toggleTheme } = usePersistentTheme();
   const rawCategory = categoryConfigs[slug] ?? categoryConfigs.houses;
@@ -107,12 +107,14 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   const listings = useMemo(() => [...databaseListings, ...category.listings].filter((item) => {
     const matchesQuery = `${item.title} ${item.location} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
     const matchesLocation = !initialLocation || initialLocation === 'Kigali' || item.location.toLowerCase().includes(initialLocation.toLowerCase());
+    const matchesDistrict = !initialDistrict || item.location.toLowerCase().includes(initialDistrict.toLowerCase());
+    const matchesSector = !initialSector || item.location.toLowerCase().includes(initialSector.toLowerCase());
     const matchesIntent = !initialIntent || initialIntent === 'Buy or rent' || (initialIntent === 'Rent' && item.intent === 'For rent') || (initialIntent === 'Buy' && item.intent === 'For sale');
     const numericPrice = Number(item.price.replace(/[^0-9]/g, ''));
     const matchesPrice = !initialPriceRange || initialPriceRange === 'Any price' || (initialPriceRange === 'Under RWF 500,000' && numericPrice < 500000) || (initialPriceRange === 'RWF 500,000 - 1,000,000' && numericPrice >= 500000 && numericPrice <= 1000000) || (initialPriceRange === 'Over RWF 1,000,000' && numericPrice > 1000000);
     const matchesFilter = filter.startsWith('All') || (filter === 'For rent' && item.intent === 'For rent') || (filter === 'For sale' && item.intent === 'For sale') || (filter === 'Book now' && item.intent === 'Book') || ['Residential', 'Commercial', 'Private office', 'Open workspace'].includes(filter);
-    return matchesQuery && matchesLocation && matchesIntent && matchesPrice && matchesFilter;
-  }), [category, databaseListings, filter, initialIntent, initialLocation, initialPriceRange, query]);
+    return matchesQuery && matchesLocation && matchesDistrict && matchesSector && matchesIntent && matchesPrice && matchesFilter;
+  }), [category, databaseListings, filter, initialDistrict, initialIntent, initialLocation, initialPriceRange, initialSector, query]);
 
   const toggleListingFavorite = (item: Listing) => {
     const wasSaved = saved.includes(item.id);

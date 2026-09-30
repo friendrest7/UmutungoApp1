@@ -6,8 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/mail"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +35,12 @@ type CurrentUser struct {
 	Status string `json:"status"`
 }
 
+type profileResponse struct {
+	Bio      string `json:"bio"`
+	PhotoURL string `json:"photo_url"`
+	Language string `json:"language"`
+}
+
 func New(db *pgxpool.Pool, cfg config.Config) *Server {
 	return &Server{db: db, cfg: cfg}
 }
@@ -44,10 +54,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/register", s.register)
 	mux.HandleFunc("/api/v1/auth/request-otp", s.requestOTP)
 	mux.HandleFunc("/api/v1/auth/verify-otp", s.verifyOTP)
+	mux.HandleFunc("/api/v1/auth/google", s.googleAuth)
 	mux.HandleFunc("/api/v1/me", s.me)
 	mux.HandleFunc("/api/v1/directory", s.directory)
 	mux.HandleFunc("/api/v1/listings", s.listings)
 	mux.HandleFunc("/api/v1/listings/", s.listingRoute)
+	mux.HandleFunc("/uploads/", s.mediaFile)
 	mux.HandleFunc("/api/v1/applications", s.applications)
 	mux.HandleFunc("/api/v1/applications/", s.applicationRoute)
 	mux.HandleFunc("/api/v1/payments", s.payments)
@@ -229,7 +241,167 @@ func (s *Server) verifyOTP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"user": user, "access_token": token})
 }
 
+func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	allowedClientIDs := configuredGoogleClientIDs(s.cfg.GoogleClientIDs)
+	if len(allowedClientIDs) == 0 {
+		errorJSON(w, http.StatusServiceUnavailable, "Google sign-in is not configured")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	var input struct {
+		AccessToken string `json:"access_token"`
+		ClientID    string `json:"client_id"`
+		Role        string `json:"role"`
+	}
+	if !decodeJSON(w, r, &input) || strings.TrimSpace(input.AccessToken) == "" {
+		errorJSON(w, http.StatusBadRequest, "access_token is required")
+		return
+	}
+	if len(input.AccessToken) > 4096 {
+		errorJSON(w, http.StatusBadRequest, "access_token is invalid")
+		return
+	}
+
+	tokenInfoRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://oauth2.googleapis.com/tokeninfo?access_token="+url.QueryEscape(strings.TrimSpace(input.AccessToken)), nil)
+	if err != nil {
+		errorJSON(w, http.StatusUnauthorized, "Google sign-in token is invalid")
+		return
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	tokenInfoResponse, err := client.Do(tokenInfoRequest)
+	if err != nil {
+		errorJSON(w, http.StatusBadGateway, "Google sign-in could not be verified")
+		return
+	}
+	defer tokenInfoResponse.Body.Close()
+	if tokenInfoResponse.StatusCode != http.StatusOK {
+		errorJSON(w, http.StatusUnauthorized, "Google sign-in token is invalid or expired")
+		return
+	}
+	var tokenInfo struct {
+		Audience  string `json:"aud"`
+		ExpiresIn string `json:"expires_in"`
+	}
+	if err := json.NewDecoder(io.LimitReader(tokenInfoResponse.Body, 64*1024)).Decode(&tokenInfo); err != nil || !containsString(allowedClientIDs, tokenInfo.Audience) {
+		errorJSON(w, http.StatusUnauthorized, "Google sign-in client is not allowed")
+		return
+	}
+	if input.ClientID != "" && strings.TrimSpace(input.ClientID) != tokenInfo.Audience {
+		errorJSON(w, http.StatusUnauthorized, "Google sign-in client does not match the token")
+		return
+	}
+	if expires, err := strconv.Atoi(tokenInfo.ExpiresIn); err != nil || expires <= 0 {
+		errorJSON(w, http.StatusUnauthorized, "Google sign-in token is expired")
+		return
+	}
+
+	profileRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://openidconnect.googleapis.com/v1/userinfo", nil)
+	if err != nil {
+		errorJSON(w, http.StatusBadGateway, "Google profile could not be loaded")
+		return
+	}
+	profileRequest.Header.Set("Authorization", "Bearer "+strings.TrimSpace(input.AccessToken))
+	profileResponse, err := client.Do(profileRequest)
+	if err != nil {
+		errorJSON(w, http.StatusBadGateway, "Google profile could not be loaded")
+		return
+	}
+	defer profileResponse.Body.Close()
+	if profileResponse.StatusCode != http.StatusOK {
+		errorJSON(w, http.StatusUnauthorized, "Google profile could not be loaded")
+		return
+	}
+	var googleProfile struct {
+		Subject       string `json:"sub"`
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
+	}
+	if err := json.NewDecoder(io.LimitReader(profileResponse.Body, 128*1024)).Decode(&googleProfile); err != nil || googleProfile.Subject == "" || googleProfile.Email == "" || !googleProfile.EmailVerified {
+		errorJSON(w, http.StatusForbidden, "a verified Google email is required")
+		return
+	}
+	role := strings.ToLower(strings.TrimSpace(input.Role))
+	if role == "" {
+		role = "tenant"
+	}
+	if role != "client" && role != "tenant" {
+		errorJSON(w, http.StatusBadRequest, "Google sign-in role must be client or tenant")
+		return
+	}
+
+	var user CurrentUser
+	err = s.db.QueryRow(r.Context(), `
+		SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status
+		FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1`, strings.TrimSpace(strings.ToLower(googleProfile.Email))).
+		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	if err == pgx.ErrNoRows {
+		name := strings.TrimSpace(googleProfile.Name)
+		if name == "" {
+			name = strings.Split(googleProfile.Email, "@")[0]
+		}
+		err = s.db.QueryRow(r.Context(), `
+			INSERT INTO users(name,email,phone,role,verified_at) VALUES($1,$2,NULL,$3,NOW())
+			RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status`, name, strings.ToLower(strings.TrimSpace(googleProfile.Email)), role).
+			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+		if err == nil {
+			_, err = s.db.Exec(r.Context(), `INSERT INTO profiles(user_id,photo_url) VALUES($1,NULLIF($2,'')) ON CONFLICT(user_id) DO NOTHING`, user.ID, strings.TrimSpace(googleProfile.Picture))
+		}
+	}
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+			errorJSON(w, http.StatusConflict, "a user with this Google email already exists")
+			return
+		}
+		errorJSON(w, http.StatusInternalServerError, "could not create or load Google account")
+		return
+	}
+	if user.Status != "active" {
+		errorJSON(w, http.StatusForbidden, "this account is not active")
+		return
+	}
+	token, err := s.createSession(r, user.ID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create session")
+		return
+	}
+	profile, err := s.profileForUser(r, user.ID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load profile")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": user, "profile": profile, "access_token": token})
+}
+
+func configuredGoogleClientIDs(value string) []string {
+	items := make([]string, 0)
+	for _, item := range strings.Split(value, ",") {
+		if value := strings.TrimSpace(item); value != "" && !containsString(items, value) {
+			items = append(items, value)
+		}
+	}
+	return items
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPatch {
+		s.updateProfile(w, r)
+		return
+	}
 	if r.Method != http.MethodGet {
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -239,7 +411,143 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"user": user})
+	profile, err := s.profileForUser(r, user.ID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load profile")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": user, "profile": profile})
+}
+
+func (s *Server) profileForUser(r *http.Request, userID string) (profileResponse, error) {
+	var profile profileResponse
+	err := s.db.QueryRow(r.Context(), `
+		SELECT COALESCE(bio,''), COALESCE(photo_url,''), COALESCE(language,'en')
+		FROM profiles WHERE user_id=$1`, userID).
+		Scan(&profile.Bio, &profile.PhotoURL, &profile.Language)
+	if err == pgx.ErrNoRows {
+		return profileResponse{Language: "en"}, nil
+	}
+	return profile, err
+}
+
+func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	var input struct {
+		Name     *string `json:"name"`
+		Email    *string `json:"email"`
+		Bio      *string `json:"bio"`
+		PhotoURL *string `json:"photo_url"`
+		Language *string `json:"language"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Name != nil {
+		value := strings.TrimSpace(*input.Name)
+		if value == "" || len([]rune(value)) > 120 {
+			errorJSON(w, http.StatusBadRequest, "name must be between 1 and 120 characters")
+			return
+		}
+		input.Name = &value
+	}
+	if input.Email != nil {
+		value := strings.TrimSpace(strings.ToLower(*input.Email))
+		if value != "" {
+			parsed, err := mail.ParseAddress(value)
+			if err != nil || parsed.Address != value || len(value) > 254 {
+				errorJSON(w, http.StatusBadRequest, "email is invalid")
+				return
+			}
+		}
+		input.Email = &value
+	}
+	if input.Bio != nil {
+		value := strings.TrimSpace(*input.Bio)
+		if len([]rune(value)) > 1000 {
+			errorJSON(w, http.StatusBadRequest, "bio cannot exceed 1000 characters")
+			return
+		}
+		input.Bio = &value
+	}
+	if input.PhotoURL != nil {
+		value := strings.TrimSpace(*input.PhotoURL)
+		if len(value) > 2048 {
+			errorJSON(w, http.StatusBadRequest, "photo_url is too long")
+			return
+		}
+		if value != "" {
+			parsed, err := url.Parse(value)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+				errorJSON(w, http.StatusBadRequest, "photo_url must be an http or https URL")
+				return
+			}
+		}
+		input.PhotoURL = &value
+	}
+	if input.Language != nil {
+		value := strings.ToLower(strings.TrimSpace(*input.Language))
+		if value != "en" && value != "fr" && value != "rw" && value != "sw" {
+			errorJSON(w, http.StatusBadRequest, "language must be en, fr, rw, or sw")
+			return
+		}
+		input.Language = &value
+	}
+	if input.Name == nil && input.Email == nil && input.Bio == nil && input.PhotoURL == nil && input.Language == nil {
+		errorJSON(w, http.StatusBadRequest, "at least one profile field is required")
+		return
+	}
+
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not update profile")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	_, err = tx.Exec(r.Context(), `
+		UPDATE users SET
+		name=CASE WHEN $1::text IS NULL THEN name ELSE $1 END,
+		email=CASE WHEN $2::text IS NULL THEN email ELSE NULLIF($2,'') END,
+		updated_at=NOW()
+		WHERE id=$3`, input.Name, input.Email, user.ID)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+			errorJSON(w, http.StatusConflict, "that email is already in use")
+			return
+		}
+		errorJSON(w, http.StatusInternalServerError, "could not update account")
+		return
+	}
+	_, err = tx.Exec(r.Context(), `
+		INSERT INTO profiles(user_id,bio,photo_url,language) VALUES($1,COALESCE($2,''),NULLIF($3,''),COALESCE(NULLIF($4,''),'en'))
+		ON CONFLICT(user_id) DO UPDATE SET
+		bio=CASE WHEN $2::text IS NULL THEN profiles.bio ELSE $2 END,
+		photo_url=CASE WHEN $3::text IS NULL THEN profiles.photo_url ELSE NULLIF($3,'') END,
+		language=CASE WHEN $4::text IS NULL THEN profiles.language ELSE $4 END`, user.ID, input.Bio, input.PhotoURL, input.Language)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not update profile details")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not finish profile update")
+		return
+	}
+	updatedUser, ok := s.userByID(r, user.ID)
+	if !ok {
+		errorJSON(w, http.StatusInternalServerError, "could not load updated account")
+		return
+	}
+	profile, err := s.profileForUser(r, user.ID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load updated profile")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": updatedUser, "profile": profile})
 }
 
 type listingInput struct {
@@ -457,7 +765,7 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		if mediaType == "" {
 			mediaType = "photo"
 		}
-		if strings.TrimSpace(media.URL) == "" || !validMediaType(mediaType) {
+		if !validMediaURL(media.URL) || !validMediaType(mediaType) {
 			errorJSON(w, http.StatusBadRequest, "media entries require a valid type and URL")
 			return
 		}
@@ -495,6 +803,10 @@ func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
 		s.createApplication(w, r, id)
 		return
 	}
+	if len(parts) > 1 && parts[1] == "media" && r.Method == http.MethodPost {
+		s.uploadListingMedia(w, r, id)
+		return
+	}
 	if len(parts) > 1 && parts[1] == "reviews" && r.Method == http.MethodGet {
 		s.listReviews(w, r, id)
 		return
@@ -509,6 +821,138 @@ func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
 	default:
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+const maxListingMediaBytes int64 = 10 * 1024 * 1024
+
+func (s *Server) uploadListingMedia(w http.ResponseWriter, r *http.Request, listingID string) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var ownerID string
+	if err := s.db.QueryRow(r.Context(), `SELECT owner_id FROM listings WHERE id=$1 AND deleted_at IS NULL AND status <> 'cancelled'`, listingID).Scan(&ownerID); err != nil {
+		if err == pgx.ErrNoRows {
+			errorJSON(w, http.StatusNotFound, "listing not found")
+			return
+		}
+		errorJSON(w, http.StatusInternalServerError, "could not load listing")
+		return
+	}
+	if user.ID != ownerID && user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "you cannot add media to this listing")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxListingMediaBytes+1024*1024)
+	if err := r.ParseMultipartForm(maxListingMediaBytes + 1024*1024); err != nil {
+		errorJSON(w, http.StatusBadRequest, "multipart upload is invalid or too large")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, "a file field is required")
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxListingMediaBytes+1))
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, "could not read uploaded file")
+		return
+	}
+	if int64(len(data)) == 0 || int64(len(data)) > maxListingMediaBytes {
+		errorJSON(w, http.StatusRequestEntityTooLarge, "image must be between 1 byte and 10 MB")
+		return
+	}
+	contentType := http.DetectContentType(data)
+	extension := ""
+	switch contentType {
+	case "image/jpeg":
+		extension = ".jpg"
+	case "image/png":
+		extension = ".png"
+	case "image/webp":
+		extension = ".webp"
+	default:
+		errorJSON(w, http.StatusUnsupportedMediaType, "only JPEG, PNG, and WebP images are supported")
+		return
+	}
+	filename, err := randomToken()
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create media filename")
+		return
+	}
+	filename += extension
+	directory := filepath.Join(s.cfg.MediaUploadDir, listingID)
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not prepare media storage")
+		return
+	}
+	filePath := filepath.Join(directory, filename)
+	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not save uploaded image")
+		return
+	}
+	removeFile := true
+	defer func() {
+		if removeFile {
+			_ = os.Remove(filePath)
+		}
+	}()
+	var sortOrder int
+	if err := s.db.QueryRow(r.Context(), `SELECT COALESCE(MAX(sort_order)+1,0) FROM listing_media WHERE listing_id=$1`, listingID).Scan(&sortOrder); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not prepare listing media")
+		return
+	}
+	mediaURL := s.mediaURL(r, listingID, filename)
+	var mediaID string
+	if err := s.db.QueryRow(r.Context(), `INSERT INTO listing_media(listing_id,media_type,url,sort_order) VALUES($1,'photo',$2,$3) RETURNING id`, listingID, mediaURL, sortOrder).Scan(&mediaID); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not save listing media")
+		return
+	}
+	removeFile = false
+	writeJSON(w, http.StatusCreated, map[string]any{"id": mediaID, "type": "photo", "url": mediaURL, "size_bytes": len(data), "filename": header.Filename})
+}
+
+func (s *Server) mediaFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	relative := strings.TrimPrefix(r.URL.Path, "/uploads/")
+	if relative == "" || strings.Contains(relative, "\\") || strings.Contains(relative, "..") {
+		errorJSON(w, http.StatusNotFound, "media not found")
+		return
+	}
+	root, err := filepath.Abs(s.cfg.MediaUploadDir)
+	if err != nil {
+		errorJSON(w, http.StatusNotFound, "media not found")
+		return
+	}
+	filePath, err := filepath.Abs(filepath.Join(root, filepath.FromSlash(relative)))
+	if err != nil {
+		errorJSON(w, http.StatusNotFound, "media not found")
+		return
+	}
+	rel, err := filepath.Rel(root, filePath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		errorJSON(w, http.StatusNotFound, "media not found")
+		return
+	}
+	http.ServeFile(w, r, filePath)
+}
+
+func (s *Server) mediaURL(r *http.Request, listingID, filename string) string {
+	base := strings.TrimRight(strings.TrimSpace(s.cfg.MediaPublicBaseURL), "/")
+	if base == "" {
+		scheme := "http"
+		if strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https") {
+			scheme = "https"
+		}
+		base = scheme + "://" + r.Host
+	}
+	return base + "/uploads/" + url.PathEscape(listingID) + "/" + url.PathEscape(filename)
 }
 
 func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
@@ -1456,13 +1900,13 @@ func (s *Server) authUser(r *http.Request) (CurrentUser, bool) {
 		return CurrentUser{}, false
 	}
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),u.phone,u.role,u.status FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.token_hash=$1 AND se.expires_at > NOW() AND u.status='active'`, hash(token)).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	err := s.db.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.token_hash=$1 AND se.expires_at > NOW() AND u.status='active'`, hash(token)).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
 	return user, err == nil
 }
 
 func (s *Server) userByID(r *http.Request, id string) (CurrentUser, bool) {
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),phone,role,status FROM users WHERE id=$1`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status FROM users WHERE id=$1`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
 	return user, err == nil
 }
 
@@ -1487,7 +1931,9 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Max-Age", "600")
-		w.Header().Set("Content-Type", "application/json")
+		if !strings.HasPrefix(r.URL.Path, "/uploads/") {
+			w.Header().Set("Content-Type", "application/json")
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -1526,6 +1972,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
 }
@@ -1554,6 +2001,15 @@ func validTransaction(value string) bool {
 
 func validMediaType(value string) bool {
 	return value == "photo" || value == "video" || value == "tour_3d"
+}
+
+func validMediaURL(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 2048 {
+		return false
+	}
+	parsed, err := url.Parse(value)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
 }
 
 func validListingStatus(value string) bool {

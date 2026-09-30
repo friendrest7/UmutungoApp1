@@ -7,3 +7,11 @@ dist/
 build/
 *.tsbuildinfo
 client_secret_*.json
+backend/storage/
+.gocache-check/
+*.jks
+*.keystore
+*.p12
+*.p8
+google-services.json
+GoogleService-Info.plist

@@ -8,6 +8,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/umutung
 FROM alpine:3.22
 WORKDIR /app
 RUN addgroup -S app && adduser -S app -G app
+RUN mkdir -p /app/storage/media && chown -R app:app /app/storage
 COPY --from=build /out/umutungo-api /app/umutungo-api
 COPY --from=build /src/migrations /app/migrations
 USER app

@@ -100,6 +100,8 @@ export default function HomePage() {
   const { darkMode, toggleTheme } = usePersistentTheme();
   const { language, changeLanguage } = usePersistentLanguage();
   const [location, setLocation] = useState('Kigali');
+  const [district, setDistrict] = useState('');
+  const [sector, setSector] = useState('');
   const [type, setType] = useState('Any type');
   const [intent, setIntent] = useState('Buy or rent');
   const [priceRange, setPriceRange] = useState('Any price');
@@ -154,7 +156,10 @@ export default function HomePage() {
     if ((intent === 'Buy' || intent === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) { requestTenantSignIn(); return; }
     const categorySlugs: Record<string, string> = { House: 'houses', Apartment: 'apartments', Land: 'land', Commercial: 'commercial' };
     const shopSlug = categorySlugs[type] ?? 'houses';
-    window.location.assign(`/categories/${shopSlug}?location=${encodeURIComponent(location)}&intent=${encodeURIComponent(intent)}&priceRange=${encodeURIComponent(priceRange)}`);
+    const params = new URLSearchParams({ location, intent, priceRange });
+    if (district) params.set('district', district);
+    if (sector) params.set('sector', sector);
+    window.location.assign(`/categories/${shopSlug}?${params.toString()}`);
   };
 
   const toggleFavorite = (property: PropertyPlaceholder) => {
@@ -175,11 +180,13 @@ export default function HomePage() {
     const matchesCategory = !selectedCategory || property.type === categoryTypes[selectedCategory];
     const matchesType = type === 'Any type' || property.type === type;
     const matchesLocation = location === 'Kigali' || property.location.toLowerCase().includes(location.toLowerCase());
+    const matchesDistrict = !district || property.location.toLowerCase().includes(district.toLowerCase());
+    const matchesSector = !sector || property.location.toLowerCase().includes(sector.toLowerCase());
     const isRental = property.priceNote.includes('/ month');
     const matchesIntent = intent === 'Buy or rent' || (intent === 'Rent' && isRental) || (intent === 'Buy' && !isRental);
     const numericPrice = Number(property.price.replace(/[^0-9]/g, ''));
     const matchesPrice = priceRange === 'Any price' || (priceRange === 'Under RWF 500,000' && numericPrice < 500000) || (priceRange === 'RWF 500,000 - 1,000,000' && numericPrice >= 500000 && numericPrice <= 1000000) || (priceRange === 'Over RWF 1,000,000' && numericPrice > 1000000);
-    return matchesCategory && matchesType && matchesLocation && matchesIntent && matchesPrice;
+    return matchesCategory && matchesType && matchesLocation && matchesDistrict && matchesSector && matchesIntent && matchesPrice;
   });
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
@@ -193,7 +200,7 @@ export default function HomePage() {
           <p className="hero-lead">{copy('Every problem has a solution. We are here to reduce the stress of searching for a property.')}</p>
           <div className="hero-actions"><a className="button button-primary" href="/categories/houses">{copy('Browse properties')} <Icon name="arrow" size={16} /></a><button className="button button-commissioner" type="button" onClick={() => requestSignIn('Commissioner / Komisiyoneri')}>{copy('Join as Commissioner')} <Icon name="arrow" size={16} /></button></div>
         </div></div></div>
-        <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} type={type} intent={intent} priceRange={priceRange} onLocationChange={setLocation} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
+        <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} district={district} sector={sector} type={type} intent={intent} priceRange={priceRange} onLocationChange={(value) => { setLocation(value); setDistrict(''); setSector(''); }} onDistrictChange={(value) => { setDistrict(value); setSector(''); }} onSectorChange={setSector} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
       </section>
 
       <section className="section section-property container" id="properties">

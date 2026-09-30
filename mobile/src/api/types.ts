@@ -9,6 +9,12 @@ export type ApiUser = {
   status: string;
 };
 
+export type ApiProfile = {
+  bio: string;
+  photo_url: string;
+  language: 'en' | 'fr' | 'rw' | 'sw' | string;
+};
+
 export type ListingMedia = { type: 'photo' | 'video' | 'tour_3d' | string; url: string; sort_order?: number };
 
 export type ApiListing = {

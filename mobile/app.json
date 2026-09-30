@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Umutungo",
+    "slug": "umutungo-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.png",
+    "userInterfaceStyle": "light",
+    "scheme": "umutungo",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f7faf7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "rw.umutungo.mobile",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Umutungo uses your photo library so you can add property photos to a listing."
+      }
+    },
+    "android": {
+      "package": "rw.umutungo.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#0b6b3a"
+      },
+      "permissions": ["android.permission.READ_MEDIA_IMAGES"]
+    },
+    "plugins": ["expo-router", "expo-secure-store", "expo-image-picker"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -68,6 +68,15 @@ function FavoritesPanel({ language, items, onRemove, onClose }: { language: Lang
   </div>;
 }
 
+type NavNotification = { id?: string; title?: string; message?: string; body?: string; createdAt?: string; created_at?: string };
+
+function NotificationsPanel({ language, items }: { language: Language; items: NavNotification[] }) {
+  return <div className="notification-panel" role="dialog" aria-label={t(language, 'Notifications')}>
+    <div className="notification-panel-heading"><div><span className="notification-panel-eyebrow">{t(language, 'Recent activity')}</span><h2>{t(language, 'Notifications')}</h2></div><span className="notification-panel-count">{items.length}</span></div>
+    {items.length ? <div className="notification-panel-list">{items.slice(0, 6).map((item, index) => <article className="notification-panel-item" key={item.id ?? `${item.title ?? 'notification'}-${index}`}><span className="notification-panel-icon"><Icon name="bell" size={15} /></span><div><strong>{item.title ?? t(language, 'New update')}</strong><p>{item.message ?? item.body ?? t(language, 'You have a new update.')}</p>{(item.createdAt ?? item.created_at) && <time>{new Date(item.createdAt ?? item.created_at ?? '').toLocaleString()}</time>}</div></article>)}</div> : <div className="notification-panel-empty"><Icon name="check" size={20} /><strong>{t(language, 'No new notifications')}</strong><p>{t(language, 'You are all caught up.')}</p></div>}
+  </div>;
+}
+
 function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChange, onAccount, onFavorites, onSignOut, showSettings = true }: { language: Language; role?: string; darkMode: boolean; onToggleTheme: () => void; onLanguageChange: (language: Language) => void; onAccount: () => void; onFavorites: () => void; onSignOut: () => void; showSettings?: boolean }) {
   return <div className="account-panel" role="menu">
     <div className="account-panel-heading"><Icon name="user" size={19} /><span><strong>{role ? t(language, role) : t(language, 'Account')}</strong><small>Umutungo account</small></span></div>
@@ -97,7 +106,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [intendedPath, setIntendedPath] = useState<string | undefined>();
   const [demoSignedIn, setDemoSignedIn] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
-  const [notifications, setNotifications] = useState<Array<{ title?: string; message?: string; createdAt?: string }>>([]);
+  const [notifications, setNotifications] = useState<NavNotification[]>([]);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
@@ -143,8 +152,14 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   useEffect(() => {
     const readNotificationCount = () => {
       try {
-        const stored = JSON.parse(window.localStorage.getItem('umutungo-notifications') ?? '[]');
-        const items = Array.isArray(stored) ? stored : [];
+        const keys = ['umutungo-notifications'];
+        if (roleKey === 'Landlord') keys.push('umutungo-landlord-notifications');
+        if (roleKey === 'Commissioner / Komisiyoneri') keys.push('umutungo-commissioner-notifications');
+        if (roleKey === 'Tenant') keys.push('umutungo-tenant-notifications');
+        const items = keys.flatMap((key) => {
+          const stored = JSON.parse(window.localStorage.getItem(key) ?? '[]');
+          return Array.isArray(stored) ? stored : [];
+        });
         setNotifications(items);
         setNotificationCount(items.length);
       } catch {
@@ -155,7 +170,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     readNotificationCount();
     window.addEventListener('umutungo:notifications-changed', readNotificationCount);
     return () => window.removeEventListener('umutungo:notifications-changed', readNotificationCount);
-  }, []);
+  }, [roleKey]);
 
   useEffect(() => {
     const label = notificationCount > 99 ? '99+' : String(notificationCount);
@@ -190,22 +205,16 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   }, [favoritesPanelOpen]);
 
   useEffect(() => {
-    if (!signedIn) {
-      setNotificationPanelOpen(false);
-      return;
-    }
+    if (!notificationPanelOpen) return;
     const closeOnOutsideClick = (event: MouseEvent) => {
       const target = event.target as Element;
-      if (!target.closest('.nav-notifications, .notification-action') && !target.closest('.notification-panel')) setNotificationPanelOpen(false);
+      if (!target.closest('.nav-notifications-wrap, .notification-action, .notification-panel')) setNotificationPanelOpen(false);
     };
-    const toggleFromBell = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (target.closest('.nav-notifications, .notification-action')) setNotificationPanelOpen((open) => !open);
-    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setNotificationPanelOpen(false); };
     document.addEventListener('mousedown', closeOnOutsideClick);
-    document.addEventListener('click', toggleFromBell);
-    return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('click', toggleFromBell); };
-  }, [signedIn]);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
+  }, [notificationPanelOpen]);
 
   useEffect(() => {
     const landing = document.getElementById('home');
@@ -285,7 +294,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <a className="sidebar-nav-link sidebar-market-link" href="#post-property"><Icon name="arrow" size={17} /><span>{t(language, 'Commercial')}</span></a>
         <HoverHint text={t(language, 'View your saved properties.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} onClick={openFavorites}><Icon name="heart" size={17} /><span>{t(language, 'Favorites')}</span></button></HoverHint>
         <HoverHint text={t(language, 'Check your latest updates.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action notification-action" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')}><Icon name="bell" size={17} /><span>{t(language, 'Notifications')}</span><b>0</b></button></HoverHint>
-      </nav><div className="sidebar-account"><HoverHint text={t(language, 'Access your Umutungo account.')} placement="right"><button className={`sidebar-nav-link ${signedIn ? 'sidebar-account-link' : 'sidebar-sign-in'}`} type="button" title={t(language, signedIn ? 'Log out' : 'Sign in')} aria-label={t(language, signedIn ? 'Log out' : 'Sign in')} onClick={signedIn ? signOut : () => (onSignIn ? onSignIn() : openSignIn())}>{signedIn && <Icon name="user" size={17} />}<span>{t(language, signedIn ? 'Log out' : 'Sign in')}</span></button></HoverHint></div></div>
+       </nav><div className="sidebar-account"><HoverHint text={t(language, 'Access your Umutungo account.')} placement="right"><button className={`sidebar-nav-link ${signedIn ? 'sidebar-account-link' : 'sidebar-sign-in'}`} type="button" title={t(language, signedIn ? 'Log out' : 'Sign in')} aria-label={t(language, signedIn ? 'Log out' : 'Sign in')} onClick={signedIn ? signOut : () => (onSignIn ? onSignIn() : openSignIn())}>{signedIn && <Icon name="user" size={17} />}<span>{t(language, signedIn ? 'Log out' : 'Sign in')}</span></button></HoverHint></div></div>
     </aside>
 
     <header className={`topbar ${scrolled ? 'is-scrolled' : ''}`}>
@@ -304,7 +313,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <div className="nav-actions">
           <HoverHint text={t(language, postActionHint)} placement="bottom">{postAction}</HoverHint>
           <div className="nav-favorites-wrap" ref={favoritesRef}><button className="nav-saved" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} aria-expanded={favoritesPanelOpen} onClick={openFavorites}><Icon name="heart" size={17} />{favoriteItems.length > 0 && <b>{favoriteItems.length > 9 ? '9+' : favoriteItems.length}</b>}</button>{favoritesPanelOpen && <FavoritesPanel language={language} items={favoriteItems} onRemove={removeFromFavorites} onClose={() => setFavoritesPanelOpen(false)} />}</div>
-          <button className="nav-notifications" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')}><Icon name="bell" size={17} /><b>0</b></button>
+           <div className="nav-notifications-wrap"><button className="nav-notifications" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationPanelOpen} onClick={() => setNotificationPanelOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>{notificationPanelOpen && <NotificationsPanel language={language} items={notifications} />}</div>
           <div className="nav-utility-group" aria-label="Site preferences"><Dropdown label={languageCodes[language]} items={languages} active={language} onSelect={(value) => onLanguageChange(value as Language)} icon="globe" /><ThemeToggle darkMode={darkMode} onToggle={onToggleTheme} language={language} /></div>
           <div className="account-menu-wrap" ref={accountMenuRef}>
             <button className={`nav-sign-in ${signedIn ? 'nav-account' : ''}`} type="button" title={t(language, signedIn ? 'Account' : 'Sign in')} aria-label={t(language, signedIn ? 'Account' : 'Sign in')} aria-expanded={signedIn ? accountMenuOpen : undefined} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => (onSignIn ? onSignIn() : openSignIn())}>{signedIn && <Icon name="user" size={16} />}{t(language, signedIn ? 'Account' : 'Sign in')}{signedIn && <Icon name="chevron" size={12} />}</button>

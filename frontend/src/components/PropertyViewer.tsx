@@ -13,6 +13,7 @@ type ViewerMode = 'photos' | 'tour' | 'plan';
 type TransactionType = 'rent' | 'buy';
 type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
+type PaymentReceipt = { receiptNumber: string; propertyTitle: string; location: string; amount: number; currency: string; paymentMethod: string; status: 'successful' | 'pending'; transactionType: TransactionType; createdAt: string };
 
 function PaymentLogo({ method }: { method: PaymentMethod }) {
   if (method === 'momo') return <span className="payment-brand payment-brand-momo"><b>m</b><small>MoMo</small></span>;
@@ -27,6 +28,14 @@ function propertyPriceAmount(value: string) {
   const amount = Number(normalized);
   if (!Number.isFinite(amount) || amount <= 0) return 1;
   return value.toLowerCase().includes('m') ? amount * 1000000 : amount;
+}
+
+function paymentMethodLabel(method: PaymentMethod) {
+  return { momo: 'MTN MoMo', airtel: 'Airtel Money', mastercard: 'Mastercard', visa: 'Visa card', other: 'Other bank card' }[method];
+}
+
+function escapeReceiptValue(value: string | number) {
+  return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character] ?? character);
 }
 
 export function PropertyViewer({ language, property, onClose }: PropertyViewerProps) {
@@ -51,6 +60,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [paymentError, setPaymentError] = useState('');
+  const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null);
   const [applicationName, setApplicationName] = useState('');
   const [applicationPhone, setApplicationPhone] = useState('');
   const [applicationMessage, setApplicationMessage] = useState('');
@@ -93,6 +103,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     setCardExpiry('');
     setCardCvv('');
     setPaymentError('');
+    setPaymentReceipt(null);
     setApplicationName('');
     setApplicationPhone('');
     setApplicationMessage('');
@@ -173,7 +184,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
       paymentStatus = result?.status?.toLowerCase() === 'successful' || result?.status?.toLowerCase() === 'paid' ? 'paid' : 'pending';
       if (result) window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...result, propertyId: property.id, createdAt: new Date().toISOString() }));
     } catch { /* The API can be enabled with a token; keep the local demo payment available. */ }
-    const localPayment = { id: `payment-${property.id}-${Date.now()}`, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', status: paymentStatus === 'paid' ? 'successful' : 'pending', created_at: new Date().toISOString() };
+    const localPayment: { id: string; related_type: string; related_id: string; amount: number; currency: string; provider: string; status: 'successful' | 'pending'; created_at: string } = { id: `payment-${property.id}-${Date.now()}`, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', status: paymentStatus === 'paid' ? 'successful' : 'pending', created_at: new Date().toISOString() };
     const storedPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as typeof localPayment[];
     window.localStorage.setItem('umutungo-payments', JSON.stringify([localPayment, ...storedPayments.filter((item) => item.related_id !== localPayment.related_id)]));
     saveTenantBooking(paymentStatus);
@@ -181,7 +192,24 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     setCardNumber('');
     setCardExpiry('');
     setCardCvv('');
+    setPaymentReceipt({ receiptNumber: `UM-${localPayment.id.replace(/^payment-/, '').toUpperCase()}`, propertyTitle: property.title, location: property.location, amount: localPayment.amount, currency: localPayment.currency, paymentMethod: paymentMethodLabel(paymentMethod), status: localPayment.status, transactionType, createdAt: localPayment.created_at });
     setTransactionStep('success');
+  };
+  const downloadReceipt = () => {
+    if (!paymentReceipt) return;
+    const receipt = paymentReceipt;
+    const formattedAmount = `${receipt.currency} ${receipt.amount.toLocaleString()}`;
+    const formattedDate = new Date(receipt.createdAt).toLocaleString();
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Umutungo receipt ${escapeReceiptValue(receipt.receiptNumber)}</title><style>body{margin:0;background:#eef4ef;color:#172219;font-family:Arial,sans-serif}.page{width:min(680px,calc(100% - 32px));margin:42px auto}.receipt{background:#fff;border:1px solid #d6e4d8;border-radius:20px;box-shadow:0 18px 50px rgba(25,65,37,.12);overflow:hidden}.top{padding:30px 34px;background:linear-gradient(135deg,#0f4a36,#23734a);color:#fff}.brand{font-size:13px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}.top h1{margin:26px 0 6px;font-size:30px;font-weight:600}.top p{margin:0;color:rgba(255,255,255,.78);font-size:13px}.body{padding:30px 34px}.meta{display:flex;justify-content:space-between;gap:18px;padding-bottom:24px;border-bottom:1px solid #e1ebe2}.meta span{display:grid;gap:5px;color:#6d7d70;font-size:11px}.meta strong{color:#172219;font-size:13px}.line{display:flex;justify-content:space-between;gap:20px;padding:18px 0;border-bottom:1px solid #e1ebe2}.line span{color:#6d7d70;font-size:12px}.line strong{max-width:55%;color:#172219;font-size:13px;text-align:right}.total{display:flex;justify-content:space-between;gap:20px;padding:24px 0 8px}.total span{color:#51705b;font-size:12px;font-weight:700}.total strong{color:#0f4a36;font-size:22px}.status{display:inline-flex;margin-top:22px;padding:7px 11px;border-radius:999px;background:#e5f4e8;color:#0f4a36;font-size:11px;font-weight:800;text-transform:capitalize}.foot{padding:18px 34px;background:#f5faf5;color:#6d7d70;font-size:11px;line-height:1.6}.print{margin:22px auto 0;display:block;border:0;border-radius:999px;padding:11px 18px;background:#0f4a36;color:#fff;cursor:pointer;font-weight:700}@media print{body{background:#fff}.page{width:100%;margin:0}.receipt{border:0;box-shadow:none}.print{display:none}}</style></head><body><main class="page"><section class="receipt"><header class="top"><div class="brand">Umutungo</div><h1>Payment receipt</h1><p>Thank you for choosing a trusted property journey.</p></header><div class="body"><div class="meta"><span>Receipt number<strong>${escapeReceiptValue(receipt.receiptNumber)}</strong></span><span>Date<strong>${escapeReceiptValue(formattedDate)}</strong></span></div><div class="line"><span>Property</span><strong>${escapeReceiptValue(receipt.propertyTitle)}</strong></div><div class="line"><span>Location</span><strong>${escapeReceiptValue(receipt.location)}</strong></div><div class="line"><span>Request type</span><strong>${escapeReceiptValue(receipt.transactionType === 'rent' ? 'Rental request' : 'Purchase request')}</strong></div><div class="line"><span>Payment method</span><strong>${escapeReceiptValue(receipt.paymentMethod)}</strong></div><div class="total"><span>Total paid</span><strong>${escapeReceiptValue(formattedAmount)}</strong></div><span class="status">${escapeReceiptValue(receipt.status)}</span></div><footer class="foot">This receipt confirms the payment recorded by Umutungo. Keep it for your records. You can print this page or choose “Save as PDF” from your browser.</footer></section><button class="print" onclick="window.print()">Print / Save as PDF</button></main></body></html>`;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `umutungo-receipt-${receipt.receiptNumber}.html`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const handleReviewSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -339,6 +367,10 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
               Continue to {transactionType === 'rent' ? 'rent' : 'buy'} this property <Icon name="arrow" size={16} />
             </button>
             <p className="property-action-signin-note"><Icon name="user" size={14} /> Sign in is required before you make a payment or contact the landlord.</p>
+            <div className="property-success-actions">
+              {paymentReceipt && <button className="property-receipt-button" type="button" onClick={downloadReceipt}><Icon name="download" size={15} /> Download receipt</button>}
+              <button className="property-success-back" type="button" onClick={() => setTransactionOpen(false)}>Go back</button>
+            </div>
           </>}
 
           {transactionStep === 'application' && <>

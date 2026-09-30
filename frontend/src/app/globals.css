@@ -3035,3 +3035,204 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   background: #02a24b !important;
   color: #ffffff !important;
 }
+
+/* Keep the navigation as one flat logo-green surface. */
+.app-realistic .topbar,
+.app-realistic .topbar.is-scrolled,
+.app.theme-dark.app-realistic .topbar,
+.app.theme-dark.app-realistic .topbar.is-scrolled {
+  background: #02a24b !important;
+  background-image: none !important;
+  border-bottom-color: rgba(255, 255, 255, .24) !important;
+  box-shadow: 0 8px 24px rgba(2, 162, 75, .22) !important;
+}
+.app-realistic .topbar .brand-logo { filter: brightness(0) invert(1); }
+.app-realistic .topbar :is(.nav-home-link, .nav-contact-link, .desktop-nav .nav-link, .nav-sign-in, .nav-saved, .nav-notifications, .theme-toggle, .mobile-menu-button, .nav-utility-group .nav-link) {
+  color: #fff !important;
+}
+.app-realistic .topbar .desktop-nav,
+.app-realistic .topbar .nav-utility-group {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+.app-realistic .topbar .nav-link:hover,
+.app-realistic .topbar .nav-link.active,
+.app-realistic .topbar .nav-dropdown-trigger.is-open,
+.app-realistic .topbar .nav-contact-link:hover,
+.app-realistic .topbar .nav-home-link:hover,
+.app-realistic .topbar .nav-saved:hover,
+.app-realistic .topbar .nav-notifications:hover,
+.app-realistic .topbar .theme-toggle:hover,
+.app-realistic .topbar .mobile-menu-button:hover {
+  background: rgba(255, 255, 255, .16) !important;
+  color: #fff !important;
+}
+.app-realistic .topbar .nav-sign-in {
+  border-color: rgba(255, 255, 255, .58) !important;
+  background: transparent !important;
+}
+.app-realistic .topbar .nav-sign-in:hover,
+.app-realistic .topbar .nav-post {
+  border-color: rgba(255, 255, 255, .68) !important;
+  background: rgba(255, 255, 255, .16) !important;
+  color: #fff !important;
+}
+.app-realistic .topbar .nav-post:hover { background: rgba(255, 255, 255, .24) !important; }
+.app-realistic .topbar .nav-utility-group .nav-link,
+.app-realistic .topbar .nav-utility-group .theme-toggle {
+  border-color: rgba(255, 255, 255, .34) !important;
+  background: transparent !important;
+}
+.app-realistic .topbar .nav-utility-group .dropdown-panel,
+.app-realistic .topbar .account-panel,
+.app-realistic .topbar .mobile-menu {
+  background: #fff !important;
+  color: #111 !important;
+}
+
+.admin-dashboard-welcome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.admin-report-download-wrap.is-labeled { position: relative; }
+.admin-report-download-trigger {
+  width: auto !important;
+  min-height: 42px;
+  padding: 0 15px !important;
+  gap: 8px;
+  border: 1px solid #02a24b;
+  border-radius: 999px;
+  background: #02a24b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+}
+.admin-report-download-trigger:hover { background: #02a24b; color: #fff; }
+.admin-report-download-wrap.is-labeled .admin-report-download-popover { top: calc(100% + 9px); right: 0; }
+@media (max-width: 760px) {
+  .admin-dashboard-welcome-actions { width: 100%; justify-content: flex-start; }
+}
+
+/* Theme-specific navbar colors: blush reference color in light mode, black in dark mode. */
+.app-realistic .topbar,
+.app-realistic .topbar.is-scrolled {
+  background: #f6dce3 !important;
+  border-bottom-color: rgba(17, 17, 17, .12) !important;
+  box-shadow: 0 8px 24px rgba(120, 82, 92, .12) !important;
+}
+.app-realistic .topbar .brand-logo { filter: none !important; }
+.app-realistic .topbar :is(.nav-home-link, .nav-contact-link, .desktop-nav .nav-link, .nav-sign-in, .nav-saved, .nav-notifications, .theme-toggle, .mobile-menu-button, .nav-utility-group .nav-link) {
+  color: #111 !important;
+}
+.app-realistic .topbar .nav-link:hover,
+.app-realistic .topbar .nav-link.active,
+.app-realistic .topbar .nav-dropdown-trigger.is-open,
+.app-realistic .topbar .nav-contact-link:hover,
+.app-realistic .topbar .nav-home-link:hover,
+.app-realistic .topbar .nav-saved:hover,
+.app-realistic .topbar .nav-notifications:hover,
+.app-realistic .topbar .theme-toggle:hover,
+.app-realistic .topbar .mobile-menu-button:hover {
+  background: rgba(17, 17, 17, .08) !important;
+  color: #111 !important;
+}
+.app-realistic .topbar .nav-sign-in {
+  border-color: rgba(17, 17, 17, .28) !important;
+  background: transparent !important;
+}
+.app-realistic .topbar .nav-sign-in:hover,
+.app-realistic .topbar .nav-post {
+  border-color: rgba(17, 17, 17, .36) !important;
+  background: rgba(255, 255, 255, .45) !important;
+  color: #111 !important;
+}
+.app-realistic .topbar .nav-post:hover { background: rgba(255, 255, 255, .68) !important; }
+.app.theme-dark.app-realistic .topbar,
+.app.theme-dark.app-realistic .topbar.is-scrolled {
+  background: #111 !important;
+  border-bottom-color: rgba(255, 255, 255, .16) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .3) !important;
+}
+.app.theme-dark.app-realistic .topbar .brand-logo { filter: none !important; }
+.app.theme-dark.app-realistic .topbar :is(.nav-home-link, .nav-contact-link, .desktop-nav .nav-link, .nav-sign-in, .nav-saved, .nav-notifications, .theme-toggle, .mobile-menu-button, .nav-utility-group .nav-link) {
+  color: #fff !important;
+}
+.app.theme-dark.app-realistic .topbar .nav-link:hover,
+.app.theme-dark.app-realistic .topbar .nav-link.active,
+.app.theme-dark.app-realistic .topbar .nav-dropdown-trigger.is-open,
+.app.theme-dark.app-realistic .topbar .nav-contact-link:hover,
+.app.theme-dark.app-realistic .topbar .nav-home-link:hover,
+.app.theme-dark.app-realistic .topbar .nav-saved:hover,
+.app.theme-dark.app-realistic .topbar .nav-notifications:hover,
+.app.theme-dark.app-realistic .topbar .theme-toggle:hover,
+.app.theme-dark.app-realistic .topbar .mobile-menu-button:hover {
+  background: rgba(255, 255, 255, .12) !important;
+  color: #fff !important;
+}
+.app.theme-dark.app-realistic .topbar .nav-sign-in {
+  border-color: rgba(255, 255, 255, .42) !important;
+  background: transparent !important;
+}
+.app.theme-dark.app-realistic .topbar .nav-sign-in:hover,
+.app.theme-dark.app-realistic .topbar .nav-post {
+  border-color: rgba(255, 255, 255, .56) !important;
+  background: rgba(255, 255, 255, .12) !important;
+  color: #fff !important;
+}
+.app.theme-dark.app-realistic .topbar .nav-post:hover { background: rgba(255, 255, 255, .2) !important; }
+
+/* Light navigation is one translucent pink surface, without segmented blocks. */
+.app-realistic:not(.theme-dark) .topbar,
+.app-realistic:not(.theme-dark) .topbar.is-scrolled {
+  background: rgba(246, 220, 227, .78) !important;
+  background-image: none !important;
+  border-color: rgba(17, 17, 17, .1) !important;
+  box-shadow: 0 12px 34px rgba(120, 82, 92, .14) !important;
+  backdrop-filter: blur(20px) saturate(125%) !important;
+}
+.app-realistic:not(.theme-dark) .topbar-inner,
+.app-realistic:not(.theme-dark) .topbar-brand-group,
+.app-realistic:not(.theme-dark) .desktop-nav,
+.app-realistic:not(.theme-dark) .nav-actions,
+.app-realistic:not(.theme-dark) .nav-utility-group,
+.app-realistic:not(.theme-dark) .nav-dropdown,
+.app-realistic:not(.theme-dark) .account-menu-wrap,
+.app-realistic:not(.theme-dark) .nav-favorites-wrap,
+.app-realistic:not(.theme-dark) .nav-notifications-wrap {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.app-realistic:not(.theme-dark) .nav-home-link,
+.app-realistic:not(.theme-dark) .desktop-nav .nav-link,
+.app-realistic:not(.theme-dark) .desktop-nav .nav-contact-link,
+.app-realistic:not(.theme-dark) .nav-saved,
+.app-realistic:not(.theme-dark) .nav-notifications,
+.app-realistic:not(.theme-dark) .nav-utility-group .nav-link,
+.app-realistic:not(.theme-dark) .nav-utility-group .theme-toggle,
+.app-realistic:not(.theme-dark) .mobile-menu-button {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.app-realistic:not(.theme-dark) .nav-home-link { border-left: 0 !important; }
+.app-realistic:not(.theme-dark) .nav-utility-group { border-left: 0 !important; padding-left: 0 !important; }
+.app-realistic:not(.theme-dark) .nav-sign-in,
+.app-realistic:not(.theme-dark) .nav-post {
+  box-shadow: none !important;
+}
+.app-realistic:not(.theme-dark) .nav-link:hover,
+.app-realistic:not(.theme-dark) .nav-link.active,
+.app-realistic:not(.theme-dark) .nav-dropdown-trigger.is-open,
+.app-realistic:not(.theme-dark) .nav-home-link:hover,
+.app-realistic:not(.theme-dark) .nav-contact-link:hover,
+.app-realistic:not(.theme-dark) .nav-saved:hover,
+.app-realistic:not(.theme-dark) .nav-notifications:hover,
+.app-realistic:not(.theme-dark) .nav-utility-group .nav-link:hover,
+.app-realistic:not(.theme-dark) .nav-utility-group .theme-toggle:hover,
+.app-realistic:not(.theme-dark) .mobile-menu-button:hover {
+  background: rgba(255, 255, 255, .3) !important;
+}

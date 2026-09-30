@@ -2488,6 +2488,9 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .app-realistic::before { display: none; }
 .app-realistic > * { position: relative; z-index: 1; }
 
+/* Keep global dialogs above the landing composition and its stacking context. */
+.app-realistic > .auth-overlay { z-index: 1000; }
+
 .app-realistic .topbar {
   top: 14px;
   right: 14px;

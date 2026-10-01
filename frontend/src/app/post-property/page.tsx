@@ -9,7 +9,8 @@ import { Logo } from '../../components/Logo';
 import { getDistrictNames, getSectorNames, provinceNames } from '../../data/rwandaLocations';
 import { umutungoApi } from '../../lib/umutungoApi';
 
-type PropertyType = 'House' | 'Apartment' | 'Land' | 'Commercial' | 'Office' | 'Equipment' | 'Hospitality';
+type PropertyType = 'House' | 'Apartment' | 'Land' | 'Commercial' | 'Office' | 'Hospitality' | 'Vehicle' | 'Furniture' | 'Appliance' | 'Equipment' | 'Other';
+type PostingRole = 'Komisiyoneri' | 'Landlord' | 'Property Owner';
 type Intent = 'For rent' | 'For sale';
 
 const steps = [
@@ -26,6 +27,10 @@ const typeOptions: { key: PropertyType; label: string; icon: 'home' | 'building'
   { key: 'Office', label: 'Offices', icon: 'building' },
   { key: 'Equipment', label: 'Equipment', icon: 'users' },
   { key: 'Hospitality', label: 'Hospitality', icon: 'home' },
+  { key: 'Vehicle', label: 'Vehicle', icon: 'building' },
+  { key: 'Furniture', label: 'Furniture', icon: 'building' },
+  { key: 'Appliance', label: 'Appliance', icon: 'building' },
+  { key: 'Other', label: 'Other', icon: 'users' },
 ];
 
 const curatedImages: Record<PropertyType, string[]> = {
@@ -36,6 +41,7 @@ const curatedImages: Record<PropertyType, string[]> = {
   Office: ['/properties/commercial-02.jpg', '/properties/commercial-01.jpg'],
   Equipment: ['/properties/commercial-01.jpg'],
   Hospitality: ['/properties/house-02.jpg', '/properties/tour-living.jpg'],
+  Vehicle: ['/properties/commercial-02.jpg'], Furniture: ['/properties/tour-living.jpg'], Appliance: ['/properties/tour-kitchen.jpg'], Other: ['/properties/story-detail.jpg'],
 };
 
 const defaultTitles: Record<PropertyType, string> = {
@@ -46,6 +52,7 @@ const defaultTitles: Record<PropertyType, string> = {
   Office: 'A polished office ready for productive work',
   Equipment: 'Reliable equipment ready for its next operator',
   Hospitality: 'A welcoming stay with room to remember',
+  Vehicle: 'A reliable vehicle ready for its next journey', Furniture: 'Furniture to make your space feel complete', Appliance: 'A useful appliance in good working condition', Other: 'A useful asset ready for its next purpose',
 };
 
 const amenityOptions = ['Parking', 'Garden', 'Furnished', 'Security', 'Water tank', 'Internet ready'];
@@ -80,6 +87,10 @@ export type LandlordListing = {
   savedAt: string;
 };
 
+function PostingSelection({ role, category, onRoleChange, onCategoryChange, onContinue, error }: { role: PostingRole | null; category: PropertyType; onRoleChange: (value: PostingRole) => void; onCategoryChange: (value: PropertyType) => void; onContinue: () => void; error: string }) {
+  return <main className="posting-selection-page"><header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><Link className="post-home-link" href="/"><Icon name="x" size={14} /> Exit</Link></header><section className="posting-selection-shell"><div><span className="post-eyebrow">New listing</span><h1>Start with the role<br /><em>and asset.</em></h1><p>Choose who you are and what you are offering. Umutungo will then show the relevant listing fields.</p></div><div className="posting-selection-card"><fieldset><legend>Who are you posting as?</legend><div className="posting-role-grid">{(['Komisiyoneri', 'Landlord', 'Property Owner'] as PostingRole[]).map((item) => <button type="button" key={item} className={role === item ? 'is-selected' : ''} onClick={() => onRoleChange(item)}><strong>{item}</strong><small>{item === 'Komisiyoneri' ? 'List for clients and manage enquiries.' : item === 'Landlord' ? 'Manage rental homes and tenants.' : 'List your hotels, vehicles, furniture, appliances, equipment, or other assets.'}</small></button>)}</div></fieldset><fieldset><legend>What are you listing?</legend><div className="posting-category-grid">{typeOptions.map((item) => <button type="button" key={item.key} className={category === item.key ? 'is-selected' : ''} onClick={() => onCategoryChange(item.key)}><Icon name={item.icon} size={18} /><span>{item.label}</span></button>)}</div></fieldset>{error && <p className="post-location-error" role="alert">{error}</p>}<button className="post-primary-button" type="button" onClick={onContinue}>Continue to listing form <Icon name="arrow" size={15} /></button></div></section></main>;
+}
+
 export default function PostPropertyPage() {
   const [step, setStep] = useState(1);
   const [propertyType, setPropertyType] = useState<PropertyType>('House');
@@ -111,7 +122,10 @@ export default function PostPropertyPage() {
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [selectedCover, setSelectedCover] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
-  const [accessRole, setAccessRole] = useState<'Landlord' | 'Commissioner / Komisiyoneri' | null>(null);
+  const [accessRole, setAccessRole] = useState<'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri' | null>(null);
+  const [postingRole, setPostingRole] = useState<PostingRole | null>(null);
+  const [selectionComplete, setSelectionComplete] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [saveError, setSaveError] = useState('');
 
@@ -119,6 +133,8 @@ export default function PostPropertyPage() {
   const cover = selectedCover ?? gallery[0];
   const listingTitle = title.trim() || defaultTitles[propertyType];
   const isLand = propertyType === 'Land';
+  const isAsset = ['Vehicle', 'Furniture', 'Appliance', 'Equipment', 'Other'].includes(propertyType);
+  const isAccommodation = ['House', 'Apartment', 'Hospitality'].includes(propertyType);
   const districtOptions = getDistrictNames(location);
 
   useEffect(() => {
@@ -174,13 +190,25 @@ export default function PostPropertyPage() {
     try {
       const user = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as { role?: string } | null;
       const userRole = user?.role;
-      setAccessRole(userRole === 'Landlord' || userRole === 'Commissioner / Komisiyoneri' ? userRole : null);
+      setAccessRole(userRole === 'Landlord' || userRole === 'Property Owner' || userRole === 'Commissioner / Komisiyoneri' ? userRole : null);
+      if (userRole === 'Landlord' || userRole === 'Property Owner' || userRole === 'Commissioner / Komisiyoneri') setPostingRole(userRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : userRole);
     } catch {
       setAccessRole(null);
     } finally {
       setCheckingAccess(false);
     }
   }, []);
+
+  useEffect(() => {
+    const labels = Array.from(document.querySelectorAll('.post-stats-grid .post-field > span:first-child'));
+    if (isAsset) {
+      ['Quantity', 'Condition', 'Specifications'].forEach((label, index) => { if (labels[index]) labels[index].textContent = label; });
+    } else if (isLand) {
+      ['Plot size', 'Tenure', 'Road access'].forEach((label, index) => { if (labels[index]) labels[index].textContent = label; });
+    } else {
+      ['Bedrooms', 'Bathrooms', 'Floor area'].forEach((label, index) => { if (labels[index]) labels[index].textContent = label; });
+    }
+  }, [isAsset, isLand, propertyType]);
 
   const readImage = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -198,6 +226,14 @@ export default function PostPropertyPage() {
   };
 
   const toggleAmenity = (amenity: string) => setAmenities((current) => current.includes(amenity) ? current.filter((item) => item !== amenity) : [...current, amenity]);
+  const continueToForm = () => {
+    if (!postingRole) { setSaveError('Choose a posting role before continuing.'); return; }
+    if (!accessRole) { setAuthOpen(true); return; }
+    const roleMatches = (postingRole === 'Komisiyoneri' && accessRole === 'Commissioner / Komisiyoneri') || (postingRole !== 'Komisiyoneri' && (accessRole === 'Landlord' || accessRole === 'Property Owner'));
+    if (!roleMatches) { setSaveError(`This account is signed in as ${accessRole}. Choose the matching posting role or sign in with another account.`); return; }
+    setSaveError('');
+    setSelectionComplete(true);
+  };
   const next = () => setStep((current) => Math.min(3, current + 1));
   const previous = () => setStep((current) => Math.max(1, current - 1));
   const saveListing = async () => {
@@ -244,7 +280,7 @@ export default function PostPropertyPage() {
   };
 
   if (checkingAccess) return <main className="landlord-access-page"><p>Checking your landlord account…</p></main>;
-  if (!accessRole) return <main className="landlord-access-page"><section><span className="post-eyebrow">Property access</span><h1>Sign in to add<br /><em>your property.</em></h1><p>Sign in as a landlord or Komisiyoneri to upload a listing and manage it from your dashboard.</p><Link className="post-secondary-button" href="/">Back to marketplace</Link></section><AuthModal open role="Landlord" onClose={() => window.location.assign('/')} onSuccess={(accountRole) => { if (accountRole === 'Landlord' || accountRole === 'Commissioner / Komisiyoneri') setAccessRole(accountRole); else window.location.assign('/'); }} /></main>;
+  if (!selectionComplete) return <><PostingSelection role={postingRole} category={propertyType} onRoleChange={(value) => { setPostingRole(value); setSaveError(''); }} onCategoryChange={(value) => { setPropertyType(value); setSaveError(''); }} onContinue={continueToForm} error={saveError} /><AuthModal open={authOpen} role={postingRole === 'Komisiyoneri' ? 'Commissioner / Komisiyoneri' : postingRole === 'Landlord' ? 'Landlord' : postingRole === 'Property Owner' ? 'Property Owner' : undefined} onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { const nextRole = accountRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : accountRole === 'Property Owner' ? 'Property Owner' : accountRole === 'Landlord' ? 'Landlord' : null; if (nextRole) { setAccessRole(accountRole as 'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri'); setPostingRole((current) => current ?? nextRole); setAuthOpen(false); } else setSaveError('A Komisiyoneri, Landlord, or Property Owner account is required to post a listing.'); }} /></>;
 
   if (published) {
     return <main className="post-property-page"><header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><div className="post-header-links"><Link className="post-home-link" href="/"><Icon name="home" size={14} /> Home</Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /> Exit builder</Link></div></header><section className="post-success"><div className="post-success-mark"><Icon name="check" size={30} /></div><p className="post-eyebrow">Listing saved</p><h1>Your place is ready<br /><em>for its next chapter.</em></h1><p>We have saved “{listingTitle}” as a new listing draft. Add verification documents from your dashboard when you are ready to publish it publicly.</p><div className="post-success-actions"><Link className="post-primary-button" href="/"><span>Return to marketplace</span><Icon name="arrow" size={15} /></Link><button className="post-secondary-button" type="button" onClick={() => setPublished(false)}>Edit listing</button></div></section></main>;
@@ -260,7 +296,7 @@ export default function PostPropertyPage() {
           {step === 1 && <div className="post-form-section"><div className="post-section-intro"><h3>Start with the essentials</h3><p>Choose a format and give your property a title people will remember.</p></div><div className="post-category-field"><span className="post-field-label">Property category</span><div className="post-category-grid" role="group" aria-label="Property category">{typeOptions.map((item) => <button className={propertyType === item.key ? 'is-selected' : ''} type="button" key={item.key} onClick={() => setPropertyType(item.key)}><span className="post-category-icon"><Icon name={item.icon} size={17} /></span><strong>{item.label}</strong>{propertyType === item.key && <span className="post-category-check"><Icon name="check" size={12} /></span>}</button>)}</div><small className="post-category-help">Choose the category that best describes what you are listing.</small></div><div className="post-field-group"><span className="post-field-label">Listing intent</span><div className="post-segmented"><button className={intent === 'For rent' ? 'is-selected' : ''} type="button" onClick={() => setIntent('For rent')}>For rent</button><button className={intent === 'For sale' ? 'is-selected' : ''} type="button" onClick={() => setIntent('For sale')}>For sale</button></div></div><label className="post-field"><span>Listing title</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={defaultTitles[propertyType]} /></label><label className="post-field"><span>Short description <small>Optional</small></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What makes this place special? Mention the light, the view, the street or the feeling." rows={4} /></label></div>}
           {step === 2 && <div className="post-form-section"><div className="post-section-intro"><h3>Give it a sense of place</h3><p>A clear location and honest numbers make a listing feel trustworthy.</p></div><div className="post-market-filters"><label className="post-field"><span>Location</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option>Kigali</option><option>Eastern Province</option><option>Northern Province</option><option>Southern Province</option><option>Western Province</option></select></label><label className="post-field"><span>For sale / rent</span><select value={marketIntent} onChange={(event) => { const value = event.target.value; setMarketIntent(value); if (value === 'Buy') setIntent('For sale'); if (value === 'Rent') setIntent('For rent'); }}><option>Buy or rent</option><option>Buy</option><option>Rent</option></select></label><label className="post-field"><span>Price range</span><select value={priceRange} onChange={(event) => setPriceRange(event.target.value)}><option>Any price</option><option>Under RWF 500,000</option><option>RWF 500,000 - 1,000,000</option><option>Over RWF 1,000,000</option></select></label></div><label className="post-field"><span>Neighbourhood</span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="e.g. Kacyiru, near the offices" /></label><div className="post-price-field"><label className="post-field"><span>{intent === 'For rent' ? 'Monthly price' : 'Asking price'}</span><div className="post-input-prefix"><b>RWF</b><input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="numeric" /></div></label><span className="post-price-note">{intent === 'For rent' ? 'per month' : 'total asking price'}</span></div><div className="post-form-grid post-stats-grid"><label className="post-field"><span>{isLand ? 'Plot size' : 'Bedrooms'}</span><div className="post-input-suffix"><input value={isLand ? area : bedrooms} onChange={(event) => isLand ? setArea(event.target.value) : setBedrooms(event.target.value)} inputMode="numeric" /><b>{isLand ? 'm²' : 'beds'}</b></div></label><label className="post-field"><span>{isLand ? 'Tenure' : 'Bathrooms'}</span><div className="post-input-suffix"><input value={isLand ? 'Freehold' : bathrooms} onChange={(event) => isLand ? null : setBathrooms(event.target.value)} inputMode={isLand ? 'text' : 'numeric'} /><b>{isLand ? '' : 'baths'}</b></div></label><label className="post-field"><span>{isLand ? 'Road access' : 'Floor area'}</span><div className="post-input-suffix"><input value={isLand ? 'Yes' : area} onChange={(event) => isLand ? null : setArea(event.target.value)} inputMode="numeric" /><b>{isLand ? '' : 'm²'}</b></div></label></div><div className="post-field-group"><span className="post-field-label">Highlights</span><div className="post-amenities">{amenityOptions.map((amenity) => <button className={amenities.includes(amenity) ? 'is-selected' : ''} type="button" key={amenity} onClick={() => toggleAmenity(amenity)}>{amenities.includes(amenity) && <Icon name="check" size={12} />}{amenity}</button>)}</div></div></div>}
           {step === 3 && <div className="post-form-section"><div className="post-section-intro"><h3>Let the photos do some talking</h3><p>Choose a cover that sets the mood, then add the details that help someone picture themselves there.</p></div><label className="post-dropzone"><input type="file" accept="image/*" multiple onChange={handleFiles} /><span className="post-upload-icon"><Icon name="download" size={19} /></span><strong>Drop your photos here</strong><small>or click to browse · JPG, PNG up to 10MB each</small></label><div className="post-curated-heading"><span>Start with a curated set</span><small>Swap these for your own any time</small></div><div className="post-image-choices">{curatedImages[propertyType].map((image) => <button className={cover === image ? 'is-selected' : ''} type="button" key={image} onClick={() => { setSelectedCover(image); setUploadedImages([]); }}><Image src={image} alt="Suggested property view" fill sizes="120px" />{cover === image && <span><Icon name="check" size={13} /></span>}</button>)}</div><div className="post-amenities-summary"><span>Selected highlights</span><div>{amenities.length ? amenities.map((amenity) => <b key={amenity}>{amenity}</b>) : <small>Add a few highlights above</small>}</div></div></div>}
-          {step === 3 && <div className="post-lifecycle-panel"><div><span className="post-field-label">Publication</span><p>Save privately now or schedule this listing for a future release.</p></div><div className="post-segmented"><button className={publicationMode === 'Draft' ? 'is-selected' : ''} type="button" onClick={() => setPublicationMode('Draft')}>Save as draft</button><button className={publicationMode === 'Scheduled' ? 'is-selected' : ''} type="button" onClick={() => setPublicationMode('Scheduled')}>Schedule</button></div>{publicationMode === 'Scheduled' && <label className="post-field"><span>Publish date and time</span><input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} required /></label>}{accessRole === 'Landlord' && <label className="post-field"><span>Property Owner subscription tier</span><select value={ownerTier} onChange={(event) => setOwnerTier(event.target.value as 'Silver' | 'Gold' | 'Platinum')}><option>Silver · 90 days</option><option>Gold · 180 days</option><option>Platinum · 365 days</option></select></label>}<small className="post-lifecycle-note">{accessRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri listings expire 30 days after publication.' : `Property Owner listings expire according to the ${ownerTier} tier.`}</small></div>}
+          {step === 3 && <div className="post-lifecycle-panel"><div><span className="post-field-label">Publication</span><p>Save privately now or schedule this listing for a future release.</p></div><div className="post-segmented"><button className={publicationMode === 'Draft' ? 'is-selected' : ''} type="button" onClick={() => setPublicationMode('Draft')}>Save as draft</button><button className={publicationMode === 'Scheduled' ? 'is-selected' : ''} type="button" onClick={() => setPublicationMode('Scheduled')}>Schedule</button></div>{publicationMode === 'Scheduled' && <label className="post-field"><span>Publish date and time</span><input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} required /></label>}{(accessRole === 'Landlord' || accessRole === 'Property Owner') && <label className="post-field"><span>Property Owner subscription tier</span><select value={ownerTier} onChange={(event) => setOwnerTier(event.target.value as 'Silver' | 'Gold' | 'Platinum')}><option>Silver · 90 days</option><option>Gold · 180 days</option><option>Platinum · 365 days</option></select></label>}<small className="post-lifecycle-note">{accessRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri listings expire 30 days after publication.' : `Property Owner listings expire according to the ${ownerTier} tier.`}</small></div>}
           <div className="post-form-actions">{step > 1 ? <button className="post-secondary-button" type="button" onClick={previous}><Icon name="arrow" size={14} /> Back</button> : <span />}{step < 3 ? <button className="post-primary-button" type="button" onClick={next}><span>Continue</span><Icon name="arrow" size={15} /></button> : <button className="post-primary-button" type="button" onClick={saveListing}><span>{publicationMode === 'Scheduled' ? 'Schedule listing' : 'Save listing draft'}</span><Icon name="arrow" size={15} /></button>}</div>
         </div><aside className="post-preview-wrap"><div className="post-preview-label"><span>Live preview</span><small>How it will look in Umutungo</small></div><article className="post-preview-card"><div className="post-preview-image"><Image src={cover} alt="Property preview" fill sizes="(max-width: 900px) 100vw, 350px" /><span className="post-preview-badge">{intent}</span><button type="button" aria-label="Save preview"><Icon name="heart" size={17} /></button><div className="post-preview-dots">{gallery.slice(0, 4).map((_, index) => <i className={index === 0 ? 'is-active' : ''} key={index} />)}</div></div><div className="post-preview-content"><span className="post-preview-type">{propertyType} · Verified after review</span><h3>{listingTitle}</h3><p><Icon name="pin" size={13} /> {address || 'Your neighbourhood'}, {location}</p><strong>RWF {price || '0'} <small>{intent === 'For rent' ? '/ month' : 'asking'}</small></strong><div className="post-preview-stats"><span>{isLand ? area : bedrooms}<small>{isLand ? 'm²' : 'beds'}</small></span><span>{isLand ? 'Freehold' : bathrooms}<small>{isLand ? 'tenure' : 'baths'}</small></span><span>{isLand ? 'Road ready' : area}<small>{isLand ? '' : 'm²'}</small></span></div></div></article><p className="post-preview-note"><Icon name="sparkles" size={14} /> Your draft stays private until you publish it.</p></aside></div>
       </section>

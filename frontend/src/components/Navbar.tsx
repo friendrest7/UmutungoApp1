@@ -20,8 +20,8 @@ type NavbarProps = {
   onLandingVisibilityChange?: (visible: boolean) => void;
 };
 
-const authRoles = ['Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Admin'];
-const categories = ['Houses', 'Apartments', 'Land', 'Commercial', 'Offices', 'Equipment', 'Hospitality'];
+const authRoles = ['Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Property Owner', 'Admin'];
+const categories = ['Houses', 'Apartments', 'Land', 'Commercial', 'Offices', 'Hotels and lodges', 'Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other'];
 const languages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
 const languageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
 
@@ -119,7 +119,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const openFavorites = () => { setFavoritesPanelOpen((open) => !open); setAccountMenuOpen(false); setMobileOpen(false); };
   const openCategory = (value: string) => {
     const category = categories.find((item) => t(language, item) === value) ?? value;
-    const slugs: Record<string, string> = { Houses: 'houses', Apartments: 'apartments', Land: 'land', Commercial: 'commercial', Offices: 'offices', Equipment: 'equipment', Hospitality: 'hospitality' };
+    const slugs: Record<string, string> = { Houses: 'houses', Apartments: 'apartments', Land: 'land', Commercial: 'commercial', Offices: 'offices', 'Hotels and lodges': 'hospitality', Vehicles: 'vehicles', Furniture: 'furniture', Appliances: 'appliances', Equipment: 'equipment', Other: 'other' };
     if (slugs[category]) window.location.assign(`/categories/${slugs[category]}`);
   };
 
@@ -277,14 +277,14 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const openAccount = () => {
     setAccountMenuOpen(false);
     if (onAccount) { onAccount(); return; }
-    const dashboardPaths: Record<string, string> = { Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', Admin: '/admin' };
+    const dashboardPaths: Record<string, string> = { Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/landlord', Admin: '/admin' };
     if (dashboardPaths[roleKey]) router.push(dashboardPaths[roleKey]);
   };
 
   const openMarket = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (!signedIn) { event.preventDefault(); setMobileOpen(false); openSignIn('Tenant'); }
   };
-  const postAction = <a className={`nav-link nav-post ${isTenant ? 'nav-post-upgrade' : ''}`} href={isTenant ? '/upgrade' : '/post-property'} onClick={(event) => { if (!signedIn) { event.preventDefault(); setMobileOpen(false); openSignIn('Landlord', '/post-property'); } }} aria-label={t(language, postActionHint)}><span className="nav-post-label">{t(language, postActionLabel)}</span></a>;
+  const postAction = <a className={`nav-link nav-post ${isTenant ? 'nav-post-upgrade' : ''}`} href={isTenant ? '/upgrade' : '/post-property'} onClick={() => setMobileOpen(false)} aria-label={t(language, postActionHint)}><span className="nav-post-label">{t(language, postActionLabel)}</span></a>;
 
   return <>
     <aside className={`site-header ${scrolled ? 'is-scrolled' : ''} ${landingVisible ? '' : 'is-hidden'}`}>
@@ -336,6 +336,6 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         </div>
       </div>}
     </header>
-    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); const paths: Record<string, string> = { Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', Admin: '/admin' }; const destination = intendedPath ?? (pendingRole && paths[pendingRole]) ?? paths[accountRole] ?? '/'; setIntendedPath(undefined); router.push(destination); }} />
+    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); const destination = intendedPath ?? `${window.location.pathname}${window.location.search}${window.location.hash}`; setIntendedPath(undefined); router.push(destination || '/'); }} />
   </>;
 }

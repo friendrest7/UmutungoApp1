@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const allowedRoles = new Set(['Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Admin']);
+const allowedRoles = new Set(['Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Property Owner', 'Admin']);
 
 export async function POST(request: Request) {
   try {

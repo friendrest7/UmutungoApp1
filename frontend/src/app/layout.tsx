@@ -5,8 +5,8 @@ import { LanguageProvider } from '../lib/language';
 import { ThemeProvider } from '../lib/theme';
 
 export const metadata: Metadata = {
-  title: 'Umutungo — Find where you belong',
-  description: 'A trusted, comfortable way to discover property and assets in Rwanda.',
+  title: 'Umutungo - Rwanda property marketplace',
+  description: 'Discover, list, and manage every kind of property in Rwanda.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

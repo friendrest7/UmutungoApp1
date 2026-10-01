@@ -1,11 +1,13 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
 
-export type PropertyPlaceholder = { id: string; title: string; type: string; location: string; price: string; priceNote: string; bedrooms: number; bathrooms: number; area: number; accent: string; image: string; images?: string[]; listed: string; availableFor?: 'rent' | 'sale' | 'both' };
+export type PropertyPoster = { name: string; businessName?: string; photoUrl?: string; phone?: string; location?: string; role: 'Komisiyoneri' | 'Landlord' | 'Property Owner'; verified?: boolean; postedAt?: string; rating?: string };
+export type PropertyPlaceholder = { id: string; title: string; type: string; location: string; price: string; priceNote: string; bedrooms: number; bathrooms: number; area: number; accent: string; image: string; images?: string[]; listed: string; availableFor?: 'rent' | 'sale' | 'both'; description?: string; poster?: PropertyPoster };
 type PropertyCardProps = { language: Language; property: PropertyPlaceholder; favorite: boolean; onFavorite: () => void; onView: () => void };
 
 export function PropertyCard({ language, property, favorite, onFavorite, onView }: PropertyCardProps) {
@@ -40,7 +42,7 @@ export function PropertyCard({ language, property, favorite, onFavorite, onView 
       <div className="property-card-body">
         <div className="property-card-top"><div><span className="property-type">{t(language, property.type)}</span><h3>{t(language, property.title)}</h3><p><Icon name="pin" size={13} /> {t(language, property.location)}</p></div><span className="property-accent" style={{ background: property.accent }} aria-hidden="true" /></div>
         <div className="property-details"><span><strong>{property.bedrooms}</strong> {t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong> {t(language, 'baths')}</span><span><strong>{property.area}</strong> m2</span></div>
-        <div className="property-card-footer"><div><strong>{property.price} <small>{t(language, property.priceNote)}</small></strong><small className="property-listed">{t(language, property.listed)}</small></div><button className="view-property-button" type="button" onClick={onView}>{t(language, 'View property')} <Icon name="arrow" size={14} /></button></div>
+        <div className="property-card-footer"><div><strong>{property.price} <small>{t(language, property.priceNote)}</small></strong><small className="property-listed">{t(language, property.listed)}</small></div><Link className="view-property-button" href={`/property/${encodeURIComponent(property.id)}`} onClick={() => onView()}>{t(language, 'View property')} <Icon name="arrow" size={14} /></Link></div>
       </div>
     </article>
   );

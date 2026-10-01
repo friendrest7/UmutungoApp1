@@ -70,6 +70,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/reports", s.reports)
 	mux.HandleFunc("/api/v1/admin/reports", s.adminReports)
 	mux.HandleFunc("/api/v1/admin/reports/", s.adminReportRoute)
+	mux.HandleFunc("/api/v1/admin/locations", s.adminLocations)
 	mux.HandleFunc("/api/v1/notifications", s.notifications)
 	mux.HandleFunc("/api/v1/favorites", s.favorites)
 	mux.HandleFunc("/api/v1/favorites/", s.favoriteRoute)
@@ -957,13 +958,14 @@ func (s *Server) mediaURL(r *http.Request, listingID, filename string) string {
 
 func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 	var item map[string]any
-	var ownerID, ownerName, ownerRole, category, transactionType, title, description, currency, province, district, sector, cell, village, status string
+	var ownerID, ownerName, ownerRole, businessName, photoURL, ownerPhone, category, transactionType, title, description, currency, province, district, sector, cell, village, status string
 	var price float64
 	var latitude, longitude *float64
 	var tags, amenities []byte
 	var createdAt, expiresAt time.Time
-	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.expires_at FROM listings l JOIN users u ON u.id=l.owner_id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
-		Scan(&ownerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &expiresAt)
+	var ownerVerifiedAt *time.Time
+	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,COALESCE(bp.business_name,''),COALESCE(pr.photo_url,''),COALESCE(u.phone,''),u.verified_at,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.expires_at FROM listings l JOIN users u ON u.id=l.owner_id LEFT JOIN business_profiles bp ON bp.user_id=u.id LEFT JOIN profiles pr ON pr.user_id=u.id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
+		Scan(&ownerID, &ownerName, &ownerRole, &businessName, &photoURL, &ownerPhone, &ownerVerifiedAt, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &expiresAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			errorJSON(w, http.StatusNotFound, "listing not found")
@@ -972,7 +974,11 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 		errorJSON(w, http.StatusInternalServerError, "could not load listing")
 		return
 	}
-	item = map[string]any{"id": id, "owner": map[string]string{"id": ownerID, "name": ownerName, "role": ownerRole}, "category": category, "transaction_type": transactionType, "title": title, "description": description, "price": price, "currency": currency, "province": province, "district": district, "sector": sector, "cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status, "tags": rawJSON(tags), "amenities": rawJSON(amenities), "created_at": createdAt, "expires_at": expiresAt}
+	poster := map[string]any{"id": ownerID, "name": ownerName, "business_name": businessName, "role": ownerRole, "photo_url": photoURL, "verified": ownerVerifiedAt != nil, "posted_at": createdAt}
+	if ownerVerifiedAt != nil {
+		poster["phone"] = ownerPhone
+	}
+	item = map[string]any{"id": id, "owner": poster, "category": category, "transaction_type": transactionType, "title": title, "description": description, "price": price, "currency": currency, "province": province, "district": district, "sector": sector, "cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status, "tags": rawJSON(tags), "amenities": rawJSON(amenities), "created_at": createdAt, "expires_at": expiresAt}
 	rows, err := s.db.Query(r.Context(), `SELECT media_type,url,sort_order FROM listing_media WHERE listing_id=$1 ORDER BY sort_order`, id)
 	media := make([]map[string]any, 0)
 	if err != nil {
@@ -1505,6 +1511,65 @@ func (s *Server) reports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "pending"})
+}
+
+func (s *Server) adminLocations(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "administrator access required")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := s.db.Query(r.Context(), `SELECT DISTINCT province,district,sector,COALESCE(cell,''),COALESCE(village,'') FROM administrative_locations ORDER BY province,district,sector,cell,village`)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load administrative locations")
+			return
+		}
+		defer rows.Close()
+		items := make([]map[string]string, 0)
+		for rows.Next() {
+			var province, district, sector, cell, village string
+			if err := rows.Scan(&province, &district, &sector, &cell, &village); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not read administrative locations")
+				return
+			}
+			items = append(items, map[string]string{"province": province, "district": district, "sector": sector, "cell": cell, "village": village})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
+	case http.MethodPost:
+		var input struct {
+			Province string `json:"province"`
+			District string `json:"district"`
+			Sector   string `json:"sector"`
+			Cell     string `json:"cell"`
+			Village  string `json:"village"`
+		}
+		if !decodeJSON(w, r, &input) || strings.TrimSpace(input.Province) == "" || strings.TrimSpace(input.District) == "" || strings.TrimSpace(input.Sector) == "" {
+			errorJSON(w, http.StatusBadRequest, "province, district, and sector are required")
+			return
+		}
+		var exists bool
+		err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM administrative_locations WHERE province=$1 AND district=$2 AND sector=$3 AND COALESCE(cell,'')=COALESCE($4,'') AND COALESCE(village,'')=COALESCE($5,''))`, strings.TrimSpace(input.Province), strings.TrimSpace(input.District), strings.TrimSpace(input.Sector), strings.TrimSpace(input.Cell), strings.TrimSpace(input.Village)).Scan(&exists)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not validate administrative location")
+			return
+		}
+		if !exists {
+			_, err = s.db.Exec(r.Context(), `INSERT INTO administrative_locations(province,district,sector,cell,village) VALUES($1,$2,$3,NULLIF($4,''),NULLIF($5,''))`, strings.TrimSpace(input.Province), strings.TrimSpace(input.District), strings.TrimSpace(input.Sector), strings.TrimSpace(input.Cell), strings.TrimSpace(input.Village))
+			if err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not save administrative location")
+				return
+			}
+		}
+		writeJSON(w, http.StatusCreated, map[string]string{"status": "saved"})
+	default:
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET or POST /api/v1/admin/locations")
+	}
 }
 
 func (s *Server) adminReports(w http.ResponseWriter, r *http.Request) {

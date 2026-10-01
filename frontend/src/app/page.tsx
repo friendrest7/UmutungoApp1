@@ -26,10 +26,17 @@ const properties: PropertyPlaceholder[] = [
 ];
 
 const categories = [
-  { name: 'Homes', detail: 'Family houses and places to rent.', image: '/properties/house-01.jpg' },
-  { name: 'Apartments', detail: 'Easy city living in Kigali.', image: '/properties/apartment-01.jpg' },
-  { name: 'Land', detail: 'Plots for your next project.', image: '/properties/land-01.jpg' },
-  { name: 'Commercial spaces', detail: 'Shops, offices and workspaces.', image: '/properties/commercial-01.jpg' },
+  { name: 'Residential houses', slug: 'houses', detail: 'Family houses and places to rent.', image: '/properties/house-01.jpg' },
+  { name: 'Apartments', slug: 'apartments', detail: 'Easy city living in Kigali.', image: '/properties/apartment-01.jpg' },
+  { name: 'Land', slug: 'land', detail: 'Plots for your next project.', image: '/properties/land-01.jpg' },
+  { name: 'Commercial buildings', slug: 'commercial', detail: 'Shops and commercial spaces.', image: '/properties/commercial-01.jpg' },
+  { name: 'Offices', slug: 'offices', detail: 'Flexible workspaces for teams.', image: '/properties/commercial-02.jpg' },
+  { name: 'Hotels and lodges', slug: 'hospitality', detail: 'Stays, lodges, and bookable rooms.', image: '/properties/apartment-02.jpg' },
+  { name: 'Vehicles', slug: 'vehicles', detail: 'Vehicles for sale or hire.', image: '/properties/commercial-02.jpg' },
+  { name: 'Furniture', slug: 'furniture', detail: 'Furniture for homes and spaces.', image: '/properties/tour-living.jpg' },
+  { name: 'Appliances', slug: 'appliances', detail: 'Useful appliances from local sellers.', image: '/properties/tour-kitchen.jpg' },
+  { name: 'Equipment', slug: 'equipment', detail: 'Tools and equipment for every project.', image: '/properties/commercial-02.jpg' },
+  { name: 'Other assets', slug: 'other', detail: 'Other rentable, sellable, or bookable assets.', image: '/properties/story-detail.jpg' },
 ];
 
 const neighbourhoods = [
@@ -172,9 +179,8 @@ export default function HomePage() {
     window.dispatchEvent(new Event('umutungo:favorites-changed'));
     void (wasSaved ? removeFavorite(property.id) : saveFavorite(item)).catch(() => undefined);
   };
-  const selectCategory = (category: string) => {
-    const categorySlugs: Record<string, string> = { Homes: 'houses', Apartments: 'apartments', Land: 'land', 'Commercial spaces': 'commercial' };
-    window.location.assign(`/categories/${categorySlugs[category] ?? 'houses'}`);
+  const selectCategory = (category: typeof categories[number]) => {
+    window.location.assign(`/categories/${category.slug}`);
   };
   const visibleProperties = properties.filter((property) => {
     const matchesCategory = !selectedCategory || property.type === categoryTypes[selectedCategory];
@@ -195,12 +201,17 @@ export default function HomePage() {
     <main>
       <section className="hero-section" id="home">
         <div className="hero-image"><Image className="hero-image-photo" src="/landingog.png" alt="Kigali cityscape" fill priority quality={82} sizes="100vw" /><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
-          <h1>{copy('Here is the best choice for places that are personalised to you.')}</h1>
-          <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form>
-          <p className="hero-lead">{copy('Every problem has a solution. We are here to reduce the stress of searching for a property.')}</p>
-          <div className="hero-actions"><a className="button button-primary" href="/categories/houses">{copy('Browse properties')} <Icon name="arrow" size={16} /></a><button className="button button-commissioner" type="button" onClick={() => requestSignIn('Commissioner / Komisiyoneri')}>{copy('Join as Commissioner')} <Icon name="arrow" size={16} /></button></div>
+          <h1>Discover, list, and manage every kind of property in Rwanda.</h1>
+          <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="search for a property you want to get here" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form>
+          <p className="hero-lead">Umutungo connects property owners, landlords, commissioners, and customers through one trusted marketplace for real estate, land, vehicles, accommodation, furniture, appliances, and equipment.</p>
+          <div className="hero-actions"><a className="button button-primary" href="/register?role=Komisiyoneri">Join as Komisiyoneri <Icon name="arrow" size={16} /></a><a className="button button-secondary" href="/register?role=Landlord">Join as Landlord <Icon name="arrow" size={16} /></a><a className="button button-commissioner" href="/register?role=Property%20Owner">Join as Property Owner <Icon name="arrow" size={16} /></a></div>
         </div></div></div>
         <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} district={district} sector={sector} type={type} intent={intent} priceRange={priceRange} onLocationChange={(value) => { setLocation(value); setDistrict(''); setSector(''); }} onDistrictChange={(value) => { setDistrict(value); setSector(''); }} onSectorChange={setSector} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
+      </section>
+
+      <section className="category-section section container" id="categories">
+        <div className="section-heading split-heading"><div><p className="eyebrow">Browse Categories</p><h2>Find every kind<br /><em>of property.</em></h2></div><p className="section-description">Explore homes, land, vehicles, accommodation, furniture, appliances, equipment, and other assets in one trusted marketplace.</p></div>
+        <div className="category-grid premium-category-grid">{categories.map((category) => <a className="premium-category-card" href={`/categories/${category.slug}`} key={category.slug}><span className="premium-category-image" style={{ backgroundImage: `url(${category.image})` }} /><span className="premium-category-copy"><strong>{category.name}</strong><small>{category.detail}</small><Icon name="arrow" size={15} /></span></a>)}</div>
       </section>
 
       <section className="section section-property container" id="properties">
@@ -210,12 +221,7 @@ export default function HomePage() {
         {selectedCategory && <button className="category-reset" type="button" onClick={() => { setSelectedCategory(''); setType('Any type'); }}>{copy('Show all properties')}</button>}
       </section>
 
-      <section className="category-section section container" id="categories">
-        <div className="section-heading split-heading"><div><p className="eyebrow">{copy('Browse by category')}</p><h2>{copy('Find your kind')}<br /><em>{copy('of place.')}</em></h2></div><p className="section-description">{copy('Choose a starting point, then narrow it down by area, budget and what matters to you.')}</p></div>
-        <div className="category-grid premium-category-grid">{categories.map((category) => <button className="premium-category-card" type="button" key={category.name} onClick={() => selectCategory(category.name)}><span className="premium-category-image" style={{ backgroundImage: `url(${category.image})` }} /><span className="premium-category-copy"><strong>{copy(category.name)}</strong><small>{copy(category.detail)}</small><Icon name="arrow" size={15} /></span></button>)}</div>
-      </section>
-
-      <section className="info-section how-it-works-section" id="how-it-works">
+      {false && <section className="info-section how-it-works-section" id="how-it-works">
         <div className="container">
           <div className="section-heading split-heading"><div><p className="eyebrow">{copy('How Umutungo works')}</p><h2>{copy('Find where')}<br /><em>{copy('you belong.')}</em></h2></div><p className="section-description">{copy('We are here for everyone who wants a place to live — the easy, trusted and comfortable way.')}</p></div>
           <div className="process-grid">
@@ -225,7 +231,7 @@ export default function HomePage() {
           </div>
           <a className="text-arrow-link" href="#properties">{copy('Explore spaces')} <Icon name="arrow" size={15} /></a>
         </div>
-      </section>
+       </section>}
 
       <section className="info-section about-section" id="about">
         <div className="container about-interface"><div className="about-panel"><p className="eyebrow">{copy('Why Umutungo')}</p><h2>{copy('Property search,')}<br /><em>{copy('made clearer.')}</em></h2><p>{copy('The useful details, in one place, so the next step feels easier.')}</p><a className="button button-primary" href="#properties">{copy('Find a property')} <Icon name="arrow" size={15} /></a></div><div className="about-feature-list"><article><Icon name="check" size={20} /><div><h3>{copy('Verified listings')}</h3><p>{copy('Clear details on the places we feature.')}</p></div></article><article><Icon name="users" size={20} /><div><h3>{copy('Local agents')}</h3><p>{copy('Speak to people who know the area and the market.')}</p></div></article><article><Icon name="heart" size={20} /><div><h3>{copy('Compare with ease')}</h3><p>{copy('See price, space and location before you visit.')}</p></div></article></div></div>
@@ -235,10 +241,10 @@ export default function HomePage() {
         <div className="container contact-interface-grid"><div><p className="eyebrow">{copy('Connect')}</p><h2>{copy('Every place has a story.')}<br /><em>{copy('Let’s help you find yours.')}</em></h2><p className="contact-interface-copy">{copy('We are building a property experience where every person in the journey can move with more clarity and confidence.')}</p><a className="contact-email" href="mailto:hello@umutungo.rw">hello@umutungo.rw <Icon name="arrow" size={15} /></a></div><form className="contact-interface-form" action="mailto:hello@umutungo.rw" method="post" encType="text/plain"><label><span>{copy('Name')}</span><input name="name" placeholder={copy('Your name')} required /></label><label><span>{copy('Email address')}</span><input name="email" type="email" placeholder="you@example.com" required /></label><label><span>{copy('Message')}</span><textarea name="message" placeholder={copy('How can we help?')} rows={4} required /></label><button className="button button-primary" type="submit">{copy('Send message')} <Icon name="arrow" size={15} /></button></form></div>
       </section>
 
-      <section className="neighbourhood-section section container" id="explore">
+      {false && <section className="neighbourhood-section section container" id="explore">
         <div className="section-heading split-heading"><div><p className="eyebrow">{copy('Explore Kigali')}</p><h2>{copy('Look around')}<br /><em>{copy('the neighbourhoods.')}</em></h2></div><p className="section-description">{copy('Get a feel for the areas people choose for home, work and everyday life.')}</p></div>
         <div className="neighbourhood-grid">{neighbourhoods.map((neighbourhood, index) => <a className={`neighbourhood-card neighbourhood-card-${index + 1}`} href="#properties" key={neighbourhood.name} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 20, 11, .05), rgba(8, 20, 11, .78)), url(${neighbourhood.image})` }}><span><strong>{copy(neighbourhood.name)}</strong><small>{copy(neighbourhood.note)}</small></span><Icon name="arrow" size={17} /></a>)}</div>
-      </section>
+       </section>}
 
       <section className="stats-section"><div className="container stats-grid"><div><strong>1,200+</strong><span>{copy('properties listed')}</span></div><div><strong>300+</strong><span>{copy('verified agents')}</span></div><div><strong>15</strong><span>{copy('districts covered')}</span></div></div></section>
 

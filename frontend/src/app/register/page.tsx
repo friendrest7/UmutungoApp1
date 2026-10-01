@@ -5,13 +5,14 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Icon } from '../../components/Icons';
 import { Logo } from '../../components/Logo';
 
-type RegistrationRole = 'Client' | 'Tenant' | 'Komisiyoneri' | 'Property Owner';
+type RegistrationRole = 'Client' | 'Tenant' | 'Komisiyoneri' | 'Landlord' | 'Property Owner';
 
-const roleOptions: Array<{ role: RegistrationRole; detail: string; storageRole: 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' }> = [
+const roleOptions: Array<{ role: RegistrationRole; detail: string; storageRole: 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' }> = [
   { role: 'Client', detail: 'I want to find or rent property.', storageRole: 'Tenant' },
   { role: 'Tenant', detail: 'I currently rent or occupy a property.', storageRole: 'Tenant' },
   { role: 'Komisiyoneri', detail: 'I help clients buy, sell, or rent property.', storageRole: 'Commissioner / Komisiyoneri' },
-  { role: 'Property Owner', detail: 'I own property and want to sell or rent it.', storageRole: 'Landlord' },
+  { role: 'Landlord', detail: 'I manage rental property and tenants.', storageRole: 'Landlord' },
+  { role: 'Property Owner', detail: 'I own property and want to sell or rent it.', storageRole: 'Property Owner' },
 ];
 
 export default function RegisterPage() {
@@ -24,13 +25,18 @@ export default function RegisterPage() {
   const [captcha, setCaptcha] = useState('');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('role') as RegistrationRole | null;
+    if (requested && roleOptions.some((item) => item.role === requested)) setRole(requested);
+  }, []);
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (captcha.trim() !== challenge.answer) { setError('Complete the anti-bot check correctly.'); return; }
     if (phone.replace(/\D/g, '').length < 9) { setError('Enter a valid Rwanda phone number.'); return; }
     const selected = roleOptions.find((item) => item.role === role) ?? roleOptions[0];
     window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: selected.storageRole, name: name.trim(), phone: phone.trim(), email: email.trim(), kycStatus: selected.storageRole === 'Tenant' ? 'not_required' : 'pending', signedInAt: new Date().toISOString() }));
-    const destination = selected.storageRole === 'Commissioner / Komisiyoneri' ? '/commissioner' : selected.storageRole === 'Landlord' ? '/landlord' : '/tenant';
+    const destination = selected.storageRole === 'Commissioner / Komisiyoneri' ? '/commissioner' : selected.storageRole === 'Landlord' || selected.storageRole === 'Property Owner' ? '/landlord' : '/tenant';
     window.location.assign(destination);
   };
 

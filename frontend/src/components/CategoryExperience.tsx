@@ -27,6 +27,11 @@ const categoryConfigs: Record<string, CategoryConfig> = {
   hospitality: { name: 'Hospitality', eyebrow: 'Stay somewhere memorable', description: 'Hotels, guesthouses, and short stays with clear booking details.', cover: '/properties/apartment-02.jpg', accent: '#9a6f4d', filters: ['All stays', 'Book now'], listings: [listing('hospitality-1', 'Kigali garden guesthouse', 'Kimihurura · Kigali', 'RWF 95,000 / night', 'Book', '2 guests · Breakfast · Wi-Fi', '/properties/apartment-02.jpg', '4.9', true), listing('hospitality-2', 'Quiet serviced apartment', 'Nyarutarama · Kigali', 'RWF 180,000 / night', 'Book', '4 guests · 2 beds · Kitchen', '/properties/apartment-01.jpg', '4.8', true)] },
 };
 
+categoryConfigs.vehicles = { name: 'Vehicles', eyebrow: 'Move with confidence', description: 'Vehicles for sale, hire, and work across Rwanda with clear owner information.', cover: '/properties/commercial-02.jpg', accent: '#4f7a63', filters: ['All vehicles', 'For rent', 'For sale'], listings: [listing('vehicle-1', 'Reliable family SUV', 'Kigali Â· Rwanda', 'RWF 85,000 / day', 'For rent', '5 seats Â· Insured Â· Delivery available', '/properties/commercial-02.jpg', '4.8', true)] };
+categoryConfigs.furniture = { name: 'Furniture', eyebrow: 'Make a space yours', description: 'Furniture for homes, offices, lodges, and other spaces.', cover: '/properties/tour-living.jpg', accent: '#8a674d', filters: ['All furniture', 'For rent', 'For sale'], listings: [listing('furniture-1', 'Living room furniture set', 'Kigali Â· Rwanda', 'RWF 1,800,000', 'For sale', 'Sofa Â· Table Â· Ready for delivery', '/properties/tour-living.jpg', '4.7', true)] };
+categoryConfigs.appliances = { name: 'Appliances', eyebrow: 'Useful things, ready to go', description: 'Home and commercial appliances from local owners and businesses.', cover: '/properties/tour-kitchen.jpg', accent: '#527b83', filters: ['All appliances', 'For rent', 'For sale'], listings: [listing('appliance-1', 'Complete kitchen appliance set', 'Kigali Â· Rwanda', 'RWF 2,400,000', 'For sale', 'Good condition Â· Inspection available', '/properties/tour-kitchen.jpg', '4.6', true)] };
+categoryConfigs.other = { name: 'Other assets', eyebrow: 'More ways to use Umutungo', description: 'Rentable, sellable, and bookable assets that do not fit one category.', cover: '/properties/story-detail.jpg', accent: '#65735f', filters: ['All assets', 'For rent', 'For sale', 'Book now'], listings: [listing('other-1', 'Event equipment package', 'Kigali Â· Rwanda', 'RWF 250,000 / day', 'For rent', 'Flexible booking Â· Delivery available', '/properties/story-detail.jpg', '4.7', true)] };
+
 const viewerImages: Record<string, string[]> = {
   Houses: ['/properties/house-01.jpg', '/properties/house-02.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg'],
   Apartments: ['/properties/apartment-01.jpg', '/properties/apartment-02.jpg', '/properties/tour-living.jpg', '/properties/tour-kitchen.jpg', '/properties/tour-bedroom-real.jpg'],
@@ -35,6 +40,7 @@ const viewerImages: Record<string, string[]> = {
   Offices: ['/properties/commercial-02.jpg', '/properties/commercial-01.jpg', '/properties/tour-interior.jpg'],
   Equipment: ['/properties/commercial-02.jpg', '/properties/commercial-01.jpg', '/properties/tour-interior.jpg'],
   Hospitality: ['/properties/apartment-02.jpg', '/properties/apartment-01.jpg', '/properties/tour-living.jpg', '/properties/tour-bedroom-real.jpg'],
+  Vehicles: ['/properties/commercial-02.jpg'], Furniture: ['/properties/tour-living.jpg'], Appliances: ['/properties/tour-kitchen.jpg'], 'Other assets': ['/properties/story-detail.jpg'],
 };
 
 const shopCategories: Array<{ slug: string; label: string; icon: 'home' | 'building' | 'leaf' | 'users' }> = [
@@ -42,6 +48,13 @@ const shopCategories: Array<{ slug: string; label: string; icon: 'home' | 'build
   { slug: 'apartments', label: 'Apartments', icon: 'building' },
   { slug: 'land', label: 'Land', icon: 'leaf' },
   { slug: 'commercial', label: 'Commercial', icon: 'building' },
+  { slug: 'offices', label: 'Offices', icon: 'building' },
+  { slug: 'hospitality', label: 'Hospitality', icon: 'home' },
+  { slug: 'vehicles', label: 'Vehicles', icon: 'users' },
+  { slug: 'furniture', label: 'Furniture', icon: 'building' },
+  { slug: 'appliances', label: 'Appliances', icon: 'building' },
+  { slug: 'equipment', label: 'Equipment', icon: 'users' },
+  { slug: 'other', label: 'Other', icon: 'users' },
 ];
 
 const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlaceholder => {
@@ -49,7 +62,7 @@ const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlac
   const bedrooms = Number(item.detail.match(/(\d+)\s*beds?/)?.[1] ?? 0);
   const bathrooms = Number(item.detail.match(/(\d+)\s*baths?/)?.[1] ?? 0);
   const area = Number(item.detail.match(/(\d+)\s*m(?:²|2)/)?.[1] ?? 0);
-  const type = category.name === 'Houses' ? 'House' : category.name === 'Apartments' || category.name === 'Hospitality' ? 'Apartment' : category.name === 'Land' ? 'Land' : 'Commercial';
+  const type = category.name === 'Houses' ? 'House' : category.name === 'Apartments' || category.name === 'Hospitality' ? 'Apartment' : category.name === 'Land' ? 'Land' : category.name;
   const images = viewerImages[category.name] ?? [item.image];
 
   return { id: item.id, title: item.title, type, location: item.location.replace(/\s*·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images: [item.image, ...images.filter((image) => image !== item.image)], listed: 'Listed recently', availableFor: item.intent === 'For sale' ? 'sale' : 'rent' };
@@ -115,6 +128,16 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     const matchesFilter = filter.startsWith('All') || (filter === 'For rent' && item.intent === 'For rent') || (filter === 'For sale' && item.intent === 'For sale') || (filter === 'Book now' && item.intent === 'Book') || ['Residential', 'Commercial', 'Private office', 'Open workspace'].includes(filter);
     return matchesQuery && matchesLocation && matchesDistrict && matchesSector && matchesIntent && matchesPrice && matchesFilter;
   }), [category, databaseListings, filter, initialDistrict, initialIntent, initialLocation, initialPriceRange, initialSector, query]);
+
+  useEffect(() => {
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.category-view-button'));
+    const handlers = buttons.map((button, index) => {
+      const handler = () => { const item = listings[index]; if (item) window.location.assign(`/property/${encodeURIComponent(item.id)}`); };
+      button.addEventListener('click', handler);
+      return { button, handler };
+    });
+    return () => handlers.forEach(({ button, handler }) => button.removeEventListener('click', handler));
+  }, [listings]);
 
   const toggleListingFavorite = (item: Listing) => {
     const wasSaved = saved.includes(item.id);

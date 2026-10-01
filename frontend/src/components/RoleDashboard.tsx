@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
@@ -74,9 +74,81 @@ function DashboardTopbar({ eyebrow, active, initials, accountLabel }: { eyebrow:
       </div>
       <button className="dashboard-header-tool" type="button" title={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} aria-label={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} onClick={toggleTheme}><Icon name={darkMode ? 'sun' : 'moon'} size={17} /></button>
       <label className="dashboard-language-select" title={t(language, 'Language')}><Icon name="globe" size={15} /><select value={language} aria-label={t(language, 'Language')} onChange={(event) => changeLanguage(event.target.value as Language)}>{dashboardLanguages.map((item) => <option key={item} value={item}>{dashboardLanguageCodes[item]}</option>)}</select></label>
-      <div className="role-dashboard-profile"><span className="role-dashboard-avatar">{initials}</span><span><strong>My account</strong><small>{accountLabel}</small></span><Icon name="chevron" size={14} /></div>
+      <DashboardAccountMenu initials={initials} accountLabel={accountLabel} onOverview={() => undefined} />
     </div>
   </header>;
+}
+
+function DashboardAccountMenu({ initials, accountLabel, onOverview }: { initials: string; accountLabel: string; onOverview: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
+  }, [open]);
+
+  const selectOverview = () => { onOverview(); setOpen(false); };
+
+  return <div className="dashboard-account-menu" ref={ref}>
+    <button className={`role-dashboard-profile ${open ? 'is-open' : ''}`} type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+      <span className="role-dashboard-avatar">{initials}</span>
+      <span><strong>My account</strong><small>{accountLabel}</small></span>
+      <Icon name="chevron" size={14} />
+    </button>
+    {open && <div className="dashboard-account-panel" role="menu" aria-label="My account">
+      <div className="dashboard-account-panel-heading"><span className="role-dashboard-avatar">{initials}</span><span><strong>My account</strong><small>{accountLabel}</small></span></div>
+      <button type="button" role="menuitem" onClick={selectOverview}><Icon name="user" size={15} /><span>Account overview</span><Icon name="arrow" size={13} /></button>
+      <Link href="/" role="menuitem" onClick={() => setOpen(false)}><Icon name="home" size={15} /><span>Back to marketplace</span><Icon name="arrow" size={13} /></Link>
+    </div>}
+  </div>;
+}
+
+function DashboardAccountBridge({ initials, accountLabel }: { initials: string; accountLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, right: 18 });
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Element;
+      const profile = target.closest<HTMLElement>('.role-dashboard-profile');
+      if (profile) {
+        const bounds = profile.getBoundingClientRect();
+        setPosition({ top: bounds.bottom + 10, right: Math.max(18, window.innerWidth - bounds.right) });
+        setOpen((current) => !current);
+        return;
+      }
+      if (!target.closest('.dashboard-account-bridge-panel')) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => { document.removeEventListener('click', handleClick); document.removeEventListener('keydown', closeOnEscape); };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const reposition = () => {
+      const profile = document.querySelector<HTMLElement>('.role-dashboard-profile');
+      if (!profile) return;
+      const bounds = profile.getBoundingClientRect();
+      setPosition({ top: bounds.bottom + 10, right: Math.max(18, window.innerWidth - bounds.right) });
+    };
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, { passive: true });
+    return () => { window.removeEventListener('resize', reposition); window.removeEventListener('scroll', reposition); };
+  }, [open]);
+
+  if (!open) return null;
+  return <div className="dashboard-account-bridge-panel" role="menu" aria-label="My account" style={{ top: position.top, right: position.right }}>
+    <div className="dashboard-account-panel-heading"><span className="role-dashboard-avatar">{initials}</span><span><strong>My account</strong><small>{accountLabel}</small></span></div>
+    <button type="button" role="menuitem" onClick={() => setOpen(false)}><Icon name="user" size={15} /><span>Account overview</span><Icon name="arrow" size={13} /></button>
+    <Link href="/" role="menuitem" onClick={() => setOpen(false)}><Icon name="home" size={15} /><span>Back to marketplace</span><Icon name="arrow" size={13} /></Link>
+  </div>;
 }
 
 function getLocalAdminReports(): AdminReport[] {
@@ -625,10 +697,10 @@ export function RoleDashboard({ role }: { role: DashboardRole }) {
   const initials = role === 'admin' ? 'AD' : role === 'tenant' ? 'TN' : role === 'landlord' ? 'LL' : 'CM';
   const accountLabel = role === 'admin' ? 'Platform administrator' : `Verified ${role}`;
 
-  if (role === 'tenant') return <><DashboardUtilityDock role={role} /><TenantDashboard /></>;
-  if (role === 'commissioner') return <><DashboardUtilityDock role={role} /><CommissionerDashboard /></>;
-  if (role === 'landlord') return <><DashboardUtilityDock role={role} /><LandlordDashboard /></>;
-  if (role === 'admin') return <><DashboardUtilityDock role={role} isAdmin /><AdminDashboard /></>;
+  if (role === 'tenant') return <><DashboardUtilityDock role={role} /><TenantDashboard /><DashboardAccountBridge initials="TN" accountLabel="Verified tenant" /></>;
+  if (role === 'commissioner') return <><DashboardUtilityDock role={role} /><CommissionerDashboard /><DashboardAccountBridge initials="CM" accountLabel="Verified Komisiyoneri" /></>;
+  if (role === 'landlord') return <><DashboardUtilityDock role={role} /><LandlordDashboard /><DashboardAccountBridge initials="LL" accountLabel="Verified Property Owner" /></>;
+  if (role === 'admin') return <><DashboardUtilityDock role={role} isAdmin /><AdminDashboard /><DashboardAccountBridge initials="AD" accountLabel="Platform administrator" /></>;
 
   return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label={`${config.eyebrow} navigation`}><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><button type="button"><Icon name="user" size={16} /> Account</button></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><div className="role-dashboard-profile"><span className="role-dashboard-avatar">{initials}</span><span><strong>My account</strong><small>{accountLabel}</small></span><Icon name="chevron" size={14} /></div></header><div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">{config.greeting}</p><h2>{config.welcome}</h2><p>Manage your Umutungo activity in one clear, professional workspace.</p></div><button className="role-dashboard-primary" type="button"><Icon name={config.actionIcon} size={16} /> {config.action}</button></section><section className="role-dashboard-metrics" aria-label="Dashboard metrics">{config.metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-grid"><section className="role-dashboard-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">{config.panelEyebrow}</span><h3>{config.panelTitle}</h3></div><button type="button">View all <Icon name="arrow" size={14} /></button></div><div className="role-dashboard-activity">{config.activity.map((item) => <article key={`${item.name}-${item.time}`}><span className="role-dashboard-contact-avatar">{item.initials}</span><div><strong>{item.name}</strong><small>{item.detail} Ã‚Â· {item.time}</small></div><span className={`role-dashboard-status ${item.status === 'New' ? 'new' : ''}`}>{item.status}</span><button type="button" aria-label={`Open ${item.name}`}><Icon name="arrow" size={14} /></button></article>)}</div></section><section className="role-dashboard-panel role-dashboard-side-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">{config.sideEyebrow}</span><h3>{config.sideTitle}</h3></div><Icon name="sparkles" size={17} /></div>{config.sideItems.map((item) => <div className="role-dashboard-side-item" key={item.title}><span><Icon name={item.icon} size={16} /></span><div><strong>{item.title}</strong><small>{item.detail}</small></div><Icon name="arrow" size={14} /></div>)}<button className="role-dashboard-outline" type="button">Open workspace</button></section></div></div></section></main>;
 }

@@ -32,7 +32,7 @@ const categories = [
   { name: 'Commercial buildings', slug: 'commercial', detail: 'Shops and commercial spaces.', image: '/properties/commercial-01.jpg' },
   { name: 'Offices', slug: 'offices', detail: 'Flexible workspaces for teams.', image: '/properties/commercial-02.jpg' },
   { name: 'Hotels and lodges', slug: 'hospitality', detail: 'Stays, lodges, and bookable rooms.', image: '/properties/apartment-02.jpg' },
-  { name: 'Vehicles', slug: 'vehicles', detail: 'Vehicles for sale or hire.', image: '/properties/commercial-02.jpg' },
+  { name: 'Vehicles', slug: 'vehicles', detail: 'Vehicles for sale or hire.', image: '/properties/vehicle-01.png' },
   { name: 'Furniture', slug: 'furniture', detail: 'Furniture for homes and spaces.', image: '/properties/tour-living.jpg' },
   { name: 'Appliances', slug: 'appliances', detail: 'Useful appliances from local sellers.', image: '/properties/tour-kitchen.jpg' },
   { name: 'Equipment', slug: 'equipment', detail: 'Tools and equipment for every project.', image: '/properties/commercial-02.jpg' },

@@ -11,7 +11,7 @@ export default function LandlordPage() {
   useEffect(() => {
     try {
       const user = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as { role?: string } | null;
-      setAuthorized(user?.role === 'Landlord');
+      setAuthorized(user?.role === 'Landlord' || user?.role === 'Property Owner');
     } catch {
       setAuthorized(false);
     } finally {

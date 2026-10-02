@@ -3631,6 +3631,17 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   background: #02a24b !important;
   color: #ffffff !important;
 }
+.app-realistic .topbar .nav-sign-in.nav-account,
+.app-realistic .topbar .nav-sign-in.nav-account:hover {
+  color: #ffffff !important;
+}
+.app-realistic .section-property .section-heading h2 {
+  font-size: clamp(36px, 4.3vw, 58px) !important;
+  line-height: .84;
+}
+.app-realistic .section-property .eyebrow::after {
+  font-size: 14px;
+}
 .app-realistic .nav-post:not(.nav-post-upgrade):hover,
 .app-realistic .nav-sign-in:hover,
 .app-realistic .sidebar-sign-in:hover,
@@ -3639,6 +3650,15 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   border-color: #02a24b !important;
   background: #02a24b !important;
   color: #ffffff !important;
+}
+
+/* Keep display titles flowing as single sentences when the available width allows it. */
+@media (min-width: 761px) {
+  h1 > br,
+  h2 > br,
+  h3 > br {
+    display: none;
+  }
 }
 
 .posting-selection-page {

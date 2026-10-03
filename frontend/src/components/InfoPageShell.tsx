@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
+import { AiChatbot } from './AiChatbot';
 import { Footer } from './Footer';
 import { Icon } from './Icons';
 import { Navbar } from './Navbar';
@@ -96,6 +97,7 @@ export function InfoPageShell({ page }: { page: InfoPage }) {
     {page === 'about' && <AboutPage copy={copy} />}
     {page === 'categories' && <CategoriesPage copy={copy} />}
     <Footer language={language} darkMode={darkMode} />
+    <AiChatbot language={language} />
   </div>;
 }
 

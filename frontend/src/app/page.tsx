@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Image from 'next/image';
+import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
 import { Icon } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
@@ -196,11 +197,12 @@ export default function HomePage() {
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
+    <AiChatbot language={language} />
     <main>
       <section className="hero-section" id="home">
         <div className="hero-image"><Image className="hero-image-photo" src="/landingog.png" alt="Kigali cityscape" fill priority quality={82} sizes="100vw" /><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <h1>Discover, list, and manage every kind of property in Rwanda.</h1>
-          <form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="search for a property you want to get here" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form>
+          <div className="landing-search-actions"><form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="search for a property you want to get here" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form><a className="landing-view-all-properties" href="/categories/houses">View all properties</a></div>
           <p className="hero-lead">Umutungo connects property owners, landlords, commissioners, and customers through one trusted marketplace for real estate, land, vehicles, accommodation, furniture, appliances, and equipment.</p>
           <div className="hero-actions"><a className="button button-primary" href="/register?role=Komisiyoneri">Join as Komisiyoneri <Icon name="arrow" size={16} /></a><a className="button button-secondary" href="/register?role=Landlord">Join as Landlord <Icon name="arrow" size={16} /></a><a className="button button-commissioner" href="/register?role=Property%20Owner">Join as Property Owner <Icon name="arrow" size={16} /></a></div>
         </div></div></div>

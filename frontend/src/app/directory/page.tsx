@@ -2,10 +2,12 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { AiChatbot } from '../../components/AiChatbot';
 import { Icon } from '../../components/Icons';
 import { InterfacePreferences } from '../../components/InterfacePreferences';
 import { Logo } from '../../components/Logo';
 import { apiBaseUrl, DirectoryProfile, publicUmutungoApi } from '../../lib/umutungoApi';
+import { usePersistentLanguage } from '../../lib/language';
 
 type DirectoryResponse = { items: DirectoryProfile[]; count: number };
 
@@ -14,6 +16,7 @@ function roleLabel(role: DirectoryProfile['role']) {
 }
 
 export default function DirectoryPage() {
+  const { language } = usePersistentLanguage();
   const [query, setQuery] = useState('');
   const [profiles, setProfiles] = useState<DirectoryProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +51,7 @@ export default function DirectoryPage() {
   };
 
   return (
-    <main className="directory-page">
+    <><main className="directory-page">
       <header className="directory-page-header">
         <Link href="/" aria-label="Umutungo home"><Logo /></Link>
         <div className="standalone-header-actions">
@@ -70,7 +73,7 @@ export default function DirectoryPage() {
       </section>
       <section className="directory-results container">
         <div className="directory-results-heading">
-          <div><p className="eyebrow">Professional directory</p><h2>{query ? `Results for “${query}”` : 'Landlords and Komisiyoneri'}</h2></div>
+          <div><h2>{query ? `Results for “${query}”` : 'Landlords and Komisiyoneri'}</h2></div>
           <span>{loading ? 'Searching…' : `${profiles.length} found`}</span>
         </div>
         {error && <p className="directory-error" role="alert">{error}{!apiBaseUrl() ? ' Set NEXT_PUBLIC_API_URL for local development.' : ''}</p>}
@@ -85,6 +88,6 @@ export default function DirectoryPage() {
           </article>)}
         </div>
       </section>
-    </main>
+    </main><AiChatbot language={language} /></>
   );
 }

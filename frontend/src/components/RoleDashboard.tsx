@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
-import { AdminReport, AdminReportsResponse, ApiApplication, ApiMessage, ApiNotification, TenantBooking, TenantDashboardData, umutungoApi } from '../lib/umutungoApi';
+import { FavoritesPanel } from './Navbar';
+import { AdminReport, AdminReportsResponse, ApiApplication, ApiMessage, ApiNotification, FavoriteItem, TenantBooking, TenantDashboardData, listFavorites, removeFavorite, umutungoApi } from '../lib/umutungoApi';
 import { downloadReportsExcel, downloadReportsImage, downloadReportsPdf } from '../lib/adminReportExports';
 import { Language, t } from '../data/translations';
 import { usePersistentLanguage } from '../lib/language';
@@ -54,6 +55,49 @@ const configs: Record<DashboardRole, DashboardConfig> = {
 const dashboardLanguages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
 const dashboardLanguageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
 
+function DashboardFavoritesButton({ language }: { language: Language }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<FavoriteItem[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const readFavorites = () => {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem('umutungo-favorites') ?? '[]') as FavoriteItem[];
+        setItems(Array.isArray(stored) ? stored : []);
+      } catch { setItems([]); }
+    };
+    readFavorites();
+    window.addEventListener('umutungo:favorites-changed', readFavorites);
+    void listFavorites().then((remote) => {
+      if (!remote) return;
+      setItems(remote);
+      window.localStorage.setItem('umutungo-favorites', JSON.stringify(remote));
+      window.dispatchEvent(new Event('umutungo:favorites-changed'));
+    }).catch(() => undefined);
+    return () => window.removeEventListener('umutungo:favorites-changed', readFavorites);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
+  }, [open]);
+
+  const remove = (propertyID: string) => {
+    const next = items.filter((item) => item.property_id !== propertyID);
+    setItems(next);
+    window.localStorage.setItem('umutungo-favorites', JSON.stringify(next));
+    window.dispatchEvent(new Event('umutungo:favorites-changed'));
+    void removeFavorite(propertyID).catch(() => undefined);
+  };
+
+  return <div className="dashboard-favorites-wrap" ref={ref}><button className="dashboard-header-tool" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} aria-expanded={open} onClick={() => setOpen((current) => !current)}><Icon name="heart" size={17} />{items.length > 0 && <b>{items.length > 9 ? '9+' : items.length}</b>}</button>{open && <FavoritesPanel language={language} items={items} onRemove={remove} onClose={() => setOpen(false)} />}</div>;
+}
+
 function DashboardTopbar({ eyebrow, active, initials, accountLabel }: { eyebrow: string; active: string; initials: string; accountLabel: string }) {
   const { darkMode, toggleTheme } = usePersistentTheme();
   const { language, changeLanguage } = usePersistentLanguage();
@@ -67,7 +111,7 @@ function DashboardTopbar({ eyebrow, active, initials, accountLabel }: { eyebrow:
   return <header className="role-dashboard-topbar">
     <div><span className="role-dashboard-eyebrow">{eyebrow}</span><h1>{active}</h1></div>
     <div className="role-dashboard-header-actions">
-      <Link className="dashboard-header-tool" href="/#properties" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')}><Icon name="heart" size={17} /></Link>
+      <DashboardFavoritesButton language={language} />
       <div className="dashboard-notification-wrap">
         <button className="dashboard-header-tool" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>
         {notificationsOpen && <div className="dashboard-notification-popover" role="status">{t(language, 'No new notifications')}</div>}
@@ -225,7 +269,7 @@ function DashboardUtilityDock({ isAdmin = false, role }: { isAdmin?: boolean; ro
     return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener('umutungo:notifications-changed', refresh); window.removeEventListener('umutungo:landlord-data-changed', refresh); window.removeEventListener('umutungo:tenant-data-changed', refresh); window.removeEventListener('umutungo:commissioner-data-changed', refresh); };
   }, [role]);
   return <div className={`dashboard-utility-dock ${darkMode ? 'is-dark' : ''}`} aria-label="Dashboard tools">
-    <Link className="dashboard-header-tool" href="/#properties" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')}><Icon name="heart" size={17} /></Link>
+    <DashboardFavoritesButton language={language} />
     {isAdmin && <AdminReportDownloadMenu />}
     <div className="dashboard-notification-wrap"><button className="dashboard-header-tool" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" size={17} />{notifications.length > 0 && <b>{notifications.length > 99 ? '99+' : notifications.length}</b>}</button>{notificationsOpen && <div className="dashboard-notification-popover" role="status">{notifications.length ? notifications.slice(0, 5).map((item) => <article key={item.id}><strong>{item.title}</strong><small>{item.body}</small></article>) : t(language, 'No new notifications')}</div>}</div>
     <button className="dashboard-header-tool" type="button" title={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} aria-label={darkMode ? t(language, 'Light mode') : t(language, 'Dark mode')} onClick={toggleTheme}><Icon name={darkMode ? 'sun' : 'moon'} size={17} /></button>

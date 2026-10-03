@@ -33,8 +33,8 @@ export default function RegisterPage() {
     if (phone.replace(/\D/g, '').length < 9) { setError('Enter a valid Rwanda phone number.'); return; }
     const selected = roleOptions.find((item) => item.role === role) ?? roleOptions[0];
     window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: selected.storageRole, name: name.trim(), phone: phone.trim(), email: email.trim(), kycStatus: selected.storageRole === 'Tenant' ? 'not_required' : 'pending', signedInAt: new Date().toISOString() }));
-    // Keep the new account on the marketplace. The navbar account menu provides the dashboard entry point.
-    window.location.assign('/');
+    const dashboardPaths = { Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/landlord' } as const;
+    window.location.assign(dashboardPaths[selected.storageRole]);
   };
 
   const backgroundClass = role === 'Komisiyoneri' ? 'registration-komisiyoneri' : role === 'Landlord' ? 'registration-landlord' : role === 'Property Owner' ? 'registration-property-owner' : '';

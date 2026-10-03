@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Image from 'next/image';
-import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
 import { Icon } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
@@ -197,7 +196,6 @@ export default function HomePage() {
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
-    <AiChatbot language={language} />
     <main>
       <section className="hero-section" id="home">
         <div className="hero-image"><Image className="hero-image-photo" src="/landingog.png" alt="Kigali cityscape" fill priority quality={82} sizes="100vw" /><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
@@ -215,7 +213,7 @@ export default function HomePage() {
       </section>
 
       <section className="section section-property container" id="properties">
-        <div className="section-heading split-heading"><div><p className="eyebrow">{selectedCategory ? copy('Category view') : copy('Featured properties')}</p><h2>{selectedCategory ? copy(selectedCategory) : copy('Places worth')}<br /><em>{selectedCategory ? copy('properties.') : copy('a closer look.')}</em></h2></div><p className="section-description">{selectedCategory ? `${visibleProperties.length} ${copy('properties found in this category.')}` : copy('A small selection of homes currently available in Kigali.')}</p></div>
+        <div className="section-heading split-heading"><div><p className="eyebrow">{selectedCategory ? copy('Category view') : copy('Featured properties')}</p><h2>{selectedCategory ? <>{copy(selectedCategory)}<br /><em>{copy('properties.')}</em></> : `${copy('Places worth')} ${copy('a closer look.')}`}</h2></div><p className={`section-description ${selectedCategory ? '' : 'featured-properties-description'}`}>{selectedCategory ? `${visibleProperties.length} ${copy('properties found in this category.')}` : 'A small selection of homes currently available in Kigali, personalised to you. Check it out.'}</p></div>
         {searchMessage && <div className="search-feedback" role="status"><Icon name="check" size={16} /> {searchMessage}</div>}
         <div className="property-grid">{visibleProperties.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />)}</div>
         {selectedCategory && <button className="category-reset" type="button" onClick={() => { setSelectedCategory(''); setType('Any type'); }}>{copy('Show all properties')}</button>}
@@ -247,8 +245,6 @@ export default function HomePage() {
        </section>}
 
       <section className="stats-section"><div className="container stats-grid"><div><strong>1,200+</strong><span>{copy('properties listed')}</span></div><div><strong>300+</strong><span>{copy('verified agents')}</span></div><div><strong>15</strong><span>{copy('districts covered')}</span></div></div></section>
-
-      <section className="listing-cta container" id="post-property"><div><p className="eyebrow">{copy('For owners and agents')}</p><h2>{copy('Have a place to')}<br /><em>{copy('rent or sell?')}</em></h2></div><div><p>{copy('Put the price, location and key details in one clear listing.')}</p><a className="listing-cta-button" href="/post-property">Create a listing <Icon name="arrow" size={15} /></a></div></section>
 
       <ReviewPanel language={language} />
     </main>

@@ -9,8 +9,8 @@ import { PropertyPlaceholder } from './PropertyCard';
 import { AuthModal } from './AuthModal';
 import { umutungoApi } from '../lib/umutungoApi';
 
-type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void };
 type ViewerMode = 'photos' | 'tour' | 'plan';
+type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode };
 type TransactionType = 'rent' | 'buy';
 type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
@@ -39,10 +39,10 @@ function escapeReceiptValue(value: string | number) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character] ?? character);
 }
 
-export function PropertyViewer({ language, property, onClose }: PropertyViewerProps) {
+export function PropertyViewer({ language, property, onClose, initialMode = 'photos' }: PropertyViewerProps) {
   const images = property.images?.length ? property.images : [property.image];
   const [activeImage, setActiveImage] = useState(0);
-  const [mode, setMode] = useState<ViewerMode>('photos');
+  const [mode, setMode] = useState<ViewerMode>(initialMode);
   const [tourStop, setTourStop] = useState(0);
   const [turn, setTurn] = useState(0);
   const [tourZoom, setTourZoom] = useState(0);
@@ -77,6 +77,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   const [viewingRequested, setViewingRequested] = useState(false);
   const [applicationId, setApplicationId] = useState('');
   const dragStart = useRef<{ x: number; y: number; turn: number; pointerType: string } | null>(null);
+  const photoSwipeStart = useRef<{ x: number; pointerId: number } | null>(null);
 
   useEffect(() => {
     setSignedIn(Boolean(window.localStorage.getItem('umutungo-demo-user')));
@@ -91,6 +92,18 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
   }, [authOpen, onClose]);
 
   const changeImage = (direction: number) => setActiveImage((current) => (current + direction + images.length) % images.length);
+  const startPhotoSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    photoSwipeStart.current = { x: event.clientX, pointerId: event.pointerId };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const stopPhotoSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = photoSwipeStart.current;
+    if (start && event.pointerId === start.pointerId && Math.abs(event.clientX - start.x) > 42) {
+      changeImage(event.clientX < start.x ? 1 : -1);
+    }
+    photoSwipeStart.current = null;
+  };
   const isLand = property.type === 'Land';
   const isCommercial = property.type === 'Commercial';
   const availableFor = property.availableFor ?? (property.priceNote.includes('/ month') || property.priceNote.includes('/ night') ? 'rent' : 'sale');
@@ -327,7 +340,7 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
 
       <div className="property-viewer-grid">
         <div className="property-viewer-media">
-          {mode === 'photos' && <div className="viewer-photo-stage"><Image src={images[activeImage]} alt={t(language, property.title)} fill sizes="(max-width: 900px) 100vw, 62vw" priority className="viewer-main-image" /><span className="viewer-media-count">{activeImage + 1} / {images.length}</span><button className="viewer-arrow viewer-arrow-prev" type="button" onClick={() => changeImage(-1)} aria-label={t(language, 'Previous property image')}><Icon name="chevron" size={21} /></button><button className="viewer-arrow viewer-arrow-next" type="button" onClick={() => changeImage(1)} aria-label={t(language, 'Next property image')}><Icon name="chevron" size={21} /></button></div>}
+          {mode === 'photos' && <div className="viewer-photo-stage" onPointerDown={startPhotoSwipe} onPointerUp={stopPhotoSwipe} onPointerCancel={() => { photoSwipeStart.current = null; }}><Image src={images[activeImage]} alt={t(language, property.title)} fill sizes="(max-width: 900px) 100vw, 62vw" priority className="viewer-main-image" /><span className="viewer-media-count">{activeImage + 1} / {images.length}</span><button className="viewer-arrow viewer-arrow-prev" type="button" onClick={() => changeImage(-1)} aria-label={t(language, 'Previous property image')}><Icon name="chevron" size={21} /></button><button className="viewer-arrow viewer-arrow-next" type="button" onClick={() => changeImage(1)} aria-label={t(language, 'Next property image')}><Icon name="chevron" size={21} /></button></div>}
 
           {mode === 'tour' && <div className="viewer-tour-stage viewer-game-stage" tabIndex={0} onKeyDown={handleGameKey} onWheel={handleTourWheel} onPointerDown={startLook} onPointerMove={dragLook} onPointerUp={stopLook} onPointerCancel={stopLook} onPointerLeave={stopLook} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 22, 12, .04), rgba(8, 22, 12, .78)), url(${tourImages[tourStop] ?? images[0]})`, backgroundPosition: `${50 + turn * .12}% center`, backgroundSize: tourZoom ? `${100 + tourZoom * 18}% auto` : 'cover' }}>
             <div className="viewer-tour-topline"><span><Icon name="sparkles" size={15} /> {t(language, 'Walk-through mode')}</span><small>{t(language, 'WASD / arrows to move Â· drag to look')}</small></div>
@@ -456,5 +469,3 @@ export function PropertyViewer({ language, property, onClose }: PropertyViewerPr
     <AuthModal open={authOpen} role="Tenant" onClose={() => setAuthOpen(false)} onSuccess={() => { setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? 'application' : 'security'); }} />
   </div>;
 }
-
-

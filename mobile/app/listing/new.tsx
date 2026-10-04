@@ -4,8 +4,7 @@ import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, Tex
 import { useRouter } from 'expo-router';
 import { createListing, uploadListingMedia } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
-import { colors } from '@/theme/colors';
-import { styles } from '@/theme/styles';
+import { useTheme } from '@/theme/ThemeContext';
 
 function assetName(asset: ImagePicker.ImagePickerAsset, index: number) {
   const extension = asset.mimeType?.split('/')[1] ?? 'jpg';
@@ -13,6 +12,7 @@ function assetName(asset: ImagePicker.ImagePickerAsset, index: number) {
 }
 
 export default function NewListingScreen() {
+  const { colors, styles } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
   const [title, setTitle] = useState('');

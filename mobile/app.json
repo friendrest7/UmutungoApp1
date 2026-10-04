@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "rw.umutungo.mobile",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Umutungo uses your photo library so you can add property photos to a listing."
+        "NSPhotoLibraryUsageDescription": "Umutungo uses your photo library so you can add property photos to a listing.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -25,11 +26,26 @@
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#0b6b3a"
       },
-      "permissions": ["android.permission.READ_MEDIA_IMAGES"]
+      "permissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
-    "plugins": ["expo-router", "expo-secure-store", "expo-image-picker"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-image-picker",
+      "./plugins/withAndroidNativeRuntime"
+    ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e3a637b3-8746-47e2-9d5a-6c1c9322031a"
+      }
+    },
+    "owner": "friendrest7"
   }
 }

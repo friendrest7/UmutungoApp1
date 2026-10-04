@@ -3,11 +3,11 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 import { useRouter } from 'expo-router';
 import { registerAccount, requestOtp } from '@/api/client';
 import type { UserRole } from '@/api/types';
-import { colors } from '@/theme/colors';
-import { styles } from '@/theme/styles';
+import { useTheme } from '@/theme/ThemeContext';
 
 const roles: Array<{ label: string; value: UserRole }> = [{ label: 'Client', value: 'client' }, { label: 'Tenant', value: 'tenant' }, { label: 'Property owner', value: 'property_owner' }, { label: 'Komisiyoneri', value: 'komisiyoneri' }];
 export default function RegisterScreen() {
+  const { colors, styles } = useTheme();
   const router = useRouter();
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [phone, setPhone] = useState(''); const [role, setRole] = useState<UserRole>('client'); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
   const submit = async () => { if (!name.trim() || phone.replace(/\D/g, '').length < 9) { setError('Enter your name and a valid Rwanda phone number.'); return; } setBusy(true); setError(''); try { const result = await registerAccount({ name: name.trim(), email: email.trim(), phone: phone.trim(), role }); const otp = await requestOtp(phone.trim()); setNotice(`${result.message}. ${otp.development_code ? `Development code: ${otp.development_code}` : 'Check your SMS for the code.'}`); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Account could not be created.'); } finally { setBusy(false); } };

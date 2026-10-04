@@ -24,7 +24,7 @@ services:
       PORT: 8080
       DATABASE_URL: postgres://umutungo:umutungo@db:5432/umutungo?sslmode=disable
       CORS_ORIGINS: http://localhost:3000
-      MIGRATIONS_PATH: migrations/001_init.sql
+      MIGRATIONS_PATH: migrations
       MEDIA_UPLOAD_DIR: /app/storage/media
       MEDIA_PUBLIC_BASE_URL: http://localhost:8080
       GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}

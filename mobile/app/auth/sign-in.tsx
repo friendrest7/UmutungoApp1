@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { requestOtp, signInWithGoogle, verifyOtp } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { ErrorState } from '@/components/StateView';
-import { colors } from '@/theme/colors';
-import { styles } from '@/theme/styles';
+import { useTheme } from '@/theme/ThemeContext';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SignInScreen() {
+  const { colors, styles } = useTheme();
   const router = useRouter();
   const { setUser, setProfile } = useAuth();
   const [phone, setPhone] = useState('');
@@ -93,7 +94,8 @@ export default function SignInScreen() {
       <Text style={styles.title}>Sign in to continue.</Text>
       <Text style={styles.body}>Use Google or the phone number connected to your Umutungo account.</Text>
       {error && <ErrorState message={error} />}
-      <Pressable style={styles.secondaryButton} disabled={!googleRequest || googleBusy} onPress={() => void promptGoogle()}>
+      <Pressable style={[styles.secondaryButton, { flexDirection: 'row', gap: 8 }]} disabled={!googleRequest || googleBusy} onPress={() => void promptGoogle()}>
+        <MaterialCommunityIcons name="google" size={19} color="#4285F4" />
         <Text style={styles.secondaryText}>{googleBusy ? 'Connecting to Google...' : googleRequest ? 'Continue with Google' : 'Google sign-in is not configured'}</Text>
       </Pressable>
       <Text style={[styles.muted, { textAlign: 'center' }]}>Google access is verified by the Umutungo API before a session is created.</Text>

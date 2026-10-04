@@ -110,6 +110,10 @@ func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	if s.db == nil {
+		errorJSON(w, http.StatusServiceUnavailable, "database unavailable")
+		return
+	}
 	if err := s.db.Ping(r.Context()); err != nil {
 		errorJSON(w, http.StatusServiceUnavailable, "database unavailable")
 		return
@@ -1956,6 +1960,9 @@ func (s *Server) maintenance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) authUser(r *http.Request) (CurrentUser, bool) {
+	if s.db == nil {
+		return CurrentUser{}, false
+	}
 	header := strings.TrimSpace(r.Header.Get("Authorization"))
 	if !strings.HasPrefix(strings.ToLower(header), "bearer ") {
 		return CurrentUser{}, false
@@ -2028,9 +2035,15 @@ func (s *Server) corsOrigin(origin string) string {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(target); err != nil {
 		errorJSON(w, http.StatusBadRequest, "invalid JSON body")
+		return false
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		errorJSON(w, http.StatusBadRequest, "request body must contain one JSON object")
 		return false
 	}
 	return true

@@ -5,12 +5,11 @@ import { deleteListing, listOwnerListings, updateListing } from '@/api/client';
 import type { ApiListing } from '@/api/types';
 import { useAuth } from '@/auth/AuthContext';
 import { EmptyState, ErrorState, LoadingState } from '@/components/StateView';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeContext';
 import { formatPrice } from '@/components/PropertyCard';
-import { styles } from '@/theme/styles';
 
 export default function ManageListingsScreen() {
-  const router = useRouter(); const { user } = useAuth(); const [listings, setListings] = useState<ApiListing[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [editing, setEditing] = useState<string | null>(null); const [title, setTitle] = useState(''); const [price, setPrice] = useState(''); const [notice, setNotice] = useState('');
+  const { colors, styles } = useTheme(); const router = useRouter(); const { user } = useAuth(); const [listings, setListings] = useState<ApiListing[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [editing, setEditing] = useState<string | null>(null); const [title, setTitle] = useState(''); const [price, setPrice] = useState(''); const [notice, setNotice] = useState('');
   const load = useCallback(async () => { if (!user) return; setLoading(true); setError(''); try { setListings((await listOwnerListings()).items); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Your listings could not be loaded.'); } finally { setLoading(false); } }, [user]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   const startEdit = (listing: ApiListing) => { setEditing(listing.id); setTitle(listing.title); setPrice(String(listing.price)); setNotice(''); };

@@ -13,10 +13,15 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
   const base = baseUrl();
   if (!base) throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env before connecting to Umutungo.');
   const token = authenticated ? await SecureStore.getItemAsync(TOKEN_KEY) : null;
-  const response = await fetch(`${base}${path}`, {
-    ...init,
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(init.headers ?? {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${base}${path}`, {
+      ...init,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(init.headers ?? {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+  } catch {
+    throw new ApiError('Umutungo is unreachable. Check the API URL and your network connection.');
+  }
   const body = await response.json().catch(() => ({})) as T & { error?: string };
   if (!response.ok) throw new ApiError(body.error ?? `Umutungo request failed (${response.status})`, response.status);
   return body as T;

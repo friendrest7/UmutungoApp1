@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+results/
+.git/
+*.log
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/

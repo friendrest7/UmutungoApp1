@@ -54,7 +54,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
         const result = await response.json() as { error?: string; development_code?: string };
         if (!response.ok) { setError(result.error ?? 'Verification code could not be sent.'); return; }
         setNotice(`Verification code sent${result.development_code ? ` — development code: ${result.development_code}` : ''}.`);
-      } else setNotice('Verification code sent. For development, use 111111.');
+      }
       setMethod('otp');
     } catch { setError('The Umutungo API could not be reached.'); } finally { setBusy(false); }
   };

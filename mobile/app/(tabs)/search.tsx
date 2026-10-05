@@ -9,13 +9,13 @@ import { useTheme } from '@/theme/ThemeContext';
 import { useI18n } from '@/i18n';
 
 export default function SearchScreen() {
-  const params = useLocalSearchParams<{ search?: string; transaction_type?: string }>();
+  const params = useLocalSearchParams<{ search?: string; transaction_type?: string; category?: string }>();
   const router = useRouter();
   const { colors, styles } = useTheme();
   const { t } = useI18n();
   const [search, setSearch] = useState(params.search ?? '');
   const [transactionType, setTransactionType] = useState(params.transaction_type ?? '');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(params.category ?? '');
   const [listings, setListings] = useState<ApiListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

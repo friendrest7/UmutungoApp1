@@ -157,7 +157,7 @@ export default function HomePage() {
   const requestTenantSignIn = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Tenant', returnTo: '/tenant' } }));
   const submitDirectorySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    window.location.assign(`/directory${directoryQuery.trim() ? `?search=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
+    window.location.assign(`/categories/houses${directoryQuery.trim() ? `?q=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
   };
   const submitSearch = () => {
     if ((intent === 'Buy' || intent === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) { requestTenantSignIn(); return; }

@@ -335,10 +335,10 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	role := strings.ToLower(strings.TrimSpace(input.Role))
 	if role == "" {
-		role = "tenant"
+		role = "client"
 	}
 	if role != "client" && role != "tenant" {
-		errorJSON(w, http.StatusBadRequest, "Google sign-in role must be client or tenant")
+		errorJSON(w, http.StatusBadRequest, "Google sign-in role must be client")
 		return
 	}
 

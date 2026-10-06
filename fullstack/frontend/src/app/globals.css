@@ -2669,7 +2669,25 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .app-realistic > * { position: relative; z-index: 1; }
 
 /* Keep global dialogs fixed above the landing composition and its stacking context. */
-.app-realistic > .auth-overlay { position: fixed; z-index: 1000; inset: 0; }
+.app-realistic > .auth-overlay { position: fixed; z-index: 2000; inset: 0; pointer-events: auto; }
+
+/* Consent is a small utility notice, not a promotional pop-up. */
+.cookie-consent { z-index: 900; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; width: min(650px, calc(100vw - 40px)); padding: 15px 17px; border: 1px solid #d9ded7; border-radius: 8px; background: #fffefa; box-shadow: 0 8px 28px rgba(20, 34, 24, .16); color: #202721; }
+.cookie-consent-copy strong { display: block; margin-bottom: 4px; color: #26352a; font-size: 12px; font-weight: 700; }
+.cookie-consent-copy p { max-width: 390px; color: #626c63; font-size: 11px; line-height: 1.5; }
+.cookie-consent-actions { justify-content: flex-end; gap: 6px; }
+.cookie-consent-actions button { min-height: 32px; padding: 0 10px; border-radius: 5px; color: #354238; font-size: 10px; font-weight: 700; }
+.cookie-consent-actions .cookie-accept { border-color: #087d3d; background: #087d3d; color: #fff; }
+.cookie-preference-list { grid-column: 1 / -1; display: grid; gap: 8px; padding: 11px 0 0; border-top: 1px solid #e3e6df; }
+.cookie-preference-list label { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 8px; color: #354238; font-size: 10px; font-weight: 700; }
+.cookie-preference-list input { grid-row: span 2; accent-color: #087d3d; }
+.cookie-preference-list small { color: #6d766e; font-size: 9px; font-weight: 400; }
+
+@media (max-width: 640px) {
+  .cookie-consent { right: 12px; bottom: 12px; left: 12px; grid-template-columns: 1fr; width: auto; padding: 14px; }
+  .cookie-consent-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .cookie-consent-actions .cookie-accept { grid-column: 1 / -1; }
+}
 
 .app-realistic .topbar {
   top: 14px;

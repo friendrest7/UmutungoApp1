@@ -15,6 +15,10 @@ type GoogleApi = { accounts: {
   oauth2: { initTokenClient: (options: { client_id: string; scope: string; callback: (response: GoogleTokenResponse) => void }) => { requestAccessToken: (options?: { prompt?: string }) => void } }
 } };
 
+function googleWebClientId() {
+  return (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '').trim();
+}
+
 const demoAccounts: Array<{ role: AuthRole; email: string; password: string }> = [
   { role: 'Client', email: 'client@umutungo.test', password: 'Client123!' },
   { role: 'Commissioner / Komisiyoneri', email: 'commissioner@umutungo.test', password: 'Commissioner123!' },
@@ -36,8 +40,14 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId || clientId === 'null' || window.localStorage.getItem('umutungo-demo-user') || window.sessionStorage.getItem('umutungo-google-prompted')) return;
+    const clientId = googleWebClientId();
+    if (window.localStorage.getItem('umutungo-demo-user') || window.sessionStorage.getItem('umutungo-google-prompted')) return;
+    window.sessionStorage.setItem('umutungo-google-prompted', '1');
+    const openSignInFallback = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Client' } }));
+    if (!clientId || clientId === 'null') {
+      window.setTimeout(openSignInFallback, 0);
+      return;
+    }
     let cancelled = false;
     const scriptId = 'google-gsi-script';
     const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
@@ -50,8 +60,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     void loadScript.then(() => {
       if (cancelled) return;
       const google = (window as unknown as { google?: GoogleApi }).google;
-      if (!google) return;
-      if (window.sessionStorage.getItem('umutungo-google-prompted')) return;
+      if (!google) { openSignInFallback(); return; }
       google.accounts.id.initialize({
         client_id: clientId,
         auto_select: false,
@@ -64,14 +73,16 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
             const result = await authResponse.json();
             if (!authResponse.ok) return;
             const accountRole = (result.role ?? role ?? 'Client') as AuthRole;
+            if (result.access_token) window.localStorage.setItem('umutungo-api-token', result.access_token);
             window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
             onSuccess(accountRole);
           } catch { /* Keep the marketplace available if Google sign-in is unavailable. */ }
         },
       });
-      window.sessionStorage.setItem('umutungo-google-prompted', '1');
-      google.accounts.id.prompt();
-    }).catch(() => undefined);
+      google.accounts.id.prompt((moment) => {
+        if (moment.isNotDisplayed() || moment.isSkippedMoment()) openSignInFallback();
+      });
+    }).catch(() => openSignInFallback());
     return () => { cancelled = true; };
   }, []);
 
@@ -94,7 +105,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     setBusy(true); setError('');
     try {
       const apiUrl = apiBaseUrl();
-      if (apiUrl) {
+      if (apiUrl || process.env.NODE_ENV === 'production') {
         const response = await fetch(`${apiUrl}/api/v1/auth/request-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone.trim() }) });
         const result = await response.json() as { error?: string; development_code?: string };
         if (!response.ok) { setError(result.error ?? 'Verification code could not be sent.'); return; }
@@ -107,7 +118,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     event.preventDefault(); setBusy(true); setError('');
     try {
       const apiUrl = apiBaseUrl();
-      if (apiUrl) {
+      if (apiUrl || process.env.NODE_ENV === 'production') {
         const response = await fetch(`${apiUrl}/api/v1/auth/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone.trim(), code: code.trim() }) });
         const result = await response.json() as { error?: string; access_token?: string };
         if (!response.ok || !result.access_token) { setError(result.error ?? 'That code is not correct.'); return; }
@@ -117,8 +128,8 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     } catch { setError('The Umutungo API could not be reached.'); } finally { setBusy(false); }
   };
   const handleGoogleSignIn = async () => {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId || clientId === 'null') { setError('Google sign-in is not configured yet.'); return; }
+    const clientId = googleWebClientId();
+    if (!clientId || clientId === 'null') { setError('Google sign-in is not configured for this website yet. Please use email or phone sign-in.'); return; }
     setBusy(true); setError('');
     try {
       await new Promise<void>((resolve, reject) => {
@@ -132,48 +143,30 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
       });
       const google = (window as unknown as { google?: GoogleApi }).google;
       if (!google) throw new Error('Google sign-in could not be loaded.');
-      const finishWithCredential = async (credential: string) => {
-        try {
-          const response = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential, role: role ?? 'Client' }) });
-          const result = await response.json();
-          if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
-          const accountRole = (result.role ?? role ?? 'Client') as AuthRole;
-          window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
-          reset(); onSuccess(accountRole);
-        } catch { setError('Google sign-in could not be completed.'); } finally { setBusy(false); }
-      };
-      let promptHandled = false;
-      google.accounts.id.initialize({
+      // Start the account chooser directly from this user click. The One Tap prompt is
+      // browser- and privacy-setting-dependent, so it must not gate an explicit sign-in.
+      const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        auto_select: false,
-        cancel_on_tap_outside: true,
-        use_fedcm_for_prompt: true,
-        callback: (response) => {
-          promptHandled = true;
-          if (response.credential) void finishWithCredential(response.credential);
-          else { setError('Google sign-in was cancelled.'); setBusy(false); }
+        scope: 'openid email profile',
+        callback: async (token) => {
+          try {
+            if (!token.access_token) { setError(token.error_description ?? 'Google sign-in was cancelled.'); return; }
+            const response = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: token.access_token, role: role ?? 'Client' }) });
+            const result = await response.json();
+            if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
+            const accountRole = (result.role ?? role ?? 'Client') as AuthRole;
+            if (result.access_token) window.localStorage.setItem('umutungo-api-token', result.access_token);
+            window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
+            reset(); onSuccess(accountRole);
+          } catch { setError('Google sign-in could not be completed.'); } finally { setBusy(false); }
         },
       });
-      google.accounts.id.prompt((moment) => {
-        if (!promptHandled && (moment.isNotDisplayed() || moment.isSkippedMoment())) {
-          const client = google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: 'openid email profile',
-            callback: async (token) => {
-              try {
-                if (!token.access_token) { setError(token.error_description ?? 'Google sign-in was cancelled.'); return; }
-                const response = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: token.access_token, role: role ?? 'Client' }) });
-                const result = await response.json();
-                if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
-                const accountRole = (result.role ?? role ?? 'Client') as AuthRole;
-                window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
-                reset(); onSuccess(accountRole);
-              } catch { setError('Google sign-in could not be completed.'); } finally { setBusy(false); }
-            },
-          });
-          client.requestAccessToken({ prompt: 'select_account' });
-        }
-      });
+      client.requestAccessToken({ prompt: 'select_account' });
+      // Avoid leaving the interface disabled forever if the browser blocks the popup.
+      window.setTimeout(() => setBusy((current) => {
+        if (current) setError('Google sign-in did not open. Allow pop-ups for this site, then try again.');
+        return false;
+      }), 20000);
     } catch (googleError) { setError(googleError instanceof Error ? googleError.message : 'Google sign-in could not be completed.'); setBusy(false); }
   };
 

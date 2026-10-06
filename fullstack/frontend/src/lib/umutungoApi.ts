@@ -113,8 +113,13 @@ export type AboutVideo = {
 
 export function apiBaseUrl() {
   const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').trim().replace(/\/$/, '');
-  if (configured) return configured;
-  return process.env.NODE_ENV === 'production' ? 'https://umutungoappbackend1.onrender.com' : '';
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) return '';
+  return configured;
+}
+
+function apiIsAvailable() {
+  return process.env.NODE_ENV === 'production' || Boolean(apiBaseUrl());
 }
 
 export function apiToken() {
@@ -124,7 +129,7 @@ export function apiToken() {
 
 export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
   const token = apiToken();
-  if (!token || !apiBaseUrl()) return null;
+  if (!token || !apiIsAvailable()) return null;
   const response = await fetch(`${apiBaseUrl()}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}), Authorization: `Bearer ${token}` },
@@ -136,7 +141,7 @@ export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
 
 export async function publicUmutungoApi<T>(path: string, init: RequestInit = {}) {
   const base = apiBaseUrl();
-  if (!base) return null;
+  if (!apiIsAvailable()) return null;
   const response = await fetch(`${base}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
@@ -154,7 +159,7 @@ export async function getAboutVideo() {
 export async function uploadListingImage(listingId: string, file: File) {
   const base = apiBaseUrl();
   const token = apiToken();
-  if (!base || !token) throw new Error('Connect to the Umutungo API and sign in before uploading listing photos.');
+  if (!apiIsAvailable() || !token) throw new Error('Connect to the Umutungo API and sign in before uploading listing photos.');
   const form = new FormData();
   form.set('file', file);
   const response = await fetch(`${base}/api/v1/listings/${encodeURIComponent(listingId)}/media`, {
@@ -170,7 +175,7 @@ export async function uploadListingImage(listingId: string, file: File) {
 export async function uploadAboutVideo(file: File, title: string) {
   const base = apiBaseUrl();
   const token = apiToken();
-  if (!base || !token) throw new Error('Connect to the Umutungo API and sign in as an administrator to publish this video.');
+  if (!apiIsAvailable() || !token) throw new Error('Connect to the Umutungo API and sign in as an administrator to publish this video.');
   const form = new FormData();
   form.set('file', file);
   form.set('title', title);

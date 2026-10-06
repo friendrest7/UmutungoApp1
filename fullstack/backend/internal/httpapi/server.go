@@ -261,19 +261,24 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var input struct {
 		AccessToken string `json:"access_token"`
+		Credential  string `json:"credential"`
 		ClientID    string `json:"client_id"`
 		Role        string `json:"role"`
 	}
-	if !decodeJSON(w, r, &input) || strings.TrimSpace(input.AccessToken) == "" {
-		errorJSON(w, http.StatusBadRequest, "access_token is required")
+	if !decodeJSON(w, r, &input) || (strings.TrimSpace(input.AccessToken) == "" && strings.TrimSpace(input.Credential) == "") || (strings.TrimSpace(input.AccessToken) != "" && strings.TrimSpace(input.Credential) != "") {
+		errorJSON(w, http.StatusBadRequest, "exactly one Google access token or credential is required")
 		return
 	}
-	if len(input.AccessToken) > 4096 {
+	if len(input.AccessToken) > 4096 || len(input.Credential) > 16*1024 {
 		errorJSON(w, http.StatusBadRequest, "access_token is invalid")
 		return
 	}
 
-	tokenInfoRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://oauth2.googleapis.com/tokeninfo?access_token="+url.QueryEscape(strings.TrimSpace(input.AccessToken)), nil)
+	verificationQuery := "access_token=" + url.QueryEscape(strings.TrimSpace(input.AccessToken))
+	if strings.TrimSpace(input.Credential) != "" {
+		verificationQuery = "id_token=" + url.QueryEscape(strings.TrimSpace(input.Credential))
+	}
+	tokenInfoRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://oauth2.googleapis.com/tokeninfo?"+verificationQuery, nil)
 	if err != nil {
 		errorJSON(w, http.StatusUnauthorized, "Google sign-in token is invalid")
 		return
@@ -290,8 +295,15 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var tokenInfo struct {
-		Audience  string `json:"aud"`
-		ExpiresIn string `json:"expires_in"`
+		Audience      string          `json:"aud"`
+		ExpiresIn     string          `json:"expires_in"`
+		ExpiresAt     json.RawMessage `json:"exp"`
+		Issuer        string          `json:"iss"`
+		Subject       string          `json:"sub"`
+		Email         string          `json:"email"`
+		EmailVerified json.RawMessage `json:"email_verified"`
+		Name          string          `json:"name"`
+		Picture       string          `json:"picture"`
 	}
 	if err := json.NewDecoder(io.LimitReader(tokenInfoResponse.Body, 64*1024)).Decode(&tokenInfo); err != nil || !containsString(allowedClientIDs, tokenInfo.Audience) {
 		errorJSON(w, http.StatusUnauthorized, "Google sign-in client is not allowed")
@@ -301,27 +313,6 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusUnauthorized, "Google sign-in client does not match the token")
 		return
 	}
-	if expires, err := strconv.Atoi(tokenInfo.ExpiresIn); err != nil || expires <= 0 {
-		errorJSON(w, http.StatusUnauthorized, "Google sign-in token is expired")
-		return
-	}
-
-	profileRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://openidconnect.googleapis.com/v1/userinfo", nil)
-	if err != nil {
-		errorJSON(w, http.StatusBadGateway, "Google profile could not be loaded")
-		return
-	}
-	profileRequest.Header.Set("Authorization", "Bearer "+strings.TrimSpace(input.AccessToken))
-	profileResponse, err := client.Do(profileRequest)
-	if err != nil {
-		errorJSON(w, http.StatusBadGateway, "Google profile could not be loaded")
-		return
-	}
-	defer profileResponse.Body.Close()
-	if profileResponse.StatusCode != http.StatusOK {
-		errorJSON(w, http.StatusUnauthorized, "Google profile could not be loaded")
-		return
-	}
 	var googleProfile struct {
 		Subject       string `json:"sub"`
 		Email         string `json:"email"`
@@ -329,7 +320,46 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		Name          string `json:"name"`
 		Picture       string `json:"picture"`
 	}
-	if err := json.NewDecoder(io.LimitReader(profileResponse.Body, 128*1024)).Decode(&googleProfile); err != nil || googleProfile.Subject == "" || googleProfile.Email == "" || !googleProfile.EmailVerified {
+	if strings.TrimSpace(input.Credential) != "" {
+		expires, parseErr := strconv.ParseInt(strings.Trim(string(tokenInfo.ExpiresAt), `"`), 10, 64)
+		verified := strings.Trim(string(tokenInfo.EmailVerified), `"`) == "true"
+		validIssuer := tokenInfo.Issuer == "accounts.google.com" || tokenInfo.Issuer == "https://accounts.google.com"
+		if parseErr != nil || expires <= time.Now().Unix() || !validIssuer || tokenInfo.Subject == "" || tokenInfo.Email == "" || !verified {
+			errorJSON(w, http.StatusUnauthorized, "Google sign-in credential is invalid or expired")
+			return
+		}
+		googleProfile.Subject = tokenInfo.Subject
+		googleProfile.Email = tokenInfo.Email
+		googleProfile.EmailVerified = verified
+		googleProfile.Name = tokenInfo.Name
+		googleProfile.Picture = tokenInfo.Picture
+	} else {
+		if expires, err := strconv.Atoi(tokenInfo.ExpiresIn); err != nil || expires <= 0 {
+			errorJSON(w, http.StatusUnauthorized, "Google sign-in token is expired")
+			return
+		}
+		profileRequest, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://openidconnect.googleapis.com/v1/userinfo", nil)
+		if err != nil {
+			errorJSON(w, http.StatusBadGateway, "Google profile could not be loaded")
+			return
+		}
+		profileRequest.Header.Set("Authorization", "Bearer "+strings.TrimSpace(input.AccessToken))
+		profileResponse, err := client.Do(profileRequest)
+		if err != nil {
+			errorJSON(w, http.StatusBadGateway, "Google profile could not be loaded")
+			return
+		}
+		defer profileResponse.Body.Close()
+		if profileResponse.StatusCode != http.StatusOK {
+			errorJSON(w, http.StatusUnauthorized, "Google profile could not be loaded")
+			return
+		}
+		if err := json.NewDecoder(io.LimitReader(profileResponse.Body, 128*1024)).Decode(&googleProfile); err != nil {
+			errorJSON(w, http.StatusForbidden, "a verified Google email is required")
+			return
+		}
+	}
+	if googleProfile.Subject == "" || googleProfile.Email == "" || !googleProfile.EmailVerified {
 		errorJSON(w, http.StatusForbidden, "a verified Google email is required")
 		return
 	}

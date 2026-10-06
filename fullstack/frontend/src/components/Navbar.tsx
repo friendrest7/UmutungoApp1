@@ -20,11 +20,11 @@ type NavbarProps = {
   onLandingVisibilityChange?: (visible: boolean) => void;
 };
 
-const authRoles = ['Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Property Owner', 'Admin'];
+const authRoles = ['Client', 'Commissioner / Komisiyoneri', 'Landlord', 'Property Owner', 'Admin'];
 const categories = ['Houses', 'Apartments', 'Land', 'Commercial', 'Offices', 'Hotels and lodges', 'Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other'];
 const languages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
 const languageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
-const dashboardPaths: Record<AuthRole, string> = { Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/landlord', Admin: '/admin' };
+const dashboardPaths: Record<AuthRole, string> = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/landlord', Admin: '/admin' };
 const dashboardPathForRole = (role?: string) => role && role in dashboardPaths ? dashboardPaths[role as AuthRole] : undefined;
 
 function HoverHint({ text, placement, children }: { text: string; placement: 'right' | 'bottom'; children: ReactElement }) {
@@ -114,7 +114,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
   const favoritesRef = useRef<HTMLDivElement>(null);
   const signedIn = isSignedIn || demoSignedIn;
-  const isTenant = roleKey === 'Tenant';
+  const isTenant = roleKey === 'Client' || roleKey === 'Tenant';
   const postActionLabel = isTenant ? 'Upgrade to Post' : 'Post a Property';
   const postActionHint = isTenant ? 'Post (Upgrade)' : 'Share a property with people looking.';
   const goTo = (id: string) => { setMobileOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); };
@@ -136,7 +136,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         const parsed = JSON.parse(storedUser) as { role?: string };
         if (authRoles.includes(parsed.role ?? '')) {
           setDemoSignedIn(true);
-          setRoleKey(parsed.role ?? '');
+          setRoleKey(parsed.role === 'Tenant' ? 'Client' : parsed.role ?? '');
         }
       } catch {
         window.localStorage.removeItem('umutungo-demo-user');
@@ -153,11 +153,16 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
 
   useEffect(() => {
     const readNotificationCount = () => {
+      if (!signedIn) {
+        setNotifications([]);
+        setNotificationCount(0);
+        return;
+      }
       try {
         const keys = ['umutungo-notifications'];
         if (roleKey === 'Landlord') keys.push('umutungo-landlord-notifications');
         if (roleKey === 'Commissioner / Komisiyoneri') keys.push('umutungo-commissioner-notifications');
-        if (roleKey === 'Tenant') keys.push('umutungo-tenant-notifications');
+        if (roleKey === 'Tenant' || roleKey === 'Client') keys.push('umutungo-tenant-notifications');
         const items = keys.flatMap((key) => {
           const stored = JSON.parse(window.localStorage.getItem(key) ?? '[]');
           return Array.isArray(stored) ? stored : [];
@@ -172,7 +177,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     readNotificationCount();
     window.addEventListener('umutungo:notifications-changed', readNotificationCount);
     return () => window.removeEventListener('umutungo:notifications-changed', readNotificationCount);
-  }, [roleKey]);
+  }, [roleKey, signedIn]);
 
   useEffect(() => {
     const label = notificationCount > 99 ? '99+' : String(notificationCount);
@@ -253,7 +258,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         if (requestedRole === 'Commissioner / Komisiyoneri' && roleKey === requestedRole) router.push('/commissioner');
         return;
       }
-      openSignIn(requestedRole ?? 'Tenant', returnTo);
+      openSignIn(requestedRole ?? 'Client', returnTo);
     };
     window.addEventListener('umutungo:request-sign-in', requestSignIn);
     return () => window.removeEventListener('umutungo:request-sign-in', requestSignIn);
@@ -261,12 +266,52 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
 
   const signOut = () => {
     window.localStorage.removeItem('umutungo-demo-user');
+    window.localStorage.removeItem('umutungo-api-token');
+    ['umutungo-notifications', 'umutungo-landlord-notifications', 'umutungo-commissioner-notifications', 'umutungo-tenant-notifications'].forEach((key) => window.localStorage.removeItem(key));
     setDemoSignedIn(false);
     setRoleKey('');
+    setNotifications([]);
+    setNotificationCount(0);
+    setNotificationPanelOpen(false);
     setAccountMenuOpen(false);
     setMobileOpen(false);
+    window.dispatchEvent(new Event('umutungo:notifications-changed'));
+    window.dispatchEvent(new Event('umutungo:auth-changed'));
+    router.replace('/');
     onSignOut?.();
   };
+
+  useEffect(() => {
+    if (!signedIn) return;
+    const idleLimit = 5 * 60 * 1000;
+    let timer = 0;
+    let lastActivity = Date.now();
+    const expireSession = () => {
+      if (Date.now() - lastActivity < idleLimit) {
+        timer = window.setTimeout(expireSession, idleLimit - (Date.now() - lastActivity));
+        return;
+      }
+      const previousRole = roleKey as AuthRole | '';
+      signOut();
+      setPendingRole(previousRole || undefined);
+      setAuthOpen(true);
+    };
+    const resetTimer = () => {
+      lastActivity = Date.now();
+      window.clearTimeout(timer);
+      timer = window.setTimeout(expireSession, idleLimit);
+    };
+    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart', 'wheel', 'mousemove'];
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, resetTimer, { passive: true }));
+    const checkWhenVisible = () => { if (!document.hidden) expireSession(); };
+    document.addEventListener('visibilitychange', checkWhenVisible);
+    resetTimer();
+    return () => {
+      window.clearTimeout(timer);
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, resetTimer));
+      document.removeEventListener('visibilitychange', checkWhenVisible);
+    };
+  }, [signedIn]);
 
   const removeFromFavorites = (propertyID: string) => {
     const next = favoriteItems.filter((item) => item.property_id !== propertyID);
@@ -284,7 +329,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   };
 
   const openMarket = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!signedIn) { event.preventDefault(); setMobileOpen(false); openSignIn('Tenant'); }
+    if (!signedIn) { event.preventDefault(); setMobileOpen(false); openSignIn('Client'); }
   };
   const postAction = <a className={`nav-link nav-post ${isTenant ? 'nav-post-upgrade' : ''}`} href={isTenant ? '/upgrade' : '/post-property'} onClick={() => setMobileOpen(false)} aria-label={t(language, postActionHint)}><span className="nav-post-label">{t(language, postActionLabel)}</span></a>;
 
@@ -338,6 +383,6 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         </div>
       </div>}
     </header>
-    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); const destination = intendedPath ?? dashboardPaths[accountRole]; setIntendedPath(undefined); router.push(destination); }} />
+    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed')); const destination = intendedPath ?? dashboardPaths[accountRole]; setIntendedPath(undefined); router.push(destination); }} />
   </>;
 }

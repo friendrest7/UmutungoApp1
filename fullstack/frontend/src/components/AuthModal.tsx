@@ -1,24 +1,29 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Icon } from './Icons';
 import { apiBaseUrl } from '../lib/umutungoApi';
 
-export type AuthRole = 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' | 'Admin';
+export type AuthRole = 'Client' | 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' | 'Admin';
 type AuthModalProps = { open: boolean; role?: AuthRole; onClose: () => void; onSuccess: (role: AuthRole) => void };
 type SignInMethod = 'choose' | 'email' | 'phone' | 'otp';
 type GoogleTokenResponse = { access_token?: string; error?: string; error_description?: string };
-type GoogleApi = { accounts: { oauth2: { initTokenClient: (options: { client_id: string; scope: string; callback: (response: GoogleTokenResponse) => void }) => { requestAccessToken: (options?: { prompt?: string }) => void } } } };
+type GoogleCredentialResponse = { credential?: string };
+type GooglePromptMoment = { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean };
+type GoogleApi = { accounts: {
+  id: { initialize: (options: { client_id: string; callback: (response: GoogleCredentialResponse) => void; auto_select: boolean; cancel_on_tap_outside: boolean; use_fedcm_for_prompt: boolean }) => void; prompt: (callback?: (moment: GooglePromptMoment) => void) => void };
+  oauth2: { initTokenClient: (options: { client_id: string; scope: string; callback: (response: GoogleTokenResponse) => void }) => { requestAccessToken: (options?: { prompt?: string }) => void } }
+} };
 
 const demoAccounts: Array<{ role: AuthRole; email: string; password: string }> = [
-  { role: 'Tenant', email: 'tenant@umutungo.test', password: 'Tenant123!' },
+  { role: 'Client', email: 'client@umutungo.test', password: 'Client123!' },
   { role: 'Commissioner / Komisiyoneri', email: 'commissioner@umutungo.test', password: 'Commissioner123!' },
   { role: 'Landlord', email: 'landlord@umutungo.test', password: 'Landlord123!' },
   { role: 'Property Owner', email: 'owner@umutungo.test', password: 'Owner123!' },
   { role: 'Admin', email: 'admin@umutungo.test', password: 'Admin123!' },
 ];
 
-function roleLabel(role?: AuthRole) { return role === 'Tenant' ? 'Client' : role ?? 'your Umutungo account'; }
+function roleLabel(role?: AuthRole) { return role === 'Tenant' || role === 'Client' ? 'Client' : role ?? 'your Umutungo account'; }
 
 export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
   const [method, setMethod] = useState<SignInMethod>('choose');
@@ -30,6 +35,46 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId || clientId === 'null' || window.localStorage.getItem('umutungo-demo-user') || window.sessionStorage.getItem('umutungo-google-prompted')) return;
+    let cancelled = false;
+    const scriptId = 'google-gsi-script';
+    const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
+    const loadScript = existingScript
+      ? existingScript.dataset.loaded === 'true' ? Promise.resolve() : new Promise<void>((resolve, reject) => { existingScript.addEventListener('load', () => resolve(), { once: true }); existingScript.addEventListener('error', () => reject(new Error('Google sign-in could not be loaded.')), { once: true }); })
+      : new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script'); script.id = scriptId; script.src = 'https://accounts.google.com/gsi/client'; script.async = true; script.defer = true;
+        script.onload = () => { script.dataset.loaded = 'true'; resolve(); }; script.onerror = () => reject(new Error('Google sign-in could not be loaded.')); document.head.appendChild(script);
+      });
+    void loadScript.then(() => {
+      if (cancelled) return;
+      const google = (window as unknown as { google?: GoogleApi }).google;
+      if (!google) return;
+      if (window.sessionStorage.getItem('umutungo-google-prompted')) return;
+      google.accounts.id.initialize({
+        client_id: clientId,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        use_fedcm_for_prompt: true,
+        callback: async (response) => {
+          if (cancelled || !response.credential) return;
+          try {
+            const authResponse = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: response.credential, role: role ?? 'Client' }) });
+            const result = await authResponse.json();
+            if (!authResponse.ok) return;
+            const accountRole = (result.role ?? role ?? 'Client') as AuthRole;
+            window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
+            onSuccess(accountRole);
+          } catch { /* Keep the marketplace available if Google sign-in is unavailable. */ }
+        },
+      });
+      window.sessionStorage.setItem('umutungo-google-prompted', '1');
+      google.accounts.id.prompt();
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
   if (!open) return null;
 
   const reset = () => { setMethod('choose'); setEmail(''); setPassword(''); setPhone(''); setCode(''); setError(''); setNotice(''); setBusy(false); };
@@ -40,7 +85,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     setBusy(true);
     const account = demoAccounts.find((item) => item.email.toLowerCase() === email.trim().toLowerCase() && item.password === password);
     if (!account) { setError('That email or password is not recognized.'); setBusy(false); return; }
-    if (role && account.role !== role) { setError(`This account is for ${roleLabel(account.role)}. Choose that role to continue.`); setBusy(false); return; }
+    if (role && (account.role === 'Client' ? 'Client' : account.role) !== (role === 'Tenant' ? 'Client' : role)) { setError(`This account is for ${roleLabel(account.role)}. Choose that role to continue.`); setBusy(false); return; }
     complete(account.role);
   };
   const sendCode = async (event: FormEvent<HTMLFormElement>) => {
@@ -68,7 +113,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
         if (!response.ok || !result.access_token) { setError(result.error ?? 'That code is not correct.'); return; }
         window.localStorage.setItem('umutungo-api-token', result.access_token);
       } else if (code.trim() !== '111111') { setError('That code is not correct. Use 111111 in this testing environment.'); return; }
-      complete(role ?? 'Tenant');
+      complete(role ?? 'Client');
     } catch { setError('The Umutungo API could not be reached.'); } finally { setBusy(false); }
   };
   const handleGoogleSignIn = async () => {
@@ -78,27 +123,57 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     try {
       await new Promise<void>((resolve, reject) => {
         const existing = document.getElementById('google-gsi-script');
-        if (existing) { resolve(); return; }
-        const script = document.createElement('script'); script.id = 'google-gsi-script'; script.src = 'https://accounts.google.com/gsi/client'; script.async = true; script.defer = true; script.onload = () => resolve(); script.onerror = () => reject(new Error('Google sign-in could not be loaded.')); document.head.appendChild(script);
+        if (existing) {
+          const existingScript = existing as HTMLScriptElement;
+          if (existingScript.dataset.loaded === 'true') { resolve(); return; }
+          existingScript.addEventListener('load', () => resolve(), { once: true }); existingScript.addEventListener('error', () => reject(new Error('Google sign-in could not be loaded.')), { once: true }); return;
+        }
+        const script = document.createElement('script'); script.id = 'google-gsi-script'; script.src = 'https://accounts.google.com/gsi/client'; script.async = true; script.defer = true; script.onload = () => { script.dataset.loaded = 'true'; resolve(); }; script.onerror = () => reject(new Error('Google sign-in could not be loaded.')); document.head.appendChild(script);
       });
       const google = (window as unknown as { google?: GoogleApi }).google;
       if (!google) throw new Error('Google sign-in could not be loaded.');
-      const client = google.accounts.oauth2.initTokenClient({
+      const finishWithCredential = async (credential: string) => {
+        try {
+          const response = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential, role: role ?? 'Client' }) });
+          const result = await response.json();
+          if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
+          const accountRole = (result.role ?? role ?? 'Client') as AuthRole;
+          window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
+          reset(); onSuccess(accountRole);
+        } catch { setError('Google sign-in could not be completed.'); } finally { setBusy(false); }
+      };
+      let promptHandled = false;
+      google.accounts.id.initialize({
         client_id: clientId,
-        scope: 'openid email profile',
-        callback: async (token) => {
-          try {
-            if (!token.access_token) { setError(token.error_description ?? 'Google sign-in was cancelled.'); return; }
-            const response = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: token.access_token, role: role ?? 'Tenant' }) });
-            const result = await response.json();
-            if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
-            const accountRole = (result.role ?? role ?? 'Tenant') as AuthRole;
-            window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
-            reset(); onSuccess(accountRole);
-          } catch { setError('Google sign-in could not be completed.'); } finally { setBusy(false); }
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        use_fedcm_for_prompt: true,
+        callback: (response) => {
+          promptHandled = true;
+          if (response.credential) void finishWithCredential(response.credential);
+          else { setError('Google sign-in was cancelled.'); setBusy(false); }
         },
       });
-      client.requestAccessToken({ prompt: 'select_account' });
+      google.accounts.id.prompt((moment) => {
+        if (!promptHandled && (moment.isNotDisplayed() || moment.isSkippedMoment())) {
+          const client = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'openid email profile',
+            callback: async (token) => {
+              try {
+                if (!token.access_token) { setError(token.error_description ?? 'Google sign-in was cancelled.'); return; }
+                const response = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: token.access_token, role: role ?? 'Client' }) });
+                const result = await response.json();
+                if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
+                const accountRole = (result.role ?? role ?? 'Client') as AuthRole;
+                window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
+                reset(); onSuccess(accountRole);
+              } catch { setError('Google sign-in could not be completed.'); } finally { setBusy(false); }
+            },
+          });
+          client.requestAccessToken({ prompt: 'select_account' });
+        }
+      });
     } catch (googleError) { setError(googleError instanceof Error ? googleError.message : 'Google sign-in could not be completed.'); setBusy(false); }
   };
 

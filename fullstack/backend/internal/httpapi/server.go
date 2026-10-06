@@ -70,7 +70,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/reports", s.reports)
 	mux.HandleFunc("/api/v1/admin/reports", s.adminReports)
 	mux.HandleFunc("/api/v1/admin/reports/", s.adminReportRoute)
+	mux.HandleFunc("/api/v1/admin/activities", s.adminActivities)
 	mux.HandleFunc("/api/v1/admin/locations", s.adminLocations)
+	mux.HandleFunc("/api/v1/about-video", s.aboutVideo)
 	mux.HandleFunc("/api/v1/notifications", s.notifications)
 	mux.HandleFunc("/api/v1/favorites", s.favorites)
 	mux.HandleFunc("/api/v1/favorites/", s.favoriteRoute)
@@ -600,6 +602,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		l.title, l.description, l.price, l.currency, l.province, l.district, l.sector,
 		COALESCE(l.cell,''), COALESCE(l.village,''), l.latitude, l.longitude, l.status,
 		l.tags, l.amenities, l.created_at
+		, COALESCE((SELECT json_agg(json_build_object('type', lm.media_type, 'url', lm.url) ORDER BY lm.sort_order, lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id), '[]'::json) AS media
 		FROM listings l JOIN users u ON u.id=l.owner_id
 		WHERE l.deleted_at IS NULL AND l.status='published'
 		AND ($1='' OR l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%'
@@ -622,8 +625,9 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		var currency, province, district, sector, cell, village, status string
 		var latitude, longitude *float64
 		var tags, amenities []byte
+		var media []byte
 		var createdAt time.Time
-		if err := rows.Scan(&id, &ownerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt); err != nil {
+		if err := rows.Scan(&id, &ownerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &media); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not read listings")
 			return
 		}
@@ -632,7 +636,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 			"category": category, "transaction_type": transactionType, "title": title, "description": description,
 			"price": price, "currency": currency, "province": province, "district": district, "sector": sector,
 			"cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status,
-			"tags": rawJSON(tags), "amenities": rawJSON(amenities), "created_at": createdAt,
+			"tags": rawJSON(tags), "amenities": rawJSON(amenities), "media": rawJSON(media), "created_at": createdAt,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -718,9 +722,18 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.TransactionType = strings.ToLower(strings.TrimSpace(input.TransactionType))
-	if input.Category == "" || input.Title == "" || input.Province == "" || input.District == "" || input.Sector == "" || !validTransaction(input.TransactionType) {
-		errorJSON(w, http.StatusBadRequest, "category, title, transaction_type, province, district, and sector are required")
+	input.Category = strings.ToLower(strings.TrimSpace(input.Category))
+	requiresDetailedLocation := map[string]bool{"house": true, "houses": true, "apartment": true, "apartments": true, "land": true, "commercial": true, "office": true, "offices": true, "hospitality": true, "hotel": true}
+	if input.Category == "" || input.Title == "" || !validTransaction(input.TransactionType) {
+		errorJSON(w, http.StatusBadRequest, "category, title, and transaction_type are required")
 		return
+	}
+	if requiresDetailedLocation[input.Category] && (input.Province == "" || input.District == "" || input.Sector == "") {
+		errorJSON(w, http.StatusBadRequest, "province, district, and sector are required for this category")
+		return
+	}
+	if input.Province == "" {
+		input.Province = "Rwanda"
 	}
 	limit := 100
 	if user.Role == "komisiyoneri" {
@@ -946,6 +959,151 @@ func (s *Server) mediaFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, filePath)
+}
+
+const maxAboutVideoBytes int64 = 200 * 1024 * 1024
+
+type aboutVideoRecord struct {
+	URL          string `json:"url"`
+	Title        string `json:"title"`
+	Filename     string `json:"filename"`
+	OriginalName string `json:"original_name"`
+	SizeBytes    int64  `json:"size_bytes"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+func (s *Server) aboutVideo(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		manifestPath := filepath.Join(s.cfg.MediaUploadDir, "about", "video.json")
+		data, err := os.ReadFile(manifestPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				writeJSON(w, http.StatusOK, map[string]any{"video": nil})
+				return
+			}
+			errorJSON(w, http.StatusInternalServerError, "could not load About video")
+			return
+		}
+		var record aboutVideoRecord
+		if json.Unmarshal(data, &record) != nil {
+			errorJSON(w, http.StatusInternalServerError, "About video details are invalid")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"video": record})
+		return
+	}
+
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "administrator access required")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		r.Body = http.MaxBytesReader(w, r.Body, maxAboutVideoBytes+1024*1024)
+		if err := r.ParseMultipartForm(maxAboutVideoBytes + 1024*1024); err != nil {
+			errorJSON(w, http.StatusRequestEntityTooLarge, "video must be smaller than 200 MB")
+			return
+		}
+		if r.MultipartForm != nil {
+			defer r.MultipartForm.RemoveAll()
+		}
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			errorJSON(w, http.StatusBadRequest, "choose an MP4 or WebM video to upload")
+			return
+		}
+		defer file.Close()
+		data, err := io.ReadAll(io.LimitReader(file, maxAboutVideoBytes+1))
+		if err != nil || len(data) == 0 || int64(len(data)) > maxAboutVideoBytes {
+			errorJSON(w, http.StatusRequestEntityTooLarge, "video must be between 1 byte and 200 MB")
+			return
+		}
+		extension := strings.ToLower(filepath.Ext(header.Filename))
+		validVideo := (extension == ".mp4" && len(data) >= 12 && string(data[4:8]) == "ftyp") || (extension == ".webm" && len(data) >= 4 && data[0] == 0x1a && data[1] == 0x45 && data[2] == 0xdf && data[3] == 0xa3)
+		if !validVideo {
+			errorJSON(w, http.StatusUnsupportedMediaType, "only valid MP4 and WebM videos are supported")
+			return
+		}
+		filename, err := randomToken()
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not create video filename")
+			return
+		}
+		filename += extension
+		directory := filepath.Join(s.cfg.MediaUploadDir, "about")
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not prepare video storage")
+			return
+		}
+		filePath := filepath.Join(directory, filename)
+		if err := os.WriteFile(filePath, data, 0o644); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not save About video")
+			return
+		}
+		removeNewFile := true
+		defer func() {
+			if removeNewFile {
+				_ = os.Remove(filePath)
+			}
+		}()
+		oldRecord, _ := os.ReadFile(filepath.Join(directory, "video.json"))
+		title := strings.TrimSpace(r.FormValue("title"))
+		if len(title) > 120 {
+			title = title[:120]
+		}
+		if title == "" {
+			title = "The Umutungo story"
+		}
+		record := aboutVideoRecord{URL: s.mediaURL(r, "about", filename), Title: title, Filename: filename, OriginalName: filepath.Base(header.Filename), SizeBytes: int64(len(data)), UpdatedAt: time.Now().UTC().Format(time.RFC3339)}
+		manifest, err := json.Marshal(record)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not prepare About video details")
+			return
+		}
+		manifestPath := filepath.Join(directory, "video.json")
+		temporaryManifest := manifestPath + ".tmp"
+		if err := os.WriteFile(temporaryManifest, manifest, 0o644); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not publish About video")
+			return
+		}
+		if err := os.Rename(temporaryManifest, manifestPath); err != nil {
+			_ = os.Remove(temporaryManifest)
+			errorJSON(w, http.StatusInternalServerError, "could not publish About video")
+			return
+		}
+		removeNewFile = false
+		var previous aboutVideoRecord
+		if json.Unmarshal(oldRecord, &previous) == nil && previous.Filename != "" && previous.Filename != filename {
+			_ = os.Remove(filepath.Join(directory, filepath.Base(previous.Filename)))
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"video": record})
+	case http.MethodDelete:
+		directory := filepath.Join(s.cfg.MediaUploadDir, "about")
+		manifestPath := filepath.Join(directory, "video.json")
+		data, err := os.ReadFile(manifestPath)
+		if err != nil && !os.IsNotExist(err) {
+			errorJSON(w, http.StatusInternalServerError, "could not load About video")
+			return
+		}
+		var previous aboutVideoRecord
+		_ = json.Unmarshal(data, &previous)
+		if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
+			errorJSON(w, http.StatusInternalServerError, "could not remove About video")
+			return
+		}
+		if previous.Filename != "" {
+			_ = os.Remove(filepath.Join(directory, filepath.Base(previous.Filename)))
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"video": nil})
+	default:
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET, POST, or DELETE")
+	}
 }
 
 func (s *Server) mediaURL(r *http.Request, listingID, filename string) string {
@@ -1636,6 +1794,96 @@ func (s *Server) adminReports(w http.ResponseWriter, r *http.Request) {
 		"items": items, "count": len(items),
 		"summary": map[string]int{"pending": pending, "reviewing": reviewing, "resolved": resolved, "dismissed": dismissed},
 	})
+}
+
+func (s *Server) adminActivities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "administrator access required")
+		return
+	}
+	limit := 500
+	if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 {
+		limit = value
+		if limit > 50000 {
+			limit = 50000
+		}
+	}
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := s.db.Query(r.Context(), `
+		SELECT activity_id, actor_id, actor_name, actor_role, activity_type, summary, happened_at FROM (
+			SELECT u.id::text AS activity_id, u.id::text AS actor_id, u.name AS actor_name, u.role AS actor_role,
+				'account_created'::text AS activity_type, 'Created an account'::text AS summary, u.created_at AS happened_at
+			FROM users u WHERE u.role <> 'admin'
+			UNION ALL
+			SELECT l.id::text, u.id::text, u.name, u.role, 'listing_created'::text,
+				'Posted ' || l.category || ': ' || l.title || ' (' || l.status || ')', l.created_at
+			FROM listings l JOIN users u ON u.id=l.owner_id WHERE u.role <> 'admin'
+			UNION ALL
+			SELECT a.id::text, u.id::text, u.name, u.role, 'application_submitted'::text,
+				'Submitted an enquiry for ' || COALESCE(l.title, 'a listing'), a.created_at
+			FROM rental_applications a JOIN users u ON u.id=a.applicant_id LEFT JOIN listings l ON l.id=a.listing_id
+			WHERE u.role <> 'admin'
+			UNION ALL
+			SELECT m.id::text, sender.id::text, sender.name, sender.role, 'message_sent'::text,
+				'Sent a message' || CASE WHEN l.title IS NULL THEN '' ELSE ' about ' || l.title END, m.created_at
+			FROM messages m JOIN users sender ON sender.id=m.sender_id LEFT JOIN listings l ON l.id=m.listing_id
+			WHERE sender.role <> 'admin'
+			UNION ALL
+			SELECT b.id::text, u.id::text, u.name, u.role, 'booking_created'::text,
+				'Booked ' || COALESCE(l.title, 'a listing'), b.created_at
+			FROM bookings b JOIN users u ON u.id=b.guest_id LEFT JOIN listings l ON l.id=b.listing_id
+			WHERE u.role <> 'admin'
+			UNION ALL
+			SELECT r.id::text, u.id::text, u.name, u.role, 'listing_reported'::text,
+				'Reported a listing or account: ' || r.reason, r.created_at
+			FROM reports r JOIN users u ON u.id=r.reporter_id WHERE u.role <> 'admin'
+			UNION ALL
+			SELECT v.id::text, u.id::text, u.name, u.role, 'review_posted'::text,
+				'Left a ' || v.rating::text || '-star review' || CASE WHEN l.title IS NULL THEN '' ELSE ' for ' || l.title END, v.created_at
+			FROM reviews v JOIN users u ON u.id=v.author_id LEFT JOIN listings l ON l.id=v.listing_id
+			WHERE u.role <> 'admin'
+			UNION ALL
+			SELECT i.id::text, u.id::text, u.name, u.role, 'listing_interaction'::text,
+				CASE i.interaction_type WHEN 'like' THEN 'Liked ' WHEN 'save' THEN 'Saved ' WHEN 'comment' THEN 'Commented on ' WHEN 'share' THEN 'Shared ' WHEN 'view' THEN 'Viewed ' ELSE 'Interacted with ' END || COALESCE(l.title, 'a listing'), i.created_at
+			FROM interactions i JOIN users u ON u.id=i.user_id LEFT JOIN listings l ON l.id=i.listing_id
+			WHERE u.role <> 'admin'
+		) activity
+		ORDER BY happened_at DESC, activity_id DESC LIMIT $1 OFFSET $2`, limit, offset)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load user activities")
+		return
+	}
+	defer rows.Close()
+	items := make([]map[string]any, 0)
+	for rows.Next() {
+		var id, actorID, actorName, actorRole, kind, summary string
+		var happenedAt time.Time
+		if err := rows.Scan(&id, &actorID, &actorName, &actorRole, &kind, &summary, &happenedAt); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not read user activities")
+			return
+		}
+		if actorRole == "tenant" {
+			actorRole = "client"
+		}
+		items = append(items, map[string]any{"id": id, "actor_id": actorID, "actor_name": actorName, "actor_role": actorRole, "activity_type": kind, "summary": summary, "created_at": happenedAt})
+	}
+	if err := rows.Err(); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not read user activities")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 }
 
 func (s *Server) adminReportRoute(w http.ResponseWriter, r *http.Request) {

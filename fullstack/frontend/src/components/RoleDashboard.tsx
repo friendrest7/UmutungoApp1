@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
 import { FavoritesPanel } from './Navbar';
-import { AdminReport, AdminReportsResponse, ApiApplication, ApiMessage, ApiNotification, FavoriteItem, TenantBooking, TenantDashboardData, listFavorites, removeFavorite, umutungoApi } from '../lib/umutungoApi';
-import { downloadReportsExcel, downloadReportsImage, downloadReportsPdf } from '../lib/adminReportExports';
+import { AboutVideo, ApiApplication, ApiMessage, ApiNotification, FavoriteItem, TenantBooking, TenantDashboardData, deleteAboutVideo, getAboutVideo, listFavorites, removeFavorite, uploadAboutVideo, umutungoApi } from '../lib/umutungoApi';
 import { Language, t } from '../data/translations';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
@@ -46,7 +45,7 @@ const configs: Record<DashboardRole, DashboardConfig> = {
   },
   admin: {
     eyebrow: 'Admin control centre', greeting: 'Good morning', welcome: 'Keep the Umutungo marketplace trusted and moving.', action: 'Review listings', actionIcon: 'check',
-    navigation: [{ label: 'Overview', icon: 'building' }, { label: 'Users', icon: 'users' }, { label: 'Listings review', icon: 'home' }, { label: 'Reports', icon: 'bookPen' }, { label: 'Locations', icon: 'pin' }],
+    navigation: [{ label: 'Overview', icon: 'building' }, { label: 'Users', icon: 'users' }, { label: 'Listings review', icon: 'home' }, { label: 'Reports', icon: 'bookPen' }, { label: 'About video', icon: 'video' }, { label: 'Locations', icon: 'pin' }],
     metrics: [{ label: 'Total users', value: '2,840', note: '+8.4% this month', icon: 'users', tone: 'green' }, { label: 'Pending reviews', value: '17', note: 'Needs attention', icon: 'bookPen', tone: 'amber' }, { label: 'Active listings', value: '1,204', note: '+56 this month', icon: 'home', tone: 'blue' }, { label: 'Platform enquiries', value: '386', note: 'Across Rwanda', icon: 'arrow', tone: 'dark' }],
     panelEyebrow: 'Needs attention', panelTitle: 'Latest activity', activity: [{ name: 'New listing submitted', detail: 'Commercial space Ã‚Â· Remera', time: '8 min ago', status: 'Review', initials: 'RL' }, { name: 'Agent verification request', detail: 'Jean Claude N. Ã‚Â· Kigali', time: '31 min ago', status: 'Open', initials: 'JV' }, { name: 'Listing reported', detail: 'House Ã‚Â· Nyarutarama', time: 'Yesterday', status: 'Investigate', initials: 'LR' }], sideEyebrow: 'Platform health', sideTitle: 'Quick checks', sideItems: [{ title: 'Verification queue', detail: '17 accounts waiting', icon: 'check' }, { title: 'Reported listings', detail: '3 need review', icon: 'bell' }],
   },
@@ -195,41 +194,70 @@ function DashboardAccountBridge({ initials, accountLabel }: { initials: string; 
   </div>;
 }
 
-function getLocalAdminReports(): AdminReport[] {
-  try {
-    const stored = JSON.parse(window.localStorage.getItem('umutungo-listing-report') ?? 'null') as { listingId?: string; reason?: string; createdAt?: string } | null;
-    if (!stored?.reason) return [];
-    return [{ id: `local-${stored.listingId ?? 'report'}`, listing_id: stored.listingId ?? '', listing_title: 'Local listing report', reporter_name: 'Local session', reported_user_name: '', reason: stored.reason, details: `Listing ID: ${stored.listingId ?? 'unknown'}`, status: 'pending', created_at: stored.createdAt ?? new Date().toISOString() }];
-  } catch { return []; }
+type AdminActivityRecord = { id: string; actor_id: string; actor_name: string; actor_role: string; activity_type: string; summary: string; created_at: string };
+type AdminActivitiesResponse = { items: AdminActivityRecord[]; count: number };
+
+function AdminActivityWorkspace() {
+  const [activities, setActivities] = useState<AdminActivityRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    void umutungoApi<AdminActivitiesResponse>('/api/v1/admin/activities?limit=500')
+      .then((result) => { if (!cancelled) { if (result === null) setError('Connect an admin API session to load activity records.'); else setActivities(result.items ?? []); } })
+      .catch(() => { if (!cancelled) setError('Activity records could not be loaded. Sign in with an admin account connected to the Umutungo API, then refresh.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">Platform activity</p><h2>A clear record of what people do.</h2><p>Accounts, listings, enquiries, messages, bookings, reports, reviews, and listing interactions in one timeline.</p></div><AdminReportDownloadMenu showLabel /></section><section className="role-dashboard-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">All users · newest first</span><h3>{loading ? 'Loading activity' : `${activities.length} recorded activities`}</h3></div><Icon name="bell" size={17} /></div>{loading ? <p className="workspace-action-notice" role="status">Loading recorded user activity…</p> : error ? <p className="workspace-action-notice" role="alert">{error}</p> : activities.length ? <div className="role-dashboard-activity">{activities.map((item) => <article key={`${item.activity_type}-${item.id}`}><span className="role-dashboard-contact-avatar">{item.actor_name.slice(0, 2).toUpperCase()}</span><div><strong>{item.actor_name}</strong><small>{item.summary} · {item.actor_role.replaceAll('_', ' ')}</small></div><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></article>)}</div> : <p className="workspace-action-notice">No activity has been recorded yet. New account and marketplace actions will appear here automatically.</p>}</section></div>;
+}
+
+function downloadActivityDocument(items: AdminActivityRecord[], format: 'csv' | 'json') {
+  const date = new Date().toISOString().slice(0, 10);
+  const columns: Array<keyof AdminActivityRecord> = ['created_at', 'actor_name', 'actor_role', 'activity_type', 'summary', 'actor_id'];
+  const quote = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  const content = format === 'csv'
+    ? [columns.map(quote).join(','), ...items.map((item) => columns.map((key) => quote(item[key])).join(','))].join('\r\n')
+    : JSON.stringify({ generated_at: new Date().toISOString(), count: items.length, activities: items }, null, 2);
+  const blob = new Blob([format === 'csv' ? `\uFEFF${content}` : content], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a'); link.href = url; link.download = `umutungo-user-activities-${date}.${format}`; link.click(); URL.revokeObjectURL(url);
 }
 
 function AdminReportDownloadMenu({ showLabel = false }: { showLabel?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [reports, setReports] = useState<AdminReport[]>([]);
-  const [busy, setBusy] = useState<'pdf' | 'excel' | 'image' | ''>('');
+  const [activities, setActivities] = useState<AdminActivityRecord[]>([]);
+  const [busy, setBusy] = useState<'csv' | 'json' | ''>('');
   const [notice, setNotice] = useState('');
+  const [loadIssue, setLoadIssue] = useState('');
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const result = await umutungoApi<AdminReportsResponse>('/api/v1/admin/reports?limit=100');
-        if (!cancelled) setReports([...(result?.items ?? []), ...getLocalAdminReports().filter((local) => !(result?.items ?? []).some((item) => item.id === local.id))]);
-      } catch { if (!cancelled) setReports(getLocalAdminReports()); }
+        const result = await umutungoApi<AdminActivitiesResponse>('/api/v1/admin/activities?limit=50000');
+        if (!cancelled) { if (result === null) setLoadIssue('Connect an admin API session to generate this report.'); else setActivities(result.items ?? []); }
+      } catch { if (!cancelled) { setActivities([]); setLoadIssue('Activity could not be loaded. Check the admin API connection.'); } }
     };
     void load();
     return () => { cancelled = true; };
   }, []);
-  const download = async (format: 'pdf' | 'excel' | 'image') => {
+  const download = async (format: 'csv' | 'json') => {
     setBusy(format);
     try {
-      if (format === 'pdf') downloadReportsPdf(reports);
-      if (format === 'excel') downloadReportsExcel(reports);
-      if (format === 'image') await downloadReportsImage(reports);
-      setNotice(`${format === 'excel' ? 'Excel' : format[0].toUpperCase() + format.slice(1)} downloaded.`);
-    } catch { setNotice('The report could not be prepared. Please try again.'); }
+      const allActivities: AdminActivityRecord[] = [];
+      const pageSize = 500;
+      for (let offset = 0; ; offset += pageSize) {
+        const page = await umutungoApi<AdminActivitiesResponse>(`/api/v1/admin/activities?limit=${pageSize}&offset=${offset}`);
+        if (!page) throw new Error('Admin API session is required.');
+        allActivities.push(...page.items);
+        if (page.items.length < pageSize) break;
+      }
+      downloadActivityDocument(allActivities, format);
+      setNotice(`${format.toUpperCase()} report downloaded with ${allActivities.length} activities.`);
+    } catch { setNotice('The activity report could not be prepared. Please try again.'); }
     finally { setBusy(''); }
   };
-  return <div className={`dashboard-notification-wrap admin-report-download-wrap ${showLabel ? 'is-labeled' : ''}`}><button className={`dashboard-header-tool ${showLabel ? 'admin-report-download-trigger' : ''}`} type="button" title="Generate report" aria-label="Generate report" aria-expanded={open} onClick={() => setOpen((current) => !current)}><Icon name="download" size={17} />{showLabel && <span>Generate report</span>}</button>{open && <div className="dashboard-notification-popover admin-report-download-popover" role="dialog" aria-label="Generate report"><strong>Generate report</strong><small>{reports.length} report{reports.length === 1 ? '' : 's'} ready</small><div><button type="button" onClick={() => void download('pdf')} disabled={busy !== ''}><Icon name="download" size={13} /> {busy === 'pdf' ? 'Preparing...' : 'PDF'}</button><button type="button" onClick={() => void download('excel')} disabled={busy !== ''}><Icon name="download" size={13} /> {busy === 'excel' ? 'Preparing...' : 'Excel'}</button><button type="button" onClick={() => void download('image')} disabled={busy !== ''}><Icon name="download" size={13} /> {busy === 'image' ? 'Preparing...' : 'Image'}</button></div>{notice && <em role="status">{notice}</em>}</div>}</div>;
+  return <div className={`dashboard-notification-wrap admin-report-download-wrap ${showLabel ? 'is-labeled' : ''}`}><button className={`dashboard-header-tool ${showLabel ? 'admin-report-download-trigger' : ''}`} type="button" title="Generate activity report" aria-label="Generate activity report" aria-expanded={open} onClick={() => setOpen((current) => !current)}><Icon name="download" size={17} />{showLabel && <span>Download activity report</span>}</button>{open && <div className="dashboard-notification-popover admin-report-download-popover" role="dialog" aria-label="Generate activity report"><strong>User activity report</strong><small>{activities.length} recent activities · export includes all pages</small><div><button type="button" onClick={() => void download('csv')} disabled={busy !== '' || activities.length === 0}><Icon name="download" size={13} /> {busy === 'csv' ? 'Preparing...' : 'CSV'}</button><button type="button" onClick={() => void download('json')} disabled={busy !== '' || activities.length === 0}><Icon name="download" size={13} /> {busy === 'json' ? 'Preparing...' : 'JSON'}</button></div>{loadIssue ? <em role="alert">{loadIssue}</em> : activities.length === 0 && <em>No recorded activity yet. New actions will appear here automatically.</em>}{notice && <em role="status">{notice}</em>}</div>}</div>;
 }
 
 function DashboardUtilityDock({ isAdmin = false, role }: { isAdmin?: boolean; role?: DashboardRole }) {
@@ -245,6 +273,10 @@ function DashboardUtilityDock({ isAdmin = false, role }: { isAdmin?: boolean; ro
   useEffect(() => {
     let cancelled = false;
     const loadNotifications = async () => {
+      if (!window.localStorage.getItem('umutungo-demo-user')) {
+        setNotifications([]);
+        return;
+      }
       const storedRole = role ?? window.localStorage.getItem('umutungo-demo-user')?.toLowerCase() ?? '';
       if (!storedRole.includes('commissioner')) {
         try {
@@ -584,13 +616,88 @@ function AdminLocationWorkspace() {
   return <section className="tenant-workspace-section admin-location-workspace"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">Administrative hierarchy</span><h2>Locations</h2><p>Maintain Province, District, Sector, Cell, and Village values without duplicating existing records.</p></div><span className="tenant-workspace-icon"><Icon name="pin" size={22} /></span></div><form className="listing-editor-form" onSubmit={save}><label>Province<select value={province} onChange={(event) => { setProvince(event.target.value); setDistrict(''); setSector(''); setCell(''); setVillage(''); }}>{provinceNames.map((item) => <option key={item}>{item}</option>)}</select></label><label>District<select value={district} onChange={(event) => { setDistrict(event.target.value); setSector(''); setCell(''); setVillage(''); }}>{districts.map((item) => <option key={item}>{item}</option>)}</select></label><label>Sector<select value={sector} onChange={(event) => { setSector(event.target.value); setCell(''); setVillage(''); }}>{sectors.length ? sectors.map((item) => <option key={item}>{item}</option>) : <option value="">Use national directory</option>}</select></label><label>Cell (optional)<input value={cell} onChange={(event) => setCell(event.target.value)} /></label><label>Village (optional)<input value={village} onChange={(event) => setVillage(event.target.value)} /></label><button className="role-dashboard-primary" type="submit" disabled={!province || !district || !sector}>Save location <Icon name="check" size={15} /></button></form>{notice && <p className="workspace-action-notice" role="status">{notice}</p>}</section>;
 }
 
+function AdminAboutVideoWorkspace() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [currentVideo, setCurrentVideo] = useState<AboutVideo | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState('The Umutungo story');
+  const [localPreview, setLocalPreview] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    void getAboutVideo().then((video) => { if (active && video) { setCurrentVideo(video); setTitle(video.title); } }).catch(() => { if (active) setError('The video library could not be reached. Check the API connection.'); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!file) { setLocalPreview(''); return; }
+    const objectURL = URL.createObjectURL(file);
+    setLocalPreview(objectURL);
+    return () => URL.revokeObjectURL(objectURL);
+  }, [file]);
+
+  const chooseFile = (candidate?: File) => {
+    setNotice('');
+    setError('');
+    if (!candidate) return;
+    const extension = candidate.name.toLowerCase().split('.').pop();
+    if (!['mp4', 'webm'].includes(extension ?? '')) { setFile(null); setError('Choose an MP4 or WebM video.'); return; }
+    if (candidate.size > 200 * 1024 * 1024) { setFile(null); setError('Choose a video smaller than 200 MB.'); return; }
+    setFile(candidate);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+  const publish = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!file) { setError('Choose a video file before publishing.'); return; }
+    setBusy(true); setNotice(''); setError('');
+    try {
+      const published = await uploadAboutVideo(file, title.trim() || 'The Umutungo story');
+      setCurrentVideo(published); setTitle(published.title); setFile(null); setNotice('Your story is now live on the About page.');
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'The video could not be published.'); }
+    finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!window.confirm('Remove the video from the public About page?')) return;
+    setBusy(true); setNotice(''); setError('');
+    try { await deleteAboutVideo(); setCurrentVideo(null); setFile(null); setTitle('The Umutungo story'); setNotice('The video has been removed from the About page.'); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'The video could not be removed.'); }
+    finally { setBusy(false); }
+  };
+
+  return <div className="role-dashboard-content admin-about-video-content">
+    <section className="admin-about-video-hero"><div><span className="admin-about-video-kicker"><Icon name="video" size={15} /> PUBLIC STORY · ABOUT UMUTUNGO</span><h2>Your story,<br /><em>in motion.</em></h2><p>Introduce Umutungo in your own voice. Publish a short film that helps people see the homes, people and purpose behind the platform.</p></div><div className="admin-about-video-hero-mark"><span>UMU</span><small>A better way to find your place.</small></div><span className="admin-about-video-index">01 / STORY FILM</span></section>
+    <div className="admin-about-video-grid">
+      <form className="admin-about-video-editor" onSubmit={publish}>
+        <div className="admin-about-video-editor-heading"><span>01 — THE INTRODUCTION</span><strong>{currentVideo ? 'Update your film' : 'Add your film'}</strong><p>MP4 or WebM · up to 200 MB</p></div>
+        <label className="admin-about-video-title">On-page title<input value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} placeholder="The Umutungo story" /></label>
+        <label className="admin-about-video-drop" htmlFor="admin-about-video-file" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); chooseFile(event.dataTransfer.files[0]); }}>
+          <input ref={fileInputRef} id="admin-about-video-file" type="file" accept="video/mp4,video/webm,.mp4,.webm" onChange={(event) => chooseFile(event.target.files?.[0])} />
+          <span className="admin-about-video-drop-icon"><Icon name="video" size={22} /></span><strong>{file ? file.name : 'Choose your story film'}</strong><small>{file ? `${(file.size / (1024 * 1024)).toFixed(1)} MB · ready to preview` : 'Browse for a file, or drop it here'}</small><span className="admin-about-video-browse">Browse videos <Icon name="arrow" size={13} /></span>
+        </label>
+        {error && <p className="admin-about-video-message is-error" role="alert">{error}</p>}
+        {notice && <p className="admin-about-video-message" role="status"><Icon name="check" size={14} /> {notice}</p>}
+        <div className="admin-about-video-actions"><button className="role-dashboard-primary" type="submit" disabled={busy || !file}>{busy ? 'Publishing…' : currentVideo ? 'Publish update' : 'Publish to About'} <Icon name="arrow" size={15} /></button>{currentVideo && <button className="admin-about-video-remove" type="button" onClick={() => void remove()} disabled={busy}>Remove video</button>}</div>
+        <div className="admin-about-video-note"><Icon name="check" size={15} /><span><strong>Made for the About page</strong><small>Visitors can play your video directly on Umutungo. Uploading a new version replaces the current one.</small></span></div>
+      </form>
+      <aside className="admin-about-video-preview"><div className="admin-about-video-preview-heading"><div><span>LIVE PREVIEW</span><strong>{file ? 'Unpublished preview' : currentVideo ? 'Currently on About' : 'Awaiting your story'}</strong></div><span className={`admin-about-video-status ${currentVideo && !file ? 'is-live' : ''}`}><i />{currentVideo && !file ? 'LIVE' : file ? 'DRAFT' : 'EMPTY'}</span></div>
+        <div className="admin-about-video-frame">{localPreview || currentVideo ? <video key={localPreview || currentVideo?.url} src={localPreview || currentVideo?.url} controls playsInline preload="metadata" poster="/properties/story-begin.jpg">Your browser does not support video playback.</video> : <div className="admin-about-video-empty" style={{ backgroundImage: "linear-gradient(180deg, rgba(8,20,12,.06), rgba(8,20,12,.78)), url('/properties/story-begin.jpg')" }}><span className="admin-about-video-play"><Icon name="video" size={23} /></span><strong>Your film will live here.</strong><small>A warm hello from the people building Umutungo.</small></div>}</div>
+        <div className="admin-about-video-preview-footer"><span><small>STORY FILM</small><strong>{title || 'The Umutungo story'}</strong></span><span>{file ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : currentVideo ? new Date(currentVideo.updated_at).toLocaleDateString() : 'No video yet'}</span></div>
+      </aside>
+    </div>
+    {loading && <p className="admin-about-video-loading" role="status">Checking the published About video…</p>}
+  </div>;
+}
+
 function AdminDashboard() {
   const config = configs.admin;
   const [active, setActive] = useState('Overview');
   const [notice, setNotice] = useState('');
   const rows = active === 'Users' ? [{ title: 'Jean Claude N.', detail: 'Komisiyoneri KYC Ã‚Â· Submitted 31 min ago', action: 'Review KYC' }, { title: 'Aline Mukamana', detail: 'Client account Ã‚Â· Verified', action: 'Open account' }] : active === 'Listings review' ? [{ title: 'Commercial space Ã‚Â· Remera', detail: 'New listing Ã‚Â· Awaiting review', action: 'Approve listing' }, { title: 'House Ã‚Â· Nyarutarama', detail: 'Reported Ã‚Â· Incorrect information', action: 'Remove listing' }] : active === 'Reports' ? [{ title: 'Listing report', detail: 'Possible duplicate Ã‚Â· 8 min ago', action: 'Investigate report' }, { title: 'Account report', detail: 'Suspicious activity Ã‚Â· Yesterday', action: 'Suspend account' }] : config.activity.map((item) => ({ title: item.name, detail: `${item.detail} Ã‚Â· ${item.time}`, action: item.status }));
   const act = (action: string) => { window.localStorage.setItem('umutungo-admin-audit-log', JSON.stringify({ action, actor: 'demo-admin', timestamp: new Date().toISOString() })); setNotice(`${action} recorded in the moderation audit log.`); };
- return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label="Admin dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><Link href="/register"><Icon name="user" size={16} /> Create account</Link></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><div className="role-dashboard-profile"><span className="role-dashboard-avatar">AD</span><span><strong>My account</strong><small>Platform administrator</small></span><Icon name="chevron" size={14} /></div></header>{active === 'Locations' ? <div className="role-dashboard-content"><AdminLocationWorkspace /></div> : <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">Trust and safety</p><h2>Keep the marketplace trusted and moving.</h2><p>Review KYC submissions, investigate reports, and record every moderation decision.</p></div><div className="admin-dashboard-welcome-actions"><button className="role-dashboard-primary" type="button" onClick={() => setActive('Reports')}><Icon name="bell" size={16} /> Review reports</button><AdminReportDownloadMenu showLabel /></div></section><section className="role-dashboard-metrics" aria-label="Moderation metrics">{config.metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><section className="role-dashboard-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">Moderation queue</span><h3>{active === 'Overview' ? 'Latest activity' : active}</h3></div><Icon name="check" size={17} /></div><div className="role-dashboard-activity">{rows.map((row) => <article key={row.title}><span className="role-dashboard-contact-avatar">{row.title.slice(0, 2).toUpperCase()}</span><div><strong>{row.title}</strong><small>{row.detail}</small></div><button type="button" onClick={() => act(row.action)}>{row.action}<Icon name="arrow" size={14} /></button></article>)}</div>{notice && <p className="workspace-action-notice" role="status"><Icon name="check" size={14} /> {notice}</p>}</section></div>}</section></main>;
+ return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label="Admin dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><Link href="/register"><Icon name="user" size={16} /> Create account</Link></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><div className="role-dashboard-profile"><span className="role-dashboard-avatar">AD</span><span><strong>My account</strong><small>Platform administrator</small></span><Icon name="chevron" size={14} /></div></header>{active === 'About video' ? <AdminAboutVideoWorkspace /> : active === 'Locations' ? <div className="role-dashboard-content"><AdminLocationWorkspace /></div> : active === 'Reports' ? <AdminActivityWorkspace /> : <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">Trust and safety</p><h2>Keep the marketplace trusted and moving.</h2><p>Review KYC submissions, investigate reports, and record every moderation decision.</p></div><div className="admin-dashboard-welcome-actions"><button className="role-dashboard-primary" type="button" onClick={() => setActive('Reports')}><Icon name="bell" size={16} /> Review activity</button><AdminReportDownloadMenu showLabel /></div></section><section className="role-dashboard-metrics" aria-label="Moderation metrics">{config.metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><section className="role-dashboard-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">Moderation queue</span><h3>{active === 'Overview' ? 'Latest activity' : active}</h3></div><Icon name="check" size={17} /></div><div className="role-dashboard-activity">{rows.map((row) => <article key={row.title}><span className="role-dashboard-contact-avatar">{row.title.slice(0, 2).toUpperCase()}</span><div><strong>{row.title}</strong><small>{row.detail}</small></div><button type="button" onClick={() => act(row.action)}>{row.action}<Icon name="arrow" size={14} /></button></article>)}</div>{notice && <p className="workspace-action-notice" role="status"><Icon name="check" size={14} /> {notice}</p>}</section></div>}</section></main>;
 }
 
 function CommissionerDashboard() {
@@ -732,7 +839,7 @@ function TenantDashboard() {
   };
   const metrics = config.metrics.map((metric, index) => index === 0 ? { ...metric, value: String(tenantData.applications.length), note: 'Your rental applications' } : index === 2 ? { ...metric, value: String(tenantData.applications.filter((item) => item.viewed_at).length), note: 'Houses seen' } : index === 3 ? { ...metric, value: `RWF ${tenantData.payments.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}`, note: 'Recorded payments' } : metric);
   const dialogTitle = dialog === 'payment' ? 'Pay after seeing the house' : dialog === 'contact' ? 'Contact the landlord' : 'Review this property';
-  return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label="Tenant dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><button type="button" onClick={() => setActive('Overview')}><Icon name="user" size={16} /> Account</button></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><button className="role-dashboard-profile" type="button" onClick={() => setActive('Overview')}><span className="role-dashboard-avatar">TN</span><span><strong>My account</strong><small>Verified tenant</small></span><Icon name="chevron" size={14} /></button></header>{active === 'Overview' ? <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">Welcome back</p><h2>Your next home is closer than you think.</h2><p>Manage applications, payments, house-viewing status, landlord conversations, and reviews in one clear workspace.</p></div><Link className="role-dashboard-primary" href="/categories/houses"><Icon name="search" size={16} /> Explore homes</Link></section><section className="role-dashboard-metrics" aria-label="Tenant metrics">{metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-panel tenant-overview-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">Your next steps</span><h3>Rental journey</h3></div><button type="button" onClick={() => setActive('Applications')}>Open applications <Icon name="arrow" size={14} /></button></div><div className="tenant-overview-cards"><article><span className="tenant-card-number">01</span><div><strong>{tenantData.applications.length} applications</strong><small>Track decisions and house-viewing status</small></div><Icon name="arrow" size={15} /></article><article><span className="tenant-card-number">02</span><div><strong>{tenantData.payments.length} payments</strong><small>Pay only after you have seen the house</small></div><Icon name="arrow" size={15} /></article><article><span className="tenant-card-number">03</span><div><strong>{tenantData.messages.length} conversations</strong><small>Keep landlord contact in one place</small></div><Icon name="arrow" size={15} /></article></div></div></div> : <div className="role-dashboard-content"><TenantWorkspaceSection view={active} tenantData={tenantData} onViewed={(application) => updateApplication(application, new Date().toISOString())} onPay={(application) => openDialog('payment', application)} onContact={(application) => openDialog('contact', application)} onReview={(application) => openDialog('review', application)} onAction={(action) => { if (action === 'View applications') setActive('Applications'); else if (action === 'Start a new conversation') setActive('Messages'); else setNotice(`${action} selected.`); }} notice={notice} /></div>}</section>{dialog && selectedApplication && <div className="tenant-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="tenant-dialog-title"><button className="tenant-dialog-backdrop" type="button" aria-label="Close dialog" onClick={closeDialog} /><section className="tenant-dialog"><button className="property-action-close" type="button" aria-label="Close dialog" onClick={closeDialog}><Icon name="x" size={18} /></button><span className="role-dashboard-eyebrow">{selectedApplication.listing_title}</span><h2 id="tenant-dialog-title">{dialogTitle}</h2>{dialog === 'payment' && <form className="tenant-dialog-form" onSubmit={submitPayment}><p>Payment is available because you marked this house as seen.</p><label>Amount (RWF)<input type="number" min="1" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} required /></label><label>Payment method<select value={paymentProvider} onChange={(event) => setPaymentProvider(event.target.value)}><option value="mtn_momo">MTN MoMo</option><option value="airtel_money">Airtel Money</option><option value="card">Bank card</option></select></label>{paymentProvider !== 'card' && <label>Rwanda phone number<input type="tel" value={paymentPhone} onChange={(event) => setPaymentPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>}<button className="role-dashboard-primary" type="submit">Start payment <Icon name="arrow" size={15} /></button></form>}{dialog === 'contact' && <form className="tenant-dialog-form" onSubmit={submitMessage}><p>Ask about viewing times, availability, deposit terms, or anything else about this house.</p><textarea value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Write your message" rows={5} required /><button className="role-dashboard-primary" type="submit">Send message <Icon name="arrow" size={15} /></button></form>}{dialog === 'review' && <form className="tenant-dialog-form" onSubmit={submitReview}><p>Tell other renters about your experience with this property.</p><div className="property-review-stars" aria-label="Choose a rating">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" className={value <= reviewRating ? 'is-selected' : ''} aria-label={`${value} stars`} onClick={() => setReviewRating(value)}>Ã¢Ëœâ€¦</button>)}</div><textarea value={reviewBody} onChange={(event) => setReviewBody(event.target.value)} placeholder="Write your review" rows={5} required /><button className="role-dashboard-primary" type="submit">Save review <Icon name="arrow" size={15} /></button></form>}</section></div>}</main>;
+  return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{config.eyebrow}</span><nav aria-label="Client dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>Home</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{item.label}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">Back to marketplace <Icon name="arrow" size={14} /></Link><button type="button" onClick={() => setActive('Overview')}><Icon name="user" size={16} /> Account</button></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{config.eyebrow}</span><h1>{active}</h1></div><button className="role-dashboard-profile" type="button" onClick={() => setActive('Overview')}><span className="role-dashboard-avatar">CL</span><span><strong>My account</strong><small>Verified client</small></span><Icon name="chevron" size={14} /></button></header>{active === 'Overview' ? <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">Welcome back</p><h2>Your next home is closer than you think.</h2><p>Manage applications, payments, house-viewing status, landlord conversations, and reviews in one clear workspace.</p></div><Link className="role-dashboard-primary" href="/categories/houses"><Icon name="search" size={16} /> Explore homes</Link></section><section className="role-dashboard-metrics" aria-label="Client metrics">{metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-panel tenant-overview-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">Your next steps</span><h3>Rental journey</h3></div><button type="button" onClick={() => setActive('Applications')}>Open applications <Icon name="arrow" size={14} /></button></div><div className="tenant-overview-cards"><article><span className="tenant-card-number">01</span><div><strong>{tenantData.applications.length} applications</strong><small>Track decisions and house-viewing status</small></div><Icon name="arrow" size={15} /></article><article><span className="tenant-card-number">02</span><div><strong>{tenantData.payments.length} payments</strong><small>Pay only after you have seen the house</small></div><Icon name="arrow" size={15} /></article><article><span className="tenant-card-number">03</span><div><strong>{tenantData.messages.length} conversations</strong><small>Keep landlord contact in one place</small></div><Icon name="arrow" size={15} /></article></div></div></div> : <div className="role-dashboard-content"><TenantWorkspaceSection view={active} tenantData={tenantData} onViewed={(application) => updateApplication(application, new Date().toISOString())} onPay={(application) => openDialog('payment', application)} onContact={(application) => openDialog('contact', application)} onReview={(application) => openDialog('review', application)} onAction={(action) => { if (action === 'View applications') setActive('Applications'); else if (action === 'Start a new conversation') setActive('Messages'); else setNotice(`${action} selected.`); }} notice={notice} /></div>}</section>{dialog && selectedApplication && <div className="tenant-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="tenant-dialog-title"><button className="tenant-dialog-backdrop" type="button" aria-label="Close dialog" onClick={closeDialog} /><section className="tenant-dialog"><button className="property-action-close" type="button" aria-label="Close dialog" onClick={closeDialog}><Icon name="x" size={18} /></button><span className="role-dashboard-eyebrow">{selectedApplication.listing_title}</span><h2 id="tenant-dialog-title">{dialogTitle}</h2>{dialog === 'payment' && <form className="tenant-dialog-form" onSubmit={submitPayment}><p>Payment is available because you marked this house as seen.</p><label>Amount (RWF)<input type="number" min="1" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} required /></label><label>Payment method<select value={paymentProvider} onChange={(event) => setPaymentProvider(event.target.value)}><option value="mtn_momo">MTN MoMo</option><option value="airtel_money">Airtel Money</option><option value="card">Bank card</option></select></label>{paymentProvider !== 'card' && <label>Rwanda phone number<input type="tel" value={paymentPhone} onChange={(event) => setPaymentPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>}<button className="role-dashboard-primary" type="submit">Start payment <Icon name="arrow" size={15} /></button></form>}{dialog === 'contact' && <form className="tenant-dialog-form" onSubmit={submitMessage}><p>Ask about viewing times, availability, deposit terms, or anything else about this house.</p><textarea value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Write your message" rows={5} required /><button className="role-dashboard-primary" type="submit">Send message <Icon name="arrow" size={15} /></button></form>}{dialog === 'review' && <form className="tenant-dialog-form" onSubmit={submitReview}><p>Tell other renters about your experience with this property.</p><div className="property-review-stars" aria-label="Choose a rating">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" className={value <= reviewRating ? 'is-selected' : ''} aria-label={`${value} stars`} onClick={() => setReviewRating(value)}>Ã¢Ëœâ€¦</button>)}</div><textarea value={reviewBody} onChange={(event) => setReviewBody(event.target.value)} placeholder="Write your review" rows={5} required /><button className="role-dashboard-primary" type="submit">Save review <Icon name="arrow" size={15} /></button></form>}</section></div>}</main>;
 }
 
 export function RoleDashboard({ role }: { role: DashboardRole }) {
@@ -741,7 +848,7 @@ export function RoleDashboard({ role }: { role: DashboardRole }) {
   const initials = role === 'admin' ? 'AD' : role === 'tenant' ? 'TN' : role === 'landlord' ? 'LL' : 'CM';
   const accountLabel = role === 'admin' ? 'Platform administrator' : `Verified ${role}`;
 
-  if (role === 'tenant') return <><DashboardUtilityDock role={role} /><TenantDashboard /><DashboardAccountBridge initials="TN" accountLabel="Verified tenant" /></>;
+  if (role === 'tenant') return <><DashboardUtilityDock role={role} /><TenantDashboard /><DashboardAccountBridge initials="CL" accountLabel="Verified client" /></>;
   if (role === 'commissioner') return <><DashboardUtilityDock role={role} /><CommissionerDashboard /><DashboardAccountBridge initials="CM" accountLabel="Verified Komisiyoneri" /></>;
   if (role === 'landlord') return <><DashboardUtilityDock role={role} /><LandlordDashboard /><DashboardAccountBridge initials="LL" accountLabel="Verified Property Owner" /></>;
   if (role === 'admin') return <><DashboardUtilityDock role={role} isAdmin /><AdminDashboard /><DashboardAccountBridge initials="AD" accountLabel="Platform administrator" /></>;

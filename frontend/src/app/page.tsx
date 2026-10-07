@@ -205,7 +205,7 @@ export default function HomePage() {
     <AiChatbot language={language} />
     <main>
       <section className="hero-section" id="home">
-        <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/landingog.png" aria-hidden="true"><source src="/properties/ogland1.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
+        <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/landingog.png" aria-hidden="true"><source src="/properties/landing.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <h1>Discover, list, and manage every kind of property in Rwanda.</h1>
           <div className="landing-search-actions"><form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Search for a property you want to get here" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form><a className="landing-view-all-properties" href="/categories/houses">View all properties</a></div>
           <p className="hero-lead">Umutungo connects property owners, landlords, commissioners, and customers through one trusted marketplace for real estate, land, vehicles, accommodation, furniture, appliances, and equipment.</p>

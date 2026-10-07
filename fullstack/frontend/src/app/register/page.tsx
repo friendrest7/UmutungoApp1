@@ -40,7 +40,7 @@ export default function RegisterPage() {
     const selected = roleOptions.find((item) => item.role === role) ?? roleOptions[0];
     window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: selected.storageRole, name: name.trim(), phone: phone.trim(), email: email.trim(), kycStatus: selected.storageRole === 'Client' ? 'not_required' : 'pending', signedInAt: new Date().toISOString() }));
     window.dispatchEvent(new Event('umutungo:auth-changed'));
-    const dashboardPaths = { Client: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/landlord' } as const;
+    const dashboardPaths = { Client: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner' } as const;
     window.location.assign(dashboardPaths[selected.storageRole]);
   };
 

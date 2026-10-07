@@ -8,6 +8,20 @@ function backendUrl() {
   return configured && !(process.env.NODE_ENV === 'production' && isLocal) ? configured : defaultBackend;
 }
 
+function backendRole(role?: string) {
+  const normalized = (role ?? '').trim().toLowerCase();
+  if (normalized.includes('komisiyoneri') || normalized === 'commissioner') return 'komisiyoneri';
+  if (normalized === 'landlord' || normalized === 'property owner' || normalized === 'property_owner') return 'property_owner';
+  return 'client';
+}
+
+function displayRole(role: unknown, requestedRole?: string): string {
+  const normalized = typeof role === 'string' ? role.toLowerCase() : 'client';
+  if (normalized === 'komisiyoneri') return 'Commissioner / Komisiyoneri';
+  if (normalized === 'property_owner') return requestedRole?.trim().toLowerCase() === 'landlord' ? 'Landlord' : 'Property Owner';
+  return 'Client';
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json() as { accessToken?: string; credential?: string; role?: string };
@@ -22,18 +36,18 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...(accessToken ? { access_token: accessToken } : { credential }),
-        role: 'client',
+        role: backendRole(body.role),
       }),
       cache: 'no-store',
     });
-    const result = await response.json().catch(() => ({})) as { error?: string; user?: unknown; access_token?: string; profile?: unknown };
+    const result = await response.json().catch(() => ({})) as { error?: string; user?: { role?: string }; access_token?: string; profile?: unknown };
     if (!response.ok) {
       return NextResponse.json({ error: result.error ?? 'Google sign-in could not be completed.' }, { status: response.status });
     }
     if (!result.user || !result.access_token) {
       return NextResponse.json({ error: 'Google sign-in did not return a Umutungo session.' }, { status: 502 });
     }
-    return NextResponse.json({ ...result, role: 'Client' });
+    return NextResponse.json({ ...result, role: displayRole(result.user.role, body.role) });
   } catch {
     return NextResponse.json({ error: 'Google sign-in could not reach the Umutungo service.' }, { status: 502 });
   }

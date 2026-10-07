@@ -24,7 +24,7 @@ const authRoles = ['Client', 'Commissioner / Komisiyoneri', 'Landlord', 'Propert
 const categories = ['Houses', 'Apartments', 'Land', 'Commercial', 'Offices', 'Hotels and lodges', 'Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other'];
 const languages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
 const languageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
-const dashboardPaths: Record<AuthRole, string> = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/landlord', Admin: '/admin' };
+const dashboardPaths: Record<AuthRole, string> = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner', Admin: '/admin' };
 const dashboardPathForRole = (role?: string) => role && role in dashboardPaths ? dashboardPaths[role as AuthRole] : undefined;
 
 function HoverHint({ text, placement, children }: { text: string; placement: 'right' | 'bottom'; children: ReactElement }) {

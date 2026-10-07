@@ -2670,6 +2670,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 
 /* Keep global dialogs fixed above the landing composition and its stacking context. */
 .app-realistic > .auth-overlay { position: fixed; z-index: 2000; inset: 0; pointer-events: auto; }
+.auth-overlay { z-index: 2000; }
 
 /* Consent is a small utility notice, not a promotional pop-up. */
 .cookie-consent { z-index: 900; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; width: min(650px, calc(100vw - 40px)); padding: 15px 17px; border: 1px solid #d9ded7; border-radius: 8px; background: #fffefa; box-shadow: 0 8px 28px rgba(20, 34, 24, .16); color: #202721; }

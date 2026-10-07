@@ -364,11 +364,15 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	role := strings.ToLower(strings.TrimSpace(input.Role))
-	if role == "" {
+	switch role {
+	case "", "client", "tenant":
 		role = "client"
-	}
-	if role != "client" && role != "tenant" {
-		errorJSON(w, http.StatusBadRequest, "Google sign-in role must be client")
+	case "commissioner", "komisiyoneri", "commissioner / komisiyoneri":
+		role = "komisiyoneri"
+	case "landlord", "property owner", "property_owner":
+		role = "property_owner"
+	default:
+		errorJSON(w, http.StatusBadRequest, "Google sign-in role is not supported")
 		return
 	}
 
@@ -388,6 +392,9 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
 		if err == nil {
 			_, err = s.db.Exec(r.Context(), `INSERT INTO profiles(user_id,photo_url) VALUES($1,NULLIF($2,'')) ON CONFLICT(user_id) DO NOTHING`, user.ID, strings.TrimSpace(googleProfile.Picture))
+			if err == nil && (role == "komisiyoneri" || role == "property_owner") {
+				_, err = s.db.Exec(r.Context(), `INSERT INTO business_profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, user.ID)
+			}
 		}
 	}
 	if err != nil {

@@ -19,7 +19,9 @@ type GoogleApi = { accounts: {
 } };
 
 function googleWebClientId() {
-  return (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '').trim();
+  const configured = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '').trim();
+  // A web OAuth client ID is public by design and must be available in the browser.
+  return configured && configured !== 'null' ? configured : '947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com';
 }
 
 const demoAccounts: Array<{ role: AuthRole; email: string; password: string }> = [

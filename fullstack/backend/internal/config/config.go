@@ -22,7 +22,7 @@ func Load() Config {
 		MigrationsPath:     env("MIGRATIONS_PATH", "migrations"),
 		MediaUploadDir:     env("MEDIA_UPLOAD_DIR", "storage/media"),
 		MediaPublicBaseURL: env("MEDIA_PUBLIC_BASE_URL", ""),
-		GoogleClientIDs:    env("GOOGLE_CLIENT_IDS", ""),
+		GoogleClientIDs:    env("GOOGLE_CLIENT_IDS", "947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com"),
 	}
 }
 

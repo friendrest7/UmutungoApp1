@@ -8,17 +8,10 @@ function backendUrl() {
   return configured && !(process.env.NODE_ENV === 'production' && isLocal) ? configured : defaultBackend;
 }
 
-function backendRole(role?: string) {
-  const normalized = (role ?? '').trim().toLowerCase();
-  if (normalized.includes('komisiyoneri') || normalized === 'commissioner') return 'komisiyoneri';
-  if (normalized === 'landlord' || normalized === 'property owner' || normalized === 'property_owner') return 'property_owner';
-  return 'client';
-}
-
-function displayRole(role: unknown, requestedRole?: string): string {
+function displayRole(role: unknown): string {
   const normalized = typeof role === 'string' ? role.toLowerCase() : 'client';
   if (normalized === 'komisiyoneri') return 'Commissioner / Komisiyoneri';
-  if (normalized === 'property_owner') return requestedRole?.trim().toLowerCase() === 'landlord' ? 'Landlord' : 'Property Owner';
+  if (normalized === 'property_owner') return 'Property Owner';
   return 'Client';
 }
 
@@ -36,7 +29,7 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...(accessToken ? { access_token: accessToken } : { credential }),
-        role: backendRole(body.role),
+        role: 'client',
       }),
       cache: 'no-store',
     });
@@ -47,7 +40,7 @@ export async function POST(request: Request) {
     if (!result.user || !result.access_token) {
       return NextResponse.json({ error: 'Google sign-in did not return a Umutungo session.' }, { status: 502 });
     }
-    return NextResponse.json({ ...result, role: displayRole(result.user.role, body.role) });
+    return NextResponse.json({ ...result, role: displayRole(result.user.role) });
   } catch {
     return NextResponse.json({ error: 'Google sign-in could not reach the Umutungo service.' }, { status: 502 });
   }

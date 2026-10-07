@@ -251,19 +251,21 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   };
 
   const openSignIn = (requestedRole?: AuthRole, returnTo?: string) => {
-    setIntendedPath(returnTo);
+    showSignInModal(requestedRole ?? 'Client', returnTo);
     window.dispatchEvent(new CustomEvent('umutungo:request-google-sign-in', { detail: { role: requestedRole ?? 'Client' } }));
   };
 
   useEffect(() => {
     const requestSignIn = (event: Event) => {
-      const requestedRole = (event as CustomEvent<{ role?: AuthRole }>).detail?.role;
-      const returnTo = (event as CustomEvent<{ returnTo?: string }>).detail?.returnTo;
+      const detail = (event as CustomEvent<{ role?: AuthRole; returnTo?: string; fallback?: boolean }>).detail;
+      const requestedRole = detail?.role;
+      const returnTo = detail?.returnTo;
       if (signedIn) {
         if (requestedRole === 'Commissioner / Komisiyoneri' && roleKey === requestedRole) router.push('/commissioner');
         return;
       }
       showSignInModal(requestedRole ?? 'Client', returnTo);
+      if (!detail?.fallback) window.dispatchEvent(new CustomEvent('umutungo:request-google-sign-in', { detail: { role: requestedRole ?? 'Client' } }));
     };
     window.addEventListener('umutungo:request-sign-in', requestSignIn);
     return () => window.removeEventListener('umutungo:request-sign-in', requestSignIn);

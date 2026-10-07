@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -73,6 +74,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/admin/activities", s.adminActivities)
 	mux.HandleFunc("/api/v1/admin/locations", s.adminLocations)
 	mux.HandleFunc("/api/v1/about-video", s.aboutVideo)
+	mux.HandleFunc("/api/v1/about-video/media", s.aboutVideoMedia)
 	mux.HandleFunc("/api/v1/notifications", s.notifications)
 	mux.HandleFunc("/api/v1/favorites", s.favorites)
 	mux.HandleFunc("/api/v1/favorites/", s.favoriteRoute)
@@ -1011,21 +1013,17 @@ type aboutVideoRecord struct {
 
 func (s *Server) aboutVideo(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		manifestPath := filepath.Join(s.cfg.MediaUploadDir, "about", "video.json")
-		data, err := os.ReadFile(manifestPath)
+		var record aboutVideoRecord
+		err := s.db.QueryRow(r.Context(), `SELECT title,filename,original_name,size_bytes,updated_at FROM about_videos WHERE id=1`).Scan(&record.Title, &record.Filename, &record.OriginalName, &record.SizeBytes, &record.UpdatedAt)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if err == pgx.ErrNoRows {
 				writeJSON(w, http.StatusOK, map[string]any{"video": nil})
 				return
 			}
 			errorJSON(w, http.StatusInternalServerError, "could not load About video")
 			return
 		}
-		var record aboutVideoRecord
-		if json.Unmarshal(data, &record) != nil {
-			errorJSON(w, http.StatusInternalServerError, "About video details are invalid")
-			return
-		}
+		record.URL = s.aboutVideoMediaURL(r)
 		writeJSON(w, http.StatusOK, map[string]any{"video": record})
 		return
 	}
@@ -1073,23 +1071,6 @@ func (s *Server) aboutVideo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		filename += extension
-		directory := filepath.Join(s.cfg.MediaUploadDir, "about")
-		if err := os.MkdirAll(directory, 0o755); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not prepare video storage")
-			return
-		}
-		filePath := filepath.Join(directory, filename)
-		if err := os.WriteFile(filePath, data, 0o644); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not save About video")
-			return
-		}
-		removeNewFile := true
-		defer func() {
-			if removeNewFile {
-				_ = os.Remove(filePath)
-			}
-		}()
-		oldRecord, _ := os.ReadFile(filepath.Join(directory, "video.json"))
 		title := strings.TrimSpace(r.FormValue("title"))
 		if len(title) > 120 {
 			title = title[:120]
@@ -1097,50 +1078,62 @@ func (s *Server) aboutVideo(w http.ResponseWriter, r *http.Request) {
 		if title == "" {
 			title = "The Umutungo story"
 		}
-		record := aboutVideoRecord{URL: s.mediaURL(r, "about", filename), Title: title, Filename: filename, OriginalName: filepath.Base(header.Filename), SizeBytes: int64(len(data)), UpdatedAt: time.Now().UTC().Format(time.RFC3339)}
-		manifest, err := json.Marshal(record)
-		if err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not prepare About video details")
+		originalName := filepath.Base(header.Filename)
+		contentType := "video/mp4"
+		if extension == ".webm" {
+			contentType = "video/webm"
+		}
+		if _, err := s.db.Exec(r.Context(), `INSERT INTO about_videos(id,title,filename,original_name,content_type,size_bytes,data,updated_at)
+			VALUES(1,$1,$2,$3,$4,$5,$6,NOW()) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,filename=EXCLUDED.filename,original_name=EXCLUDED.original_name,content_type=EXCLUDED.content_type,size_bytes=EXCLUDED.size_bytes,data=EXCLUDED.data,updated_at=NOW()`, title, filename, originalName, contentType, int64(len(data)), data); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not save About video to the database")
 			return
 		}
-		manifestPath := filepath.Join(directory, "video.json")
-		temporaryManifest := manifestPath + ".tmp"
-		if err := os.WriteFile(temporaryManifest, manifest, 0o644); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not publish About video")
-			return
-		}
-		if err := os.Rename(temporaryManifest, manifestPath); err != nil {
-			_ = os.Remove(temporaryManifest)
-			errorJSON(w, http.StatusInternalServerError, "could not publish About video")
-			return
-		}
-		removeNewFile = false
-		var previous aboutVideoRecord
-		if json.Unmarshal(oldRecord, &previous) == nil && previous.Filename != "" && previous.Filename != filename {
-			_ = os.Remove(filepath.Join(directory, filepath.Base(previous.Filename)))
-		}
+		record := aboutVideoRecord{URL: s.aboutVideoMediaURL(r), Title: title, Filename: filename, OriginalName: originalName, SizeBytes: int64(len(data)), UpdatedAt: time.Now().UTC().Format(time.RFC3339)}
 		writeJSON(w, http.StatusCreated, map[string]any{"video": record})
 	case http.MethodDelete:
-		directory := filepath.Join(s.cfg.MediaUploadDir, "about")
-		manifestPath := filepath.Join(directory, "video.json")
-		data, err := os.ReadFile(manifestPath)
-		if err != nil && !os.IsNotExist(err) {
-			errorJSON(w, http.StatusInternalServerError, "could not load About video")
-			return
-		}
-		var previous aboutVideoRecord
-		_ = json.Unmarshal(data, &previous)
-		if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
+		if _, err := s.db.Exec(r.Context(), `DELETE FROM about_videos WHERE id=1`); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not remove About video")
 			return
-		}
-		if previous.Filename != "" {
-			_ = os.Remove(filepath.Join(directory, filepath.Base(previous.Filename)))
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"video": nil})
 	default:
 		errorJSON(w, http.StatusMethodNotAllowed, "use GET, POST, or DELETE")
 	}
+}
+
+func (s *Server) aboutVideoMedia(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var filename, contentType string
+	var data []byte
+	var updatedAt time.Time
+	err := s.db.QueryRow(r.Context(), `SELECT filename,content_type,data,updated_at FROM about_videos WHERE id=1`).Scan(&filename, &contentType, &data, &updatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			errorJSON(w, http.StatusNotFound, "About video not found")
+			return
+		}
+		errorJSON(w, http.StatusInternalServerError, "could not load About video")
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(w, r, filepath.Base(filename), updatedAt, bytes.NewReader(data))
+}
+
+func (s *Server) aboutVideoMediaURL(r *http.Request) string {
+	base := strings.TrimRight(strings.TrimSpace(s.cfg.MediaPublicBaseURL), "/")
+	if base == "" {
+		scheme := "http"
+		if strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https") {
+			scheme = "https"
+		}
+		base = scheme + "://" + r.Host
+	}
+	return base + "/api/v1/about-video/media"
 }
 
 func (s *Server) mediaURL(r *http.Request, listingID, filename string) string {

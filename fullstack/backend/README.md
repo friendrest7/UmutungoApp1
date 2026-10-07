@@ -65,6 +65,8 @@ Use `Authorization: Bearer <access_token>` for protected routes.
 
 Uploaded listing images are written to `MEDIA_UPLOAD_DIR` and served from `/uploads/`. Set `MEDIA_PUBLIC_BASE_URL` to the public API origin in production. Set `GOOGLE_CLIENT_IDS` to a comma-separated allowlist of Google Android, iOS, and web client IDs before enabling mobile Google sign-in. The backend never receives a Google client secret.
 
+The admin About-video upload is stored in the Render PostgreSQL database (`about_videos`) and streamed from `/api/v1/about-video/media` with byte-range support. The website reads the active video URL from `/api/v1/about-video`; the video binary is not part of the website's GitHub assets. Keep video uploads reasonably compressed because database storage and delivery are billed with the database plan.
+
 ## Production follow-up
 
 The schema and API are the backend foundation. Before production, add the selected SMS, MTN MoMo, Airtel Money, PSP, object storage/CDN, maps, push notification, CAPTCHA, and AI provider adapters. Move OTP/session secrets to a managed secret store, add rate limiting, and place the API behind TLS and an API gateway.

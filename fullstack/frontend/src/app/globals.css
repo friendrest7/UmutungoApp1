@@ -145,6 +145,8 @@ button { color: inherit; }
 .ai-chat-form button:hover { background: var(--green-dark); }
 .hero-section { position: relative; padding-bottom: 0; }
 .hero-image { position: relative; min-height: 622px; overflow: hidden; background: #18251b; }
+.hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.hero-has-video::before { display: none; }
 .hero-image::before { position: absolute; inset: 0; background: url('/landingog.png') center 44% / cover no-repeat; content: ''; filter: saturate(.72); transform: scale(1.02); }
 .hero-image-overlay { position: absolute; inset: 0; background: linear-gradient(90deg, var(--hero-veil) 0%, rgba(8, 20, 11, .3) 52%, rgba(8, 20, 11, .05) 100%); }
 .theme-dark .hero-image::before { filter: saturate(.68) brightness(.68); }

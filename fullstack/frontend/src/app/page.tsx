@@ -159,7 +159,7 @@ export default function HomePage() {
     return () => window.removeEventListener('umutungo:favorites-changed', onFavoritesChanged);
   }, []);
 
-  const requestSignIn = (role: 'Client' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner') => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role } }));
+  const requestSignIn = (role: 'Client' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner') => window.dispatchEvent(new CustomEvent('umutungo:request-google-sign-in', { detail: { role } }));
   const requestTenantSignIn = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Client', returnTo: '/tenant' } }));
   const submitDirectorySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

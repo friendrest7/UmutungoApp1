@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icons';
 import { apiBaseUrl } from '../lib/umutungoApi';
@@ -40,17 +40,38 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const modalRef = useRef<HTMLElement>(null);
+  const googleRoleRef = useRef<AuthRole>('Client');
+  const pendingGoogleRoleRef = useRef<AuthRole | null>(null);
+  const googlePromptRef = useRef<((requestedRole: AuthRole) => void) | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
+    if (!open) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (busy || !modalRef.current || modalRef.current.contains(event.target as Node)) return;
+      setMethod('choose'); setEmail(''); setPassword(''); setPhone(''); setCode(''); setError(''); setNotice('');
+      onClose();
+    };
+    document.addEventListener('pointerdown', dismissOutside, true);
+    return () => document.removeEventListener('pointerdown', dismissOutside, true);
+  }, [open, busy, onClose]);
+
+  useEffect(() => {
     const clientId = googleWebClientId();
-    if (window.localStorage.getItem('umutungo-demo-user') || window.sessionStorage.getItem('umutungo-google-prompted')) return;
-    window.sessionStorage.setItem('umutungo-google-prompted', '1');
-    const openSignInFallback = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Client' } }));
+    const openSignInFallback = (requestedRole: AuthRole = 'Client') => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: requestedRole } }));
+    const requestGoogleSignIn = (event: Event) => {
+      const requestedRole = (event as CustomEvent<{ role?: AuthRole }>).detail?.role ?? 'Client';
+      googleRoleRef.current = requestedRole;
+      if (!clientId || clientId === 'null') { openSignInFallback(requestedRole); return; }
+      if (googlePromptRef.current) googlePromptRef.current(requestedRole);
+      else pendingGoogleRoleRef.current = requestedRole;
+    };
+    window.addEventListener('umutungo:request-google-sign-in', requestGoogleSignIn);
     if (!clientId || clientId === 'null') {
-      window.setTimeout(openSignInFallback, 0);
-      return;
+      const timer = window.localStorage.getItem('umutungo-demo-user') ? undefined : window.setTimeout(() => openSignInFallback(), 0);
+      return () => { window.clearTimeout(timer); window.removeEventListener('umutungo:request-google-sign-in', requestGoogleSignIn); };
     }
     let cancelled = false;
     const scriptId = 'google-gsi-script';
@@ -73,21 +94,26 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
         callback: async (response) => {
           if (cancelled || !response.credential) return;
           try {
-            const authResponse = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: response.credential, role: role ?? 'Client' }) });
+            const authResponse = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: response.credential, role: googleRoleRef.current }) });
             const result = await authResponse.json();
             if (!authResponse.ok) return;
-            const accountRole = (result.role ?? role ?? 'Client') as AuthRole;
+            const accountRole = (result.role ?? googleRoleRef.current) as AuthRole;
             if (result.access_token) window.localStorage.setItem('umutungo-api-token', result.access_token);
             window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
             onSuccess(accountRole);
           } catch { /* Keep the marketplace available if Google sign-in is unavailable. */ }
         },
       });
-      google.accounts.id.prompt((moment) => {
-        if (moment.isNotDisplayed() || moment.isSkippedMoment()) openSignInFallback();
-      });
-    }).catch(() => openSignInFallback());
-    return () => { cancelled = true; };
+      googlePromptRef.current = (requestedRole) => {
+        googleRoleRef.current = requestedRole;
+        google.accounts.id.prompt((moment) => { if (moment.isNotDisplayed() || moment.isSkippedMoment()) openSignInFallback(requestedRole); });
+      };
+      const pendingRole = pendingGoogleRoleRef.current;
+      pendingGoogleRoleRef.current = null;
+      if (pendingRole) googlePromptRef.current(pendingRole);
+      else if (!window.localStorage.getItem('umutungo-demo-user')) googlePromptRef.current('Client');
+    }).catch(() => { googlePromptRef.current = openSignInFallback; if (!window.localStorage.getItem('umutungo-demo-user')) openSignInFallback(); });
+    return () => { cancelled = true; googlePromptRef.current = null; window.removeEventListener('umutungo:request-google-sign-in', requestGoogleSignIn); };
   }, []);
 
   if (!open || !mounted) return null;
@@ -174,5 +200,5 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
     } catch (googleError) { setError(googleError instanceof Error ? googleError.message : 'Google sign-in could not be completed.'); setBusy(false); }
   };
 
-  return createPortal(<div className="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title"><button className="auth-backdrop" type="button" aria-label="Close sign in" onClick={close} disabled={busy} /><section className="auth-modal"><button className="auth-close" type="button" onClick={close} aria-label="Close sign in" disabled={busy}><Icon name="x" size={18} /></button><div className="auth-modal-heading"><span className="auth-eyebrow">Umutungo account</span><h2 id="auth-title">Sign in to continue{role ? ` as ${roleLabel(role)}` : ''}.</h2><p>Keep your properties, messages, applications, and activity in one secure place.</p></div>{busy && <p className="auth-notice" role="status">Working securely…</p>}{method === 'choose' && <div className="auth-choice-view"><button className="auth-google-button" type="button" onClick={handleGoogleSignIn} disabled={busy}><Icon name="google" size={17} /> Continue with Google</button><div className="auth-divider"><span>or use your account</span></div><button className="auth-method-button" type="button" onClick={() => { setError(''); setMethod('email'); }} disabled={busy}><Icon name="bookPen" size={17} /><span><strong>Email and password</strong><small>Sign in with your Umutungo account</small></span><Icon name="arrow" size={15} /></button><button className="auth-method-button" type="button" onClick={() => { setError(''); setMethod('phone'); }} disabled={busy}><Icon name="user" size={17} /><span><strong>Phone number</strong><small>Get a verification code by SMS</small></span><Icon name="arrow" size={15} /></button></div>}{method === 'email' && <form className="auth-form" onSubmit={submitEmail}><button className="auth-form-back" type="button" onClick={() => setMethod('choose')} disabled={busy}><Icon name="arrow" size={14} /> Back to sign-in methods</button><label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email" required disabled={busy} /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" required disabled={busy} /></label><button className="auth-submit" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'} <Icon name="arrow" size={15} /></button></form>}{method === 'phone' && <form className="auth-form" onSubmit={sendCode}><button className="auth-form-back" type="button" onClick={() => setMethod('choose')} disabled={busy}><Icon name="arrow" size={14} /> Back to sign-in methods</button><label>Rwanda phone number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" autoComplete="tel" required disabled={busy} /></label><button className="auth-submit" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send verification code'} <Icon name="arrow" size={15} /></button></form>}{method === 'otp' && <form className="auth-form" onSubmit={verifyCode}><button className="auth-form-back" type="button" onClick={() => setMethod('phone')} disabled={busy}><Icon name="arrow" size={14} /> Change phone number</button><p className="auth-notice">{notice}</p><label>Verification code<input inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value)} placeholder="111111" maxLength={6} autoComplete="one-time-code" required disabled={busy} /></label><button className="auth-submit" type="submit" disabled={busy}>{busy ? 'Verifying…' : 'Verify and continue'} <Icon name="check" size={15} /></button></form>}{error && <p className="auth-error" role="alert">{error}</p>}<small className="auth-legal">By continuing, you agree to Umutungo’s terms and privacy policy.</small></section></div>, document.body);
+  return createPortal(<div className="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title"><button className="auth-backdrop" type="button" aria-label="Close sign in" onClick={close} disabled={busy} /><section ref={modalRef} className="auth-modal"><button className="auth-close" type="button" onClick={close} aria-label="Close sign in" disabled={busy}><Icon name="x" size={18} /></button><div className="auth-modal-heading"><span className="auth-eyebrow">Umutungo account</span><h2 id="auth-title">Sign in to continue{role ? ` as ${roleLabel(role)}` : ''}.</h2><p>Keep your properties, messages, applications, and activity in one secure place.</p></div>{busy && <p className="auth-notice" role="status">Working securely…</p>}{method === 'choose' && <div className="auth-choice-view"><button className="auth-google-button" type="button" onClick={handleGoogleSignIn} disabled={busy}><Icon name="google" size={17} /> Continue with Google</button><div className="auth-divider"><span>or use your account</span></div><button className="auth-method-button" type="button" onClick={() => { setError(''); setMethod('email'); }} disabled={busy}><Icon name="bookPen" size={17} /><span><strong>Email and password</strong><small>Sign in with your Umutungo account</small></span><Icon name="arrow" size={15} /></button><button className="auth-method-button" type="button" onClick={() => { setError(''); setMethod('phone'); }} disabled={busy}><Icon name="user" size={17} /><span><strong>Phone number</strong><small>Get a verification code by SMS</small></span><Icon name="arrow" size={15} /></button></div>}{method === 'email' && <form className="auth-form" onSubmit={submitEmail}><button className="auth-form-back" type="button" onClick={() => setMethod('choose')} disabled={busy}><Icon name="arrow" size={14} /> Back to sign-in methods</button><label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email" required disabled={busy} /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" required disabled={busy} /></label><button className="auth-submit" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'} <Icon name="arrow" size={15} /></button></form>}{method === 'phone' && <form className="auth-form" onSubmit={sendCode}><button className="auth-form-back" type="button" onClick={() => setMethod('choose')} disabled={busy}><Icon name="arrow" size={14} /> Back to sign-in methods</button><label>Rwanda phone number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" autoComplete="tel" required disabled={busy} /></label><button className="auth-submit" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send verification code'} <Icon name="arrow" size={15} /></button></form>}{method === 'otp' && <form className="auth-form" onSubmit={verifyCode}><button className="auth-form-back" type="button" onClick={() => setMethod('phone')} disabled={busy}><Icon name="arrow" size={14} /> Change phone number</button><p className="auth-notice">{notice}</p><label>Verification code<input inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value)} placeholder="111111" maxLength={6} autoComplete="one-time-code" required disabled={busy} /></label><button className="auth-submit" type="submit" disabled={busy}>{busy ? 'Verifying…' : 'Verify and continue'} <Icon name="check" size={15} /></button></form>}{error && <p className="auth-error" role="alert">{error}</p>}<small className="auth-legal">By continuing, you agree to Umutungo’s terms and privacy policy.</small></section></div>, document.body);
 }

@@ -244,10 +244,15 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
   }, [accountMenuOpen]);
 
-  const openSignIn = (requestedRole?: AuthRole, returnTo?: string) => {
+  const showSignInModal = (requestedRole?: AuthRole, returnTo?: string) => {
     setPendingRole(requestedRole);
     setIntendedPath(returnTo);
     setAuthOpen(true);
+  };
+
+  const openSignIn = (requestedRole?: AuthRole, returnTo?: string) => {
+    setIntendedPath(returnTo);
+    window.dispatchEvent(new CustomEvent('umutungo:request-google-sign-in', { detail: { role: requestedRole ?? 'Client' } }));
   };
 
   useEffect(() => {
@@ -258,7 +263,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         if (requestedRole === 'Commissioner / Komisiyoneri' && roleKey === requestedRole) router.push('/commissioner');
         return;
       }
-      openSignIn(requestedRole ?? 'Client', returnTo);
+      showSignInModal(requestedRole ?? 'Client', returnTo);
     };
     window.addEventListener('umutungo:request-sign-in', requestSignIn);
     return () => window.removeEventListener('umutungo:request-sign-in', requestSignIn);

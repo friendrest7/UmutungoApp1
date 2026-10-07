@@ -15,6 +15,13 @@ function displayRole(role: unknown): string {
   return 'Client';
 }
 
+function backendRole(role: unknown): string {
+  const normalized = typeof role === 'string' ? role.toLowerCase() : 'client';
+  if (normalized === 'commissioner / komisiyoneri' || normalized === 'commissioner' || normalized === 'komisiyoneri') return 'komisiyoneri';
+  if (normalized === 'landlord' || normalized === 'property owner' || normalized === 'property_owner') return 'property_owner';
+  return 'client';
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json() as { accessToken?: string; credential?: string; role?: string };
@@ -29,7 +36,7 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...(accessToken ? { access_token: accessToken } : { credential }),
-        role: 'client',
+        role: backendRole(body.role),
       }),
       cache: 'no-store',
     });

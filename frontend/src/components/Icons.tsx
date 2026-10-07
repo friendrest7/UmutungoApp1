@@ -24,6 +24,7 @@ export type IconName =
   | 'sun'
   | 'user'
   | 'users'
+  | 'video'
   | 'x';
 
 type IconProps = { name: IconName; size?: number; strokeWidth?: number; filled?: boolean };
@@ -57,6 +58,7 @@ export function Icon({ name, size = 18, strokeWidth = 1.8, filled = false }: Ico
     sun: <><circle cx="12" cy="12" r="4" fill="none" {...common} /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" fill="none" {...common} /></>,
     user: <><circle cx="12" cy="8" r="3.2" fill="none" {...common} /><path d="M5 21c.5-4 3-6 7-6s6.5 2 7 6" fill="none" {...common} /></>,
     users: <><circle cx="9" cy="8" r="3" fill="none" {...common} /><path d="M3 20c0-3.5 2.5-6 6-6s6 2.5 6 6M16 5.5a3 3 0 0 1 0 5.8M18 14c1.8.8 3 2.5 3 5" fill="none" {...common} /></>,
+    video: <><rect x="3" y="5" width="13" height="14" rx="2" fill="none" {...common} /><path d="m16 10 5-3v10l-5-3M8 9l5 3-5 3V9Z" fill="none" {...common} /></>,
     x: <><path d="m6 6 12 12M18 6 6 18" fill="none" {...common} /></>,
   };
 

@@ -91,7 +91,7 @@ export default function PropertyDetailPage() {
     if (!fallback) setLoading(false);
   }, [params.id]);
 
-  if (loading) return <main className="property-detail-loading">Loading property details...</main>;
+  if (loading && !property) return <main className="property-detail-page property-detail-loading" aria-busy="true"><div className="property-detail-skeleton" aria-hidden="true"><span /><div><i /><i /><i /></div><section><i /><i /><i /><i /></section></div></main>;
   if (!property) {
     return (
       <main className="property-detail-loading">

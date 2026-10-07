@@ -102,10 +102,24 @@ export type AdminReportsResponse = {
   summary: Record<'pending' | 'reviewing' | 'resolved' | 'dismissed', number>;
 };
 
+export type AboutVideo = {
+  url: string;
+  title: string;
+  filename: string;
+  original_name: string;
+  size_bytes: number;
+  updated_at: string;
+};
+
 export function apiBaseUrl() {
   const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').trim().replace(/\/$/, '');
-  if (configured) return configured;
-  return process.env.NODE_ENV === 'production' ? 'https://umutungoappbackend1.onrender.com' : '';
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) return '';
+  return configured;
+}
+
+function apiIsAvailable() {
+  return process.env.NODE_ENV === 'production' || Boolean(apiBaseUrl());
 }
 
 export function apiToken() {
@@ -115,7 +129,7 @@ export function apiToken() {
 
 export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
   const token = apiToken();
-  if (!token || !apiBaseUrl()) return null;
+  if (!token || !apiIsAvailable()) return null;
   const response = await fetch(`${apiBaseUrl()}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}), Authorization: `Bearer ${token}` },
@@ -127,7 +141,7 @@ export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
 
 export async function publicUmutungoApi<T>(path: string, init: RequestInit = {}) {
   const base = apiBaseUrl();
-  if (!base) return null;
+  if (!apiIsAvailable()) return null;
   const response = await fetch(`${base}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
@@ -135,6 +149,46 @@ export async function publicUmutungoApi<T>(path: string, init: RequestInit = {})
   const body = await response.json().catch(() => ({})) as T & { error?: string };
   if (!response.ok) throw new Error(body.error ?? 'Umutungo request failed');
   return body as T;
+}
+
+export async function getAboutVideo() {
+  const result = await publicUmutungoApi<{ video: AboutVideo | null }>('/api/v1/about-video', { cache: 'no-store' });
+  return result?.video ?? null;
+}
+
+export async function uploadListingImage(listingId: string, file: File) {
+  const base = apiBaseUrl();
+  const token = apiToken();
+  if (!apiIsAvailable() || !token) throw new Error('Connect to the Umutungo API and sign in before uploading listing photos.');
+  const form = new FormData();
+  form.set('file', file);
+  const response = await fetch(`${base}/api/v1/listings/${encodeURIComponent(listingId)}/media`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const body = await response.json().catch(() => ({})) as { id?: string; type?: string; url?: string; error?: string };
+  if (!response.ok || !body.url) throw new Error(body.error ?? 'The listing photo could not be uploaded.');
+  return body;
+}
+
+export async function uploadAboutVideo(file: File, title: string) {
+  const base = apiBaseUrl();
+  const token = apiToken();
+  if (!apiIsAvailable() || !token) throw new Error('Connect to the Umutungo API and sign in as an administrator to publish this video.');
+  const form = new FormData();
+  form.set('file', file);
+  form.set('title', title);
+  const response = await fetch(`${base}/api/v1/about-video`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+  const body = await response.json().catch(() => ({})) as { video?: AboutVideo; error?: string };
+  if (!response.ok || !body.video) throw new Error(body.error ?? 'The About video could not be published.');
+  return body.video;
+}
+
+export async function deleteAboutVideo() {
+  const result = await umutungoApi<{ video: AboutVideo | null }>('/api/v1/about-video', { method: 'DELETE' });
+  if (!result) throw new Error('Connect to the Umutungo API and sign in as an administrator to remove this video.');
+  return result.video;
 }
 
 export async function listFavorites() {

@@ -1,7 +1,6 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState, type CSSProperties } from 'react';
-import Image from 'next/image';
 import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
 import { Icon } from '../components/Icons';
@@ -118,9 +117,15 @@ export default function HomePage() {
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedProperty, setSelectedProperty] = useState<PropertyPlaceholder | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
   const copy = (key: string) => t(language, key);
 
   useEffect(() => {
+    const syncSignIn = () => setSignedIn(Boolean(window.localStorage.getItem('umutungo-demo-user')));
+    syncSignIn();
+    window.addEventListener('umutungo:auth-changed', syncSignIn);
+    window.addEventListener('storage', syncSignIn);
+    return () => { window.removeEventListener('umutungo:auth-changed', syncSignIn); window.removeEventListener('storage', syncSignIn); };
   }, []);
 
   useEffect(() => {
@@ -153,8 +158,8 @@ export default function HomePage() {
     return () => window.removeEventListener('umutungo:favorites-changed', onFavoritesChanged);
   }, []);
 
-  const requestSignIn = (role: 'Tenant' | 'Commissioner / Komisiyoneri') => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role } }));
-  const requestTenantSignIn = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Tenant', returnTo: '/tenant' } }));
+  const requestSignIn = (role: 'Client' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner') => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role } }));
+  const requestTenantSignIn = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Client', returnTo: '/tenant' } }));
   const submitDirectorySearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     window.location.assign(`/categories/houses${directoryQuery.trim() ? `?q=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
@@ -200,11 +205,11 @@ export default function HomePage() {
     <AiChatbot language={language} />
     <main>
       <section className="hero-section" id="home">
-        <div className="hero-image"><Image className="hero-image-photo" src="/landingog.png" alt="Kigali cityscape" fill priority quality={82} sizes="100vw" /><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
+        <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/landingog.png" aria-hidden="true"><source src="/properties/ogland1.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <h1>Discover, list, and manage every kind of property in Rwanda.</h1>
           <div className="landing-search-actions"><form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Search for a property you want to get here" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form><a className="landing-view-all-properties" href="/categories/houses">View all properties</a></div>
           <p className="hero-lead">Umutungo connects property owners, landlords, commissioners, and customers through one trusted marketplace for real estate, land, vehicles, accommodation, furniture, appliances, and equipment.</p>
-          <div className="hero-actions"><a className="button button-primary" href="/register?role=Komisiyoneri">Join as Komisiyoneri <Icon name="arrow" size={16} /></a><a className="button button-secondary" href="/register?role=Landlord">Join as Landlord <Icon name="arrow" size={16} /></a><a className="button button-commissioner" href="/register?role=Property%20Owner">Join as Property Owner <Icon name="arrow" size={16} /></a></div>
+          {!signedIn && <div className="hero-actions"><button className="button button-primary" type="button" onClick={() => requestSignIn('Commissioner / Komisiyoneri')}>Join as Komisiyoneri <Icon name="arrow" size={16} /></button><button className="button button-secondary" type="button" onClick={() => requestSignIn('Landlord')}>Join as Landlord <Icon name="arrow" size={16} /></button><button className="button button-commissioner" type="button" onClick={() => requestSignIn('Property Owner')}>Join as Property Owner <Icon name="arrow" size={16} /></button></div>}
         </div></div></div>
         <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} district={district} sector={sector} type={type} intent={intent} priceRange={priceRange} onLocationChange={(value) => { setLocation(value); setDistrict(''); setSector(''); }} onDistrictChange={(value) => { setDistrict(value); setSector(''); }} onSectorChange={setSector} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
       </section>

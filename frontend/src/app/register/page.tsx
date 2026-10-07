@@ -8,11 +8,10 @@ import { Logo } from '../../components/Logo';
 import { t } from '../../data/translations';
 import { usePersistentLanguage } from '../../lib/language';
 
-type RegistrationRole = 'Client' | 'Tenant' | 'Komisiyoneri' | 'Landlord' | 'Property Owner';
+type RegistrationRole = 'Client' | 'Komisiyoneri' | 'Landlord' | 'Property Owner';
 
-const roleOptions: Array<{ role: RegistrationRole; detail: string; storageRole: 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' }> = [
-  { role: 'Client', detail: 'I want to find or rent property.', storageRole: 'Tenant' },
-  { role: 'Tenant', detail: 'I currently rent or occupy a property.', storageRole: 'Tenant' },
+const roleOptions: Array<{ role: RegistrationRole; detail: string; storageRole: 'Client' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' }> = [
+  { role: 'Client', detail: 'I want to find or rent property.', storageRole: 'Client' },
   { role: 'Komisiyoneri', detail: 'I help clients buy, sell, or rent property.', storageRole: 'Commissioner / Komisiyoneri' },
   { role: 'Landlord', detail: 'I manage rental property and tenants.', storageRole: 'Landlord' },
   { role: 'Property Owner', detail: 'I own property and want to sell or rent it.', storageRole: 'Property Owner' },
@@ -39,8 +38,9 @@ export default function RegisterPage() {
     event.preventDefault();
     if (phone.replace(/\D/g, '').length < 9) { setError('Enter a valid Rwanda phone number.'); return; }
     const selected = roleOptions.find((item) => item.role === role) ?? roleOptions[0];
-    window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: selected.storageRole, name: name.trim(), phone: phone.trim(), email: email.trim(), kycStatus: selected.storageRole === 'Tenant' ? 'not_required' : 'pending', signedInAt: new Date().toISOString() }));
-    const dashboardPaths = { Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/landlord' } as const;
+    window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: selected.storageRole, name: name.trim(), phone: phone.trim(), email: email.trim(), kycStatus: selected.storageRole === 'Client' ? 'not_required' : 'pending', signedInAt: new Date().toISOString() }));
+    window.dispatchEvent(new Event('umutungo:auth-changed'));
+    const dashboardPaths = { Client: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner' } as const;
     window.location.assign(dashboardPaths[selected.storageRole]);
   };
 

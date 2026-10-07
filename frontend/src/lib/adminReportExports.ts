@@ -1,5 +1,15 @@
 import { AdminReport } from './umutungoApi';
 
+export type AdminActivityExportRecord = {
+  id: string;
+  actor_id: string;
+  actor_name: string;
+  actor_role: string;
+  activity_type: string;
+  summary: string;
+  created_at: string;
+};
+
 type ReportColumn = { label: string; value: (report: AdminReport) => string };
 
 const columns: ReportColumn[] = [
@@ -135,5 +145,81 @@ export async function downloadReportsImage(reports: AdminReport[]) {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('Report image could not be created.');
     downloadBlob(blob, `umutungo-admin-reports-${new Date().toISOString().slice(0, 10)}.png`);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+const activityColumns: Array<{ label: string; value: (item: AdminActivityExportRecord) => string }> = [
+  { label: 'Date', value: (item) => formatDate(item.created_at) },
+  { label: 'User', value: (item) => item.actor_name },
+  { label: 'Role', value: (item) => item.actor_role.replaceAll('_', ' ') },
+  { label: 'Activity', value: (item) => item.activity_type.replaceAll('_', ' ') },
+  { label: 'Details', value: (item) => item.summary },
+  { label: 'User ID', value: (item) => item.actor_id },
+];
+
+function activityFilename(extension: string) {
+  return `umutungo-user-activity-${new Date().toISOString().slice(0, 10)}.${extension}`;
+}
+
+export function downloadActivityExcel(items: AdminActivityExportRecord[]) {
+  const header = activityColumns.map((column) => `<Cell ss:StyleID="Header"><Data ss:Type="String">${escapeXml(column.label)}</Data></Cell>`).join('');
+  const body = items.map((item) => `<Row>${activityColumns.map((column) => `<Cell><Data ss:Type="String">${escapeXml(column.value(item))}</Data></Cell>`).join('')}</Row>`).join('');
+  const xml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#d8f1dc" ss:Pattern="Solid"/></Style></Styles><Worksheet ss:Name="User activity"><Table><Row>${header}</Row>${body}</Table></Worksheet></Workbook>`;
+  downloadBlob(new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' }), activityFilename('xls'));
+}
+
+export function downloadActivityPdf(items: AdminActivityExportRecord[]) {
+  const lines = ['UMUTUNGO · USER ACTIVITY', `Generated: ${new Date().toLocaleString()}`, `Activities: ${items.length}`, ''];
+  if (!items.length) lines.push('No recorded activities.');
+  items.forEach((item, index) => {
+    lines.push(`${index + 1}. ${item.actor_name} · ${item.actor_role.replaceAll('_', ' ')}`);
+    lines.push(`${item.activity_type.replaceAll('_', ' ')} · ${formatDate(item.created_at)}`);
+    lines.push(item.summary, `User ID: ${item.actor_id}`, '');
+  });
+  const wrapped = lines.flatMap((line) => wrapText(line, 92));
+  const pages = Array.from({ length: Math.max(1, Math.ceil(wrapped.length / 34)) }, (_, i) => wrapped.slice(i * 34, (i + 1) * 34));
+  const objects: string[] = ['<< /Type /Catalog /Pages 2 0 R >>', ''];
+  const pageNumbers: number[] = [];
+  pages.forEach((pageLines) => {
+    const pageNumber = objects.length + 1;
+    const contentNumber = pageNumber + 1;
+    pageNumbers.push(pageNumber);
+    const content = ['BT', '/F1 11 Tf', '54 742 Td', ...pageLines.map((line, index) => `${index === 0 ? '/F1 16 Tf' : '/F1 11 Tf'} (${pdfText(line)}) Tj 0 -20 Td`), 'ET'].join('\n');
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${contentNumber + 1} 0 R >> >> /Contents ${contentNumber} 0 R >>`);
+    objects.push(`<< /Length ${new TextEncoder().encode(content).length} >>\nstream\n${content}\nendstream`);
+  });
+  const fontNumber = objects.length + 1;
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  objects[1] = `<< /Type /Pages /Kids [${pageNumbers.map((number) => `${number} 0 R`).join(' ')}] /Count ${pageNumbers.length} >>`;
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => { object = object.replace(/\/F1 \d+ 0 R/g, `/F1 ${fontNumber} 0 R`); offsets.push(new TextEncoder().encode(pdf).length); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; });
+  const xrefOffset = new TextEncoder().encode(pdf).length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  downloadBlob(new Blob([pdf], { type: 'application/pdf' }), activityFilename('pdf'));
+}
+
+export async function downloadActivityImage(items: AdminActivityExportRecord[]) {
+  const width = 1600;
+  const rowHeight = 88;
+  const displayItems = items.slice(0, 10);
+  const height = 205 + Math.max(1, displayItems.length) * rowHeight;
+  const rows = displayItems.length ? displayItems.map((item, index) => {
+    const y = 164 + index * rowHeight;
+    return `<g><rect x="36" y="${y - 40}" width="1528" height="76" rx="8" fill="${index % 2 ? '#f3f7f2' : '#fff'}"/><text x="58" y="${y - 10}" class="title">${escapeHtml(item.actor_name)} · ${escapeHtml(item.actor_role.replaceAll('_', ' '))}</text><text x="58" y="${y + 15}" class="body">${escapeHtml(item.summary)}</text><text x="58" y="${y + 37}" class="muted">${escapeHtml(item.activity_type.replaceAll('_', ' '))} · ${escapeHtml(formatDate(item.created_at))}</text></g>`;
+  }).join('') : '<text x="58" y="170" class="body">No recorded activities.</text>';
+  const imageNote = items.length > displayItems.length ? ` · showing newest ${displayItems.length}` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#fbfdfb"/><rect width="100%" height="112" fill="#0b5d31"/><text x="36" y="50" class="heading">UMUTUNGO · USER ACTIVITY</text><text x="36" y="83" class="subheading">${items.length} activities${escapeHtml(imageNote)} · Generated ${escapeHtml(new Date().toLocaleString())}</text><style>.heading{font:700 30px Arial;fill:#fff}.subheading{font:400 16px Arial;fill:#d8f1dc}.title{font:700 20px Arial;fill:#173a22}.body{font:400 16px Arial;fill:#2b5c39}.muted{font:400 13px Arial;fill:#66816d}</style>${rows}</svg>`;
+  const image = new Image();
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  try {
+    await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error('Report image could not be rendered.')); image.src = url; });
+    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Report image could not be created.');
+    context.drawImage(image, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Report image could not be created.');
+    downloadBlob(blob, activityFilename('png'));
   } finally { URL.revokeObjectURL(url); }
 }

@@ -1,34 +1,54 @@
 import { NextResponse } from 'next/server';
 
-const allowedRoles = new Set(['Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Property Owner', 'Admin']);
+const defaultBackend = 'https://umutungoappbackend1.onrender.com';
+
+function backendUrl() {
+  const configured = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/$/, '');
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configured);
+  return configured && !(process.env.NODE_ENV === 'production' && isLocal) ? configured : defaultBackend;
+}
+
+function displayRole(role: unknown): string {
+  const normalized = typeof role === 'string' ? role.toLowerCase() : 'client';
+  if (normalized === 'komisiyoneri') return 'Commissioner / Komisiyoneri';
+  if (normalized === 'property_owner') return 'Property Owner';
+  return 'Client';
+}
+
+function backendRole(role: unknown): string {
+  const normalized = typeof role === 'string' ? role.toLowerCase() : 'client';
+  if (normalized === 'commissioner / komisiyoneri' || normalized === 'commissioner' || normalized === 'komisiyoneri') return 'komisiyoneri';
+  if (normalized === 'landlord' || normalized === 'property owner' || normalized === 'property_owner') return 'property_owner';
+  return 'client';
+}
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { accessToken?: string; role?: string };
+    const body = await request.json() as { accessToken?: string; credential?: string; role?: string };
     const accessToken = body.accessToken?.trim();
-    const role = allowedRoles.has(body.role ?? '') ? body.role : 'Tenant';
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-
-    if (!accessToken || !clientId) {
-      return NextResponse.json({ error: 'Google sign-in is not configured.' }, { status: 400 });
+    const credential = body.credential?.trim();
+    if ((!accessToken && !credential) || (accessToken && credential)) {
+      return NextResponse.json({ error: 'A Google sign-in token is required.' }, { status: 400 });
     }
 
-    const tokenResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`, { cache: 'no-store' });
-    if (!tokenResponse.ok) return NextResponse.json({ error: 'Google sign-in token is invalid or expired.' }, { status: 401 });
-    const tokenInfo = await tokenResponse.json() as { aud?: string; expires_in?: string };
-    if (tokenInfo.aud !== clientId || Number(tokenInfo.expires_in ?? 0) <= 0) {
-      return NextResponse.json({ error: 'Google sign-in could not be verified.' }, { status: 401 });
+    const response = await fetch(`${backendUrl()}/api/v1/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...(accessToken ? { access_token: accessToken } : { credential }),
+        role: backendRole(body.role),
+      }),
+      cache: 'no-store',
+    });
+    const result = await response.json().catch(() => ({})) as { error?: string; user?: { role?: string }; access_token?: string; profile?: unknown };
+    if (!response.ok) {
+      return NextResponse.json({ error: result.error ?? 'Google sign-in could not be completed.' }, { status: response.status });
     }
-
-    const profileResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' });
-    if (!profileResponse.ok) return NextResponse.json({ error: 'Google profile could not be loaded.' }, { status: 401 });
-    const profile = await profileResponse.json() as { sub?: string; email?: string; email_verified?: boolean; name?: string; picture?: string };
-    if (!profile.sub || !profile.email || profile.email_verified !== true) {
-      return NextResponse.json({ error: 'A verified Google email is required.' }, { status: 403 });
+    if (!result.user || !result.access_token) {
+      return NextResponse.json({ error: 'Google sign-in did not return a Umutungo session.' }, { status: 502 });
     }
-
-    return NextResponse.json({ role, user: { id: profile.sub, email: profile.email, name: profile.name ?? profile.email.split('@')[0], picture: profile.picture ?? '' } });
+    return NextResponse.json({ ...result, role: displayRole(result.user.role) });
   } catch {
-    return NextResponse.json({ error: 'Google sign-in could not be completed.' }, { status: 500 });
+    return NextResponse.json({ error: 'Google sign-in could not reach the Umutungo service.' }, { status: 502 });
   }
 }

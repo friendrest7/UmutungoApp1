@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
 import { Icon } from '../components/Icons';
@@ -117,16 +117,11 @@ export default function HomePage() {
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedProperty, setSelectedProperty] = useState<PropertyPlaceholder | null>(null);
-  const [signedIn, setSignedIn] = useState(false);
   const copy = (key: string) => t(language, key);
-
-  useEffect(() => {
-    const syncSignIn = () => setSignedIn(Boolean(window.localStorage.getItem('umutungo-demo-user')));
-    syncSignIn();
-    window.addEventListener('umutungo:auth-changed', syncSignIn);
-    window.addEventListener('storage', syncSignIn);
-    return () => { window.removeEventListener('umutungo:auth-changed', syncSignIn); window.removeEventListener('storage', syncSignIn); };
-  }, []);
+  const submitDirectorySearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    window.location.assign(`/categories/houses${directoryQuery.trim() ? `?q=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
+  };
 
   useEffect(() => {
     const localeMap: Record<string, string> = { English: 'en', French: 'fr', Kinyarwanda: 'rw', Swahili: 'sw' };
@@ -158,14 +153,7 @@ export default function HomePage() {
     return () => window.removeEventListener('umutungo:favorites-changed', onFavoritesChanged);
   }, []);
 
-  const requestSignIn = (role: 'Client' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner') => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role } }));
-  const requestTenantSignIn = () => window.dispatchEvent(new CustomEvent('umutungo:request-sign-in', { detail: { role: 'Client', returnTo: '/tenant' } }));
-  const submitDirectorySearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    window.location.assign(`/categories/houses${directoryQuery.trim() ? `?q=${encodeURIComponent(directoryQuery.trim())}` : ''}`);
-  };
   const submitSearch = () => {
-    if ((intent === 'Buy' || intent === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) { requestTenantSignIn(); return; }
     const categorySlugs: Record<string, string> = { House: 'houses', Apartment: 'apartments', Land: 'land', Commercial: 'commercial' };
     const shopSlug = categorySlugs[type] ?? 'houses';
     const params = new URLSearchParams({ location, intent, priceRange });
@@ -205,22 +193,22 @@ export default function HomePage() {
     <AiChatbot language={language} />
     <main>
       <section className="hero-section" id="home">
-        <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/landingog.png" aria-hidden="true"><source src="/properties/ogland1.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
-          <h1>Discover, list, and manage every kind of property in Rwanda.</h1>
-          <div className="landing-search-actions"><form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Describe the property you want" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Search for a property you want to get here" /><button type="submit" aria-label="Search properties"><Icon name="arrow" size={15} /></button></form><a className="landing-view-all-properties" href="/categories/houses">View all properties</a></div>
-          <p className="hero-lead">Umutungo connects property owners, landlords, commissioners, and customers through one trusted marketplace for real estate, land, vehicles, accommodation, furniture, appliances, and equipment.</p>
-          {!signedIn && <div className="hero-actions"><button className="button button-primary" type="button" onClick={() => requestSignIn('Commissioner / Komisiyoneri')}>Join as Komisiyoneri <Icon name="arrow" size={16} /></button><button className="button button-secondary" type="button" onClick={() => requestSignIn('Landlord')}>Join as Landlord <Icon name="arrow" size={16} /></button><button className="button button-commissioner" type="button" onClick={() => requestSignIn('Property Owner')}>Join as Property Owner <Icon name="arrow" size={16} /></button></div>}
+        <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
+          <div className="landing-copy-spacer" aria-hidden="true" />
+          <div className="landing-search-actions"><form className="landing-directory-search" onSubmit={submitDirectorySearch}><Icon name="search" size={16} /><input aria-label="Search properties" value={directoryQuery} onChange={(event) => setDirectoryQuery(event.target.value)} placeholder="Search properties" /><button type="submit" aria-label="Search"><Icon name="arrow" size={15} /></button></form><a className="landing-view-all-properties" href="/categories/houses">View All Properties</a></div>
+          <p className="hero-lead">Umutungo is an AI powered property market space that gives brokers and property owners a self managed platform to rent or sell real estate properties</p>
+          <div className="hero-actions join-role-actions" aria-label="Join Umutungo"><a className="button button-primary" href="/register?role=Client">Join as Client</a><a className="button button-secondary" href="/register?role=Property%20Owner">Join as Owner</a><a className="button button-commissioner" href="/register?role=Komisiyoneri">Join as Komisiyoneri</a></div>
         </div></div></div>
-        <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} district={district} sector={sector} type={type} intent={intent} priceRange={priceRange} onLocationChange={(value) => { setLocation(value); setDistrict(''); setSector(''); }} onDistrictChange={(value) => { setDistrict(value); setSector(''); }} onSectorChange={setSector} onTypeChange={setType} onIntentChange={(value) => { setIntent(value); if ((value === 'Buy' || value === 'Rent') && !window.localStorage.getItem('umutungo-demo-user')) requestTenantSignIn(); }} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
+        <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} district={district} sector={sector} type={type} intent={intent} priceRange={priceRange} onLocationChange={(value) => { setLocation(value); setDistrict(''); setSector(''); }} onDistrictChange={(value) => { setDistrict(value); setSector(''); }} onSectorChange={setSector} onTypeChange={setType} onIntentChange={setIntent} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
       </section>
 
       <section className="category-section section container" id="categories">
-        <div className="section-heading split-heading"><div><p className="eyebrow">Browse Categories</p><h2>Find every kind<br /><em>of property.</em></h2></div><p className="section-description">Explore homes, land, vehicles, accommodation, furniture, appliances, equipment, and other assets in one trusted marketplace.</p></div>
+        <div className="section-heading split-heading"><div><p className="eyebrow">Browse Categories</p><h2>Find every kind<br /><em>of property.</em></h2></div><div className="category-heading-spacer" aria-hidden="true" /></div>
         <div className="category-grid premium-category-grid">{categories.map((category) => <a className="premium-category-card" href={`/categories/${category.slug}`} key={category.slug}><span className="premium-category-image" style={{ backgroundImage: `url(${category.image})` }} /><span className="premium-category-copy"><strong>{category.name}</strong><small>{category.detail}</small><Icon name="arrow" size={15} /></span></a>)}</div>
       </section>
 
       <section className="section section-property container" id="properties">
-        <div className="section-heading split-heading"><div><p className="eyebrow">{selectedCategory ? copy('Category view') : copy('Featured properties')}</p><h2>{selectedCategory ? <>{copy(selectedCategory)}<br /><em>{copy('properties.')}</em></> : `${copy('Places worth')} ${copy('a closer look.')}`}</h2></div><p className={`section-description ${selectedCategory ? '' : 'featured-properties-description'}`}>{selectedCategory ? `${visibleProperties.length} ${copy('properties found in this category.')}` : 'A small selection of homes currently available in Kigali, personalised to you. Check it out.'}</p></div>
+        <div className="section-heading split-heading"><div><p className="eyebrow">{selectedCategory ? copy('Category view') : copy('Featured properties')}</p><h2>{selectedCategory ? <>{copy(selectedCategory)}<br /><em>{copy('properties.')}</em></> : `${copy('Places worth')} ${copy('a closer look.')}`}</h2></div>{selectedCategory && <p className="section-description">{visibleProperties.length} {copy('properties found in this category.')}</p>}</div>
         {searchMessage && <div className="search-feedback" role="status"><Icon name="check" size={16} /> {searchMessage}</div>}
         <div className="property-grid">{visibleProperties.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />)}</div>
         {selectedCategory && <button className="category-reset" type="button" onClick={() => { setSelectedCategory(''); setType('Any type'); }}>{copy('Show all properties')}</button>}
@@ -237,10 +225,6 @@ export default function HomePage() {
           <a className="text-arrow-link" href="#properties">{copy('Explore spaces')} <Icon name="arrow" size={15} /></a>
         </div>
        </section>}
-
-      <section className="info-section about-section" id="about">
-        <div className="container about-interface"><div className="about-panel"><p className="eyebrow">{copy('Why Umutungo')}</p><h2>{copy('Property search,')}<br /><em>{copy('made clearer.')}</em></h2><p>{copy('The useful details, in one place, so the next step feels easier.')}</p><a className="button button-primary" href="#properties">{copy('Find a property')} <Icon name="arrow" size={15} /></a></div><div className="about-feature-list"><article><Icon name="check" size={20} /><div><h3>{copy('Verified listings')}</h3><p>{copy('Clear details on the places we feature.')}</p></div></article><article><Icon name="users" size={20} /><div><h3>{copy('Local agents')}</h3><p>{copy('Speak to people who know the area and the market.')}</p></div></article><article><Icon name="heart" size={20} /><div><h3>{copy('Compare with ease')}</h3><p>{copy('See price, space and location before you visit.')}</p></div></article></div></div>
-      </section>
 
       <section className="contact-interface" id="contact">
         <div className="container contact-interface-grid"><div><p className="eyebrow">{copy('Connect')}</p><h2>{copy('Every place has a story.')}<br /><em>{copy('Let’s help you find yours.')}</em></h2><p className="contact-interface-copy">{copy('We are building a property experience where every person in the journey can move with more clarity and confidence.')}</p><a className="contact-email" href="mailto:hello@umutungo.rw">hello@umutungo.rw <Icon name="arrow" size={15} /></a></div><form className="contact-interface-form" action="mailto:hello@umutungo.rw" method="post" encType="text/plain"><label><span>{copy('Name')}</span><input name="name" placeholder={copy('Your name')} required /></label><label><span>{copy('Email address')}</span><input name="email" type="email" placeholder="you@example.com" required /></label><label><span>{copy('Message')}</span><textarea name="message" placeholder={copy('How can we help?')} rows={4} required /></label><button className="button button-primary" type="submit">{copy('Send message')} <Icon name="arrow" size={15} /></button></form></div>

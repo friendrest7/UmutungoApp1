@@ -1,12 +1,12 @@
 import { ReactElement, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Language, t } from '../data/translations';
 import { Icon } from './Icons';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { AuthModal, AuthRole } from './AuthModal';
-import { removeFavorite, type FavoriteItem } from '../lib/umutungoApi';
+import { removeFavorite, type FavoriteItem, umutungoApi } from '../lib/umutungoApi';
 
 type NavbarProps = {
   darkMode: boolean;
@@ -21,11 +21,22 @@ type NavbarProps = {
 };
 
 const authRoles = ['Client', 'Commissioner / Komisiyoneri', 'Landlord', 'Property Owner', 'Admin'];
-const categories = ['Houses', 'Apartments', 'Land', 'Commercial', 'Offices', 'Hotels and lodges', 'Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other'];
 const languages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
 const languageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
 const dashboardPaths: Record<AuthRole, string> = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner', Admin: '/admin' };
 const dashboardPathForRole = (role?: string) => role && role in dashboardPaths ? dashboardPaths[role as AuthRole] : undefined;
+
+async function hasPostingListings(role: AuthRole) {
+  try {
+    const response = await umutungoApi<{ items?: unknown[] }>('/api/v1/owner/listings');
+    if (response?.items) return response.items.length > 0;
+  } catch { /* Local demo listings remain available when the API is offline. */ }
+  try {
+    const key = role === 'Commissioner / Komisiyoneri' ? 'umutungo-commissioner-properties' : 'umutungo-landlord-properties';
+    const items = JSON.parse(window.localStorage.getItem(key) ?? '[]') as unknown;
+    return Array.isArray(items) && items.length > 0;
+  } catch { return false; }
+}
 
 function HoverHint({ text, placement, children }: { text: string; placement: 'right' | 'bottom'; children: ReactElement }) {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -95,10 +106,10 @@ function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChang
 
 export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, isSignedIn = false, onSignIn, onSignOut, onAccount, onLandingVisibilityChange }: NavbarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [landingVisible, setLandingVisible] = useState(true);
-  const [mobileCategoryOpen, setMobileCategoryOpen] = useState(false);
   const [roleKey, setRoleKey] = useState('');
   const [authOpen, setAuthOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -119,12 +130,6 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const postActionHint = isTenant ? 'Post (Upgrade)' : 'Share a property with people looking.';
   const goTo = (id: string) => { setMobileOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); };
   const openFavorites = () => { setFavoritesPanelOpen((open) => !open); setAccountMenuOpen(false); setMobileOpen(false); };
-  const openCategory = (value: string) => {
-    const category = categories.find((item) => t(language, item) === value) ?? value;
-    const slugs: Record<string, string> = { Houses: 'houses', Apartments: 'apartments', Land: 'land', Commercial: 'commercial', Offices: 'offices', 'Hotels and lodges': 'hospitality', Vehicles: 'vehicles', Furniture: 'furniture', Appliances: 'appliances', Equipment: 'equipment', Other: 'other' };
-    if (slugs[category]) window.location.assign(`/categories/${slugs[category]}`);
-  };
-
   useEffect(() => {
     ['/tenant', '/commissioner', '/landlord', '/admin'].forEach((path) => router.prefetch(path));
   }, [router]);
@@ -355,12 +360,10 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
       <div className="topbar-inner">
         <div className="topbar-brand-group">
           <a className="topbar-brand" href="/" aria-label="Umutungo home"><Logo darkMode={darkMode} /></a>
-          <a className="nav-home-link" href="/"><span>{t(language, 'Home')}</span></a>
         </div>
         <nav className="desktop-nav" aria-label="Primary navigation">
           <a className="nav-link" href="/how-it-works"><span>{t(language, 'How it works')}</span></a>
           <a className="nav-link" href="/about"><span>{t(language, 'About us')}</span></a>
-          <a className="nav-link" href="/categories"><span>{t(language, 'Categories')}</span></a>
           <a className="nav-contact-link" href="/#contact">{t(language, 'Contact us')}</a>
         </nav>
 
@@ -379,17 +382,25 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
       </div>
 
       {mobileOpen && <div className="mobile-menu" id="mobile-menu">
-        <a className="mobile-menu-link active" href="/" onClick={() => setMobileOpen(false)}>{t(language, 'Home')}</a>
         <a className="mobile-menu-link" href="/how-it-works" onClick={() => setMobileOpen(false)}>{t(language, 'How it works')}</a>
         <a className="mobile-menu-link" href="/about" onClick={() => setMobileOpen(false)}>{t(language, 'About us')}</a>
         <a className="mobile-menu-link mobile-contact-link" href="/#contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>
-        <div className="mobile-menu-group"><button className="mobile-menu-link" type="button" onClick={() => setMobileCategoryOpen(!mobileCategoryOpen)}>{t(language, 'Categories')} <Icon name="chevron" size={14} /></button>{mobileCategoryOpen && <div className="mobile-submenu mobile-language-submenu">{categories.map((item) => <button key={item} type="button" onClick={() => openCategory(t(language, item))}>{t(language, item)}</button>)}</div>}</div>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>
           <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-expanded={signedIn ? accountMenuOpen : undefined} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setMobileOpen(false); onSignIn ? onSignIn() : openSignIn(); }}>{t(language, signedIn ? 'Account' : 'Sign in')}<Icon name={signedIn && accountMenuOpen ? 'chevron' : 'user'} size={15} /></button>
           {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} showSettings={false} />}
         </div>
       </div>}
     </header>
-    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed')); const destination = intendedPath ?? dashboardPaths[accountRole]; setIntendedPath(undefined); router.push(destination); }} />
+    <AuthModal open={authOpen} role={pendingRole} autoPrompt={pathname === '/'} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={async (accountRole) => {
+      setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed'));
+      const fromLanding = window.location.pathname === '/';
+      let destination = intendedPath ?? (accountRole === 'Admin' ? '/admin' : fromLanding ? '/' : dashboardPaths[accountRole]);
+      if (!intendedPath && fromLanding && (accountRole === 'Commissioner / Komisiyoneri' || accountRole === 'Landlord' || accountRole === 'Property Owner')) {
+        const hasListings = await hasPostingListings(accountRole);
+        destination = hasListings ? dashboardPaths[accountRole] : '/';
+      }
+      setIntendedPath(undefined);
+      router.push(destination);
+    }} />
   </>;
 }

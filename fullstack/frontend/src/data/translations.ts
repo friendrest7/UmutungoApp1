@@ -405,6 +405,13 @@ const dashboardTranslations: Record<Language, TranslationMap> = {
   },
 };
 
+const ownerJoinTranslations: Record<Language, TranslationMap> = {
+  English: { 'Join as Property Owner': 'Join as Property Owner' },
+  French: { 'Join as Property Owner': 'Rejoindre comme propriétaire' },
+  Kinyarwanda: { 'Join as Property Owner': 'Injira nka nyir’umutungo' },
+  Swahili: { 'Join as Property Owner': 'Jiunge kama mmiliki wa mali' },
+};
+
 const storyDetailTranslations: Record<Language, TranslationMap> = {
   English: {
     'Compare the asking price, rooms, amenities and condition in one clear view. Look through photos and property details at your own pace. Save places that fit your plans so you can compare them later. A clearer picture helps you decide which homes deserve a visit.': 'Compare the asking price, rooms, amenities and condition in one clear view. Look through photos and property details at your own pace. Save places that fit your plans so you can compare them later. A clearer picture helps you decide which homes deserve a visit.',
@@ -430,7 +437,7 @@ const storyDetailTranslations: Record<Language, TranslationMap> = {
 
 export function t(language: Language, key: string) {
   const normalizedKey = repairMojibake(key);
-  const translated = storyDetailTranslations[language]?.[key] ?? storyDetailTranslations[language]?.[normalizedKey] ?? interfaceCoverageTranslations[language]?.[key] ?? interfaceCoverageTranslations[language]?.[normalizedKey] ?? dashboardTranslations[language]?.[key] ?? dashboardTranslations[language]?.[normalizedKey] ?? audienceTranslations[language]?.[key] ?? audienceTranslations[language]?.[normalizedKey] ?? platformTranslations[language]?.[key] ?? platformTranslations[language]?.[normalizedKey] ?? systemTranslations[language]?.[key] ?? systemTranslations[language]?.[normalizedKey] ?? storyTranslations[language]?.[key] ?? storyTranslations[language]?.[normalizedKey] ?? actionTranslations[language]?.[key] ?? actionTranslations[language]?.[normalizedKey] ?? categoryViewTranslations[language]?.[key] ?? categoryViewTranslations[language]?.[normalizedKey] ?? landingTranslations[language]?.[key] ?? landingTranslations[language]?.[normalizedKey] ?? navHintTranslations[language]?.[key] ?? navHintTranslations[language]?.[normalizedKey] ?? appTranslations[language]?.[key] ?? appTranslations[language]?.[normalizedKey] ?? chatTranslations[language]?.[key] ?? chatTranslations[language]?.[normalizedKey] ?? formTranslations[language]?.[key] ?? formTranslations[language]?.[normalizedKey] ?? uiTranslations[language]?.[key] ?? uiTranslations[language]?.[normalizedKey] ?? dictionaries[language]?.[key] ?? dictionaries[language]?.[normalizedKey] ?? english[key] ?? english[normalizedKey] ?? normalizedKey;
+  const translated = ownerJoinTranslations[language]?.[key] ?? ownerJoinTranslations[language]?.[normalizedKey] ?? storyDetailTranslations[language]?.[key] ?? storyDetailTranslations[language]?.[normalizedKey] ?? interfaceCoverageTranslations[language]?.[key] ?? interfaceCoverageTranslations[language]?.[normalizedKey] ?? dashboardTranslations[language]?.[key] ?? dashboardTranslations[language]?.[normalizedKey] ?? audienceTranslations[language]?.[key] ?? audienceTranslations[language]?.[normalizedKey] ?? platformTranslations[language]?.[key] ?? platformTranslations[language]?.[normalizedKey] ?? systemTranslations[language]?.[key] ?? systemTranslations[language]?.[normalizedKey] ?? storyTranslations[language]?.[key] ?? storyTranslations[language]?.[normalizedKey] ?? actionTranslations[language]?.[key] ?? actionTranslations[language]?.[normalizedKey] ?? categoryViewTranslations[language]?.[key] ?? categoryViewTranslations[language]?.[normalizedKey] ?? landingTranslations[language]?.[key] ?? landingTranslations[language]?.[normalizedKey] ?? navHintTranslations[language]?.[key] ?? navHintTranslations[language]?.[normalizedKey] ?? appTranslations[language]?.[key] ?? appTranslations[language]?.[normalizedKey] ?? chatTranslations[language]?.[key] ?? chatTranslations[language]?.[normalizedKey] ?? formTranslations[language]?.[key] ?? formTranslations[language]?.[normalizedKey] ?? uiTranslations[language]?.[key] ?? uiTranslations[language]?.[normalizedKey] ?? dictionaries[language]?.[key] ?? dictionaries[language]?.[normalizedKey] ?? english[key] ?? english[normalizedKey] ?? normalizedKey;
   return repairMojibake(translated);
 }
 

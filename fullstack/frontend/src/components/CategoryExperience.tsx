@@ -102,9 +102,12 @@ const viewerImages: Record<string, string[]> = {
   Land: ['/properties/land-01.jpg', '/properties/kigali-neighborhood.jpg', '/properties/tour-exterior.jpg'],
   Commercial: ['/properties/commercial-01.jpg', '/properties/commercial-02.jpg', '/properties/tour-interior.jpg', '/properties/tour-kitchen.jpg'],
   Offices: ['/properties/commercial-02.jpg', '/properties/commercial-01.jpg', '/properties/tour-interior.jpg'],
-  Equipment: ['/properties/commercial-02.jpg', '/properties/commercial-01.jpg', '/properties/tour-interior.jpg'],
+  Equipment: ['/properties/equipment-01.jpg', '/properties/equipment-02.jpg', '/properties/equipment-03.jpg', '/properties/equipment-04.jpg', '/properties/equipment-05.jpg'],
   Hospitality: ['/properties/apartment-02.jpg', '/properties/apartment-01.jpg', '/properties/tour-living.jpg', '/properties/tour-bedroom-real.jpg'],
-  Vehicles: ['/properties/commercial-02.jpg'], Furniture: ['/properties/tour-living.jpg'], Appliances: ['/properties/tour-kitchen.jpg'], 'Other assets': ['/properties/story-detail.jpg'],
+  Vehicles: ['/properties/vehicle-01.png', '/properties/vehicle-02.jpg', '/properties/vehicle-03.jpg', '/properties/vehicle-04.jpg', '/properties/vehicle-05.jpg'],
+  Furniture: ['/properties/tour-living.jpg', '/properties/furniture-02.jpg', '/properties/furniture-03.jpg', '/properties/furniture-04.jpg'],
+  Appliances: ['/properties/tour-kitchen.jpg', '/properties/appliance-02.jpg', '/properties/appliance-03.jpg', '/properties/appliance-04.jpg', '/properties/appliance-05.jpg'],
+  'Other assets': ['/properties/story-detail.jpg', '/properties/other-02.jpg', '/properties/other-03.jpg', '/properties/other-04.jpg', '/properties/other-05.jpg'],
 };
 
 const shopCategories: Array<{ slug: string; label: string; icon: 'home' | 'building' | 'leaf' | 'users' }> = [
@@ -143,9 +146,9 @@ const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlac
   const bathrooms = Number(item.detail.match(/(\d+)\s*baths?/)?.[1] ?? 0);
   const area = Number(item.detail.match(/(\d+)\s*m/)?.[1] ?? 0);
   const type = category.name === 'Houses' ? 'House' : category.name === 'Apartments' || category.name === 'Hospitality' ? 'Apartment' : category.name === 'Land' ? 'Land' : category.name;
-  const images = item.images?.length ? item.images : [item.image];
+  const images = item.images?.length ? item.images : item.sample ? Array.from(new Set([item.image, ...(viewerImages[category.name] ?? [])])) : [item.image];
 
-  return { id: item.id, title: item.title, type, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images: item.images?.length ? item.images : [item.image], listed: item.listed ?? 'Date unavailable', availableFor: item.intent === 'For sale' ? 'sale' : 'rent' };
+  return { id: item.id, title: item.title, type, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images, listed: item.listed ?? 'Date unavailable', availableFor: item.intent === 'For sale' ? 'sale' : 'rent' };
 };
 
 type DatabaseListing = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; tags?: string[]; amenities?: string[]; images?: string[]; created_at?: string };

@@ -3804,3 +3804,51 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
 }
+
+/* Keep property actions readable after the app-wide theme button reset. */
+.app-realistic .property-viewer :is(.viewer-request-button, .property-action-continue, .property-receipt-button) {
+  background: #0b7140 !important;
+  border-color: #0b7140 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.app-realistic .property-viewer :is(.viewer-request-button, .property-action-continue, .property-receipt-button):hover {
+  background: #075c33 !important;
+  border-color: #075c33 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.app-realistic .property-viewer .property-viewer-tabs button.is-active {
+  background: #0b7140 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.app-realistic .property-viewer :is(.viewer-tour-door, .viewer-tour-controls > button, .viewer-mini-map-canvas button, .viewer-tour-zoom button) {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.app-realistic .property-viewer .viewer-tour-controls > div button.is-active {
+  background: #fff !important;
+  color: #12351f !important;
+  -webkit-text-fill-color: #12351f !important;
+}
+.app-realistic .property-viewer .viewer-plan-room,
+.app-realistic .property-viewer .viewer-plan-room small {
+  color: #12351f !important;
+  -webkit-text-fill-color: #12351f !important;
+}
+.app-realistic .hero-content .hero-actions .button,
+.app-realistic .landing-search-actions .landing-view-all-properties {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.22);
+}
+.app-realistic .landing-directory-search button {
+  color: #0b7140 !important;
+  -webkit-text-fill-color: #0b7140 !important;
+}
+.app-realistic .property-viewer :is(button, [role="tab"]):focus-visible {
+  outline: 3px solid #81d49c !important;
+  outline-offset: 3px;
+}
+.viewer-game-stage { background-repeat: no-repeat; }

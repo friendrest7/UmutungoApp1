@@ -45,6 +45,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [mode, setMode] = useState<ViewerMode>(initialMode);
   const [tourStop, setTourStop] = useState(0);
   const [turn, setTurn] = useState(0);
+  const [tilt, setTilt] = useState(0);
   const [tourZoom, setTourZoom] = useState(0);
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [transactionType, setTransactionType] = useState<TransactionType>('rent');
@@ -75,7 +76,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [houseSeen, setHouseSeen] = useState(false);
   const [viewingRequested, setViewingRequested] = useState(false);
   const [applicationId, setApplicationId] = useState('');
-  const dragStart = useRef<{ x: number; y: number; turn: number; pointerType: string } | null>(null);
+  const dragStart = useRef<{ x: number; y: number; turn: number; tilt: number; pointerType: string } | null>(null);
   const photoSwipeStart = useRef<{ x: number; pointerId: number } | null>(null);
 
   useEffect(() => {
@@ -104,7 +105,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     photoSwipeStart.current = null;
   };
   const isLand = property.type === 'Land';
-  const isCommercial = property.type === 'Commercial';
+  const isCommercial = property.type === 'Commercial' || property.type === 'Offices';
   const availableFor = property.availableFor ?? (property.priceNote.includes('/ month') || property.priceNote.includes('/ night') ? 'rent' : 'sale');
   const availableActions: TransactionType[] = availableFor === 'both' ? ['rent', 'buy'] : [availableFor === 'rent' ? 'rent' : 'buy'];
   const openTransaction = () => {
@@ -284,22 +285,29 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     { id: 'visa', label: 'Visa card', detail: 'Debit or credit card', mark: 'VISA' },
     { id: 'other', label: 'Other bank card', detail: 'Other supported cards in Rwanda', mark: 'â€¢â€¢â€¢' },
   ];
-  const tourNames = isLand ? [t(language, 'Site entrance'), t(language, 'Buildable area'), t(language, 'Access road')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception')] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom')];
+  const isVehicle = property.type === 'Vehicles';
+  const isFurniture = property.type === 'Furniture';
+  const isAppliance = property.type === 'Appliances';
+  const isEquipment = property.type === 'Equipment';
+  const isOtherAsset = property.type === 'Other assets';
+  const tourNames = isLand ? [t(language, 'Site entrance'), t(language, 'Buildable area'), t(language, 'Access road')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception')] : isVehicle ? ['Exterior', 'Interior', 'Detail view'] : isFurniture ? ['Room view', 'Furniture detail', 'In context'] : isAppliance ? ['Product view', 'Controls', 'In context'] : isEquipment ? ['Equipment view', 'Controls', 'In use'] : isOtherAsset ? ['Main view', 'Details', 'In context'] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom')];
   const planNames = isLand ? [t(language, 'Plot frontage'), t(language, 'Buildable area'), t(language, 'Access road'), t(language, 'Green buffer')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception'), t(language, 'Staff area')] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom'), t(language, 'Garden')];
   const roomImages = images.filter((image) => /(?:^|\/)tour-[^/]+$/i.test(image.split('?')[0]));
-  const tourImages = (roomImages.length ? roomImages : images).slice(0, 3);
+  const tourImages = (roomImages.length >= 3 ? roomImages : images).slice(0, 3);
   const roomPositions = [{ x: 50, y: 62 }, { x: 71, y: 35 }, { x: 31, y: 29 }];
   const walkTo = (index: number) => { const nextIndex = Math.max(0, Math.min(index, tourImages.length - 1)); setTourStop(nextIndex); setTourZoom(0); };
   const handleGameKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); walkTo(tourStop + 1); }
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); walkTo(tourStop - 1); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); setTurn((current) => current + 18); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); setTurn((current) => current - 18); }
+    if (event.key === 'ArrowUp') { event.preventDefault(); setTilt((current) => Math.max(-35, current - 8)); }
+    if (event.key === 'ArrowDown') { event.preventDefault(); setTilt((current) => Math.min(35, current + 8)); }
   };
   const startLook = (event: ReactPointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest('button')) return;
-    dragStart.current = { x: event.clientX, y: event.clientY, turn, pointerType: event.pointerType };
+    dragStart.current = { x: event.clientX, y: event.clientY, turn, tilt, pointerType: event.pointerType };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
-  const dragLook = (event: ReactPointerEvent<HTMLDivElement>) => { if (dragStart.current) setTurn(dragStart.current.turn + (event.clientX - dragStart.current.x) * .8); };
+  const dragLook = (event: ReactPointerEvent<HTMLDivElement>) => { if (dragStart.current) { setTurn(dragStart.current.turn + (event.clientX - dragStart.current.x) * .8); setTilt(Math.max(-35, Math.min(35, dragStart.current.tilt + (event.clientY - dragStart.current.y) * .3))); } };
   const stopLook = () => { dragStart.current = null; };
   const handleTourWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -309,7 +317,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   return <div className="property-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby="property-viewer-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="property-viewer">
       <header className="property-viewer-header">
-        <div><span className="eyebrow">{t(language, 'Verified listing')}</span><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button></div>
+        <div><span className="eyebrow">{t(language, readOnly ? 'Illustrative example' : 'Property details')}</span><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p>{!readOnly && <button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button>}</div>
         <button className="property-viewer-close" type="button" onClick={onClose} aria-label={t(language, 'Close property viewer')}><Icon name="x" size={20} /></button>
       </header>
 
@@ -323,10 +331,10 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         <div className="property-viewer-media">
           {mode === 'photos' && <div className="viewer-photo-stage" onPointerDown={startPhotoSwipe} onPointerUp={stopPhotoSwipe} onPointerCancel={() => { photoSwipeStart.current = null; }}><Image src={images[activeImage]} alt={t(language, property.title)} fill sizes="(max-width: 900px) 100vw, 62vw" priority className="viewer-main-image" /><span className="viewer-media-count">{activeImage + 1} / {images.length}</span><button className="viewer-arrow viewer-arrow-prev" type="button" onClick={() => changeImage(-1)} aria-label={t(language, 'Previous property image')}><Icon name="chevron" size={21} /></button><button className="viewer-arrow viewer-arrow-next" type="button" onClick={() => changeImage(1)} aria-label={t(language, 'Next property image')}><Icon name="chevron" size={21} /></button></div>}
 
-          {mode === 'tour' && <div className="viewer-tour-stage viewer-game-stage" tabIndex={0} onKeyDown={handleGameKey} onWheel={handleTourWheel} onPointerDown={startLook} onPointerMove={dragLook} onPointerUp={stopLook} onPointerCancel={stopLook} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 22, 12, .02), rgba(8, 22, 12, .04) 45%, rgba(8, 22, 12, .76)), url(${tourImages[tourStop] ?? images[0]})`, backgroundPosition: `${Math.max(0, Math.min(100, 50 + turn * .6))}% center`, backgroundSize: tourZoom ? `${100 + tourZoom * 18}% auto` : '120% auto' }}>
-            <div className="viewer-tour-topline"><span><Icon name="sparkles" size={15} /> {t(language, '3D home tour')}</span><small>Drag to look around · select a room to move through the home</small></div>
+          {mode === 'tour' && <div className="viewer-tour-stage viewer-game-stage" tabIndex={0} onKeyDown={handleGameKey} onWheel={handleTourWheel} onPointerDown={startLook} onPointerMove={dragLook} onPointerUp={stopLook} onPointerCancel={stopLook} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 22, 12, .02), rgba(8, 22, 12, .04) 45%, rgba(8, 22, 12, .76)), url(${tourImages[tourStop] ?? images[0]})`, backgroundPosition: `${Math.max(0, Math.min(100, 50 + turn * .6))}% ${Math.max(0, Math.min(100, 50 + tilt))}%`, backgroundSize: `${120 + tourZoom * 14}% auto` }}>
+            <div className="viewer-tour-topline"><span><Icon name="sparkles" size={15} /> {t(language, 'Interactive walkthrough')}</span><small>Drag to look around · scroll to zoom · choose a view</small></div>
             <div className="viewer-tour-label"><strong>{tourNames[tourStop]}</strong><span>{t(language, 'Walk through the home and explore each stop')}</span></div>
-            <div className="viewer-mini-map" aria-label={t(language, 'Interactive floor plan')}><div className="viewer-mini-map-heading"><span>{t(language, 'FLOOR PLAN')}</span><small>{tourStop + 1} / {tourImages.length}</small></div><div className="viewer-mini-map-canvas">{tourNames.slice(0, tourImages.length).map((name, index) => <button key={name} className={tourStop === index ? 'is-active' : ''} type="button" style={{ left: `${roomPositions[index].x}%`, top: `${roomPositions[index].y}%` }} onClick={() => walkTo(index)} aria-label={`${t(language, 'Walk to')} ${name}`}><span>{index + 1}</span></button>)}<i style={{ left: `${roomPositions[tourStop].x}%`, top: `${roomPositions[tourStop].y}%` }} /></div></div>
+            <div className="viewer-mini-map" aria-label={t(language, 'Interactive floor plan')}><div className="viewer-mini-map-heading"><span>{(isVehicle || isFurniture || isAppliance || isEquipment || isOtherAsset ? 'VIEWS' : t(language, 'FLOOR PLAN'))}</span><small>{tourStop + 1} / {tourImages.length}</small></div><div className="viewer-mini-map-canvas">{tourNames.slice(0, tourImages.length).map((name, index) => <button key={name} className={tourStop === index ? 'is-active' : ''} type="button" style={{ left: `${roomPositions[index].x}%`, top: `${roomPositions[index].y}%` }} onClick={() => walkTo(index)} aria-label={`${t(language, 'Walk to')} ${name}`}><span>{index + 1}</span></button>)}<i style={{ left: `${roomPositions[tourStop].x}%`, top: `${roomPositions[tourStop].y}%` }} /></div></div>
             {tourStop > 0 && <button className="viewer-tour-door viewer-tour-door-back" type="button" onClick={() => walkTo(tourStop - 1)} aria-label={`Back to ${tourNames[tourStop - 1]}`}><Icon name="chevron" size={17} /><span>{tourNames[tourStop - 1]}</span></button>}
             {tourStop < tourImages.length - 1 && <button className="viewer-tour-door viewer-tour-door-next" type="button" onClick={() => walkTo(tourStop + 1)} aria-label={`Walk to ${tourNames[tourStop + 1]}`}><span>{tourNames[tourStop + 1]}</span><Icon name="chevron" size={17} /></button>}
             <div className="viewer-tour-controls"><button type="button" onClick={() => setTurn((current) => current - 18)} aria-label={t(language, 'Turn view left')}><Icon name="chevron" size={17} /></button><div>{tourNames.slice(0, tourImages.length).map((name, index) => <button className={tourStop === index ? 'is-active' : ''} type="button" key={name} onClick={() => walkTo(index)}>{name}</button>)}</div><button type="button" onClick={() => setTurn((current) => current + 18)} aria-label={t(language, 'Turn view right')}><Icon name="chevron" size={17} /></button></div>

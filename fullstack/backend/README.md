@@ -25,6 +25,8 @@ go run ./cmd/server
 
 The default development OTP is `111111`. It is returned only in development mode; production must connect an SMS provider before enabling real OTP delivery.
 
+The development API also supports the frontend demo accounts through `POST /api/v1/auth/dev-login`. Available credentials are `owner@umutungo.test` / `Owner123!`, `landlord@umutungo.test` / `Landlord123!`, and `commissioner@umutungo.test` / `Commissioner123!`. This route creates database-backed sessions and is disabled outside development.
+
 ## Main endpoints
 
 | Method | Endpoint | Purpose |
@@ -34,6 +36,7 @@ The default development OTP is `111111`. It is returned only in development mode
 | GET | `/` | API identity and health URL |
 | GET | `/readyz` | PostgreSQL readiness check |
 | POST | `/api/v1/auth/register` | Register a client, tenant, broker, or owner |
+| POST | `/api/v1/auth/dev-login` | Create a development session for a demo account (development only) |
 | POST | `/api/v1/auth/request-otp` | Request phone OTP |
 | POST | `/api/v1/auth/verify-otp` | Verify OTP and receive bearer token |
 | POST | `/api/v1/auth/google` | Verify a Google access token and receive a bearer token |

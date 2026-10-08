@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
 import { Icon } from '../components/Icons';
@@ -38,6 +38,10 @@ export default function HomePage() {
   const [type, setType] = useState('Any type');
   const [intent, setIntent] = useState('Buy or rent');
   const [priceRange, setPriceRange] = useState('Any price');
+  const [shopQuery, setShopQuery] = useState('');
+  const [shopMessages, setShopMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [shopReply, setShopReply] = useState('');
+  const [shopSearching, setShopSearching] = useState(false);
   const [properties, setProperties] = useState<PropertyPlaceholder[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
@@ -99,6 +103,36 @@ export default function HomePage() {
     if (sector) params.set('sector', sector);
     window.location.assign(`/categories/${shopSlug}?${params.toString()}`);
   };
+  const submitShopSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = shopQuery.trim();
+    if (!query || shopSearching) return;
+    const messages = [...shopMessages, { role: 'user' as const, content: query }];
+    setShopMessages(messages);
+    setShopQuery('');
+    setShopSearching(true);
+    setShopReply('');
+    void fetch('/api/property-search', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }),
+    }).then(async (response) => {
+      const plan = await response.json() as { status?: string; reply?: string; category?: string; query?: string; location?: string; intent?: string; priceRange?: string; error?: string };
+      if (!response.ok) throw new Error(plan.error || 'Search is unavailable right now.');
+      const assistantMessage = plan.reply || 'Tell me a little more about what you need.';
+      setShopMessages((current) => [...current, { role: 'assistant', content: assistantMessage }]);
+      setShopReply(assistantMessage);
+      if (plan.status === 'search') {
+        const params = new URLSearchParams();
+        if (plan.query) params.set('q', plan.query);
+        if (plan.location) params.set('location', plan.location);
+        if (plan.intent && plan.intent !== 'Buy or rent') params.set('intent', plan.intent);
+        if (plan.priceRange && plan.priceRange !== 'Any price') params.set('priceRange', plan.priceRange);
+        const searchParams = params.toString();
+        window.location.assign(`/categories/${plan.category || 'houses'}${searchParams ? `?${searchParams}` : ''}`);
+      }
+    }).catch((error: unknown) => {
+      setShopReply(error instanceof Error ? error.message : 'Search is unavailable right now. Please try again.');
+    }).finally(() => setShopSearching(false));
+  };
 
   const toggleFavorite = (property: PropertyPlaceholder) => {
     const item: FavoriteItem = { property_id: property.id, title: property.title, type: property.type, location: property.location, price: `${property.price} ${property.priceNote}`, image: property.image };
@@ -132,19 +166,21 @@ export default function HomePage() {
       <section className="hero-section" id="home">
         <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <div className="landing-copy-spacer" aria-hidden="true" />
-          <div className="landing-search-actions"><a className="landing-view-all-properties" href="/categories/houses">View All Properties</a></div>
-          <div className="hero-actions join-role-actions" aria-label="Join Umutungo"><a className="button button-primary" href="/register?role=Client">Join as Client</a><a className="button button-secondary" href="/register?role=Property%20Owner">Join as Owner</a><a className="button button-commissioner" href="/register?role=Komisiyoneri">Join as Komisiyoneri</a></div>
+          <div className="landing-search-actions"><form className="landing-directory-search" onSubmit={submitShopSearch} role="search" aria-label={t(language, 'Search')}><Icon name="search" size={17} /><input aria-label={t(language, 'Describe the place you need')} value={shopQuery} onChange={(event) => setShopQuery(event.target.value)} placeholder={t(language, 'Describe the place you need')} disabled={shopSearching} /><button type="submit" aria-label={t(language, 'Search')} disabled={shopSearching || !shopQuery.trim()}><Icon name="arrow" size={15} /></button></form><a className="landing-view-all-properties" href="/categories/houses">{t(language, 'View All Properties')}</a></div>
+          <p className="hero-lead landing-marketplace-description">{t(language, 'Umutungo marketplace introduction')}</p>
+          {(shopReply || shopSearching) && <p className="landing-search-reply" aria-live="polite">{shopSearching ? 'Thinking…' : shopReply}</p>}
+          <div className="hero-actions join-role-actions" aria-label="Join Umutungo"><a className="button button-primary" href="/register?role=Client">{t(language, 'Join as Client')}</a><a className="button button-secondary" href="/register?role=Property%20Owner">{t(language, 'Join as Owner')}</a><a className="button button-commissioner" href="/register?role=Komisiyoneri">{t(language, 'Join as Komisiyoneri')}</a></div>
         </div></div></div>
         <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} district={district} sector={sector} type={type} intent={intent} priceRange={priceRange} onLocationChange={(value) => { setLocation(value); setDistrict(''); setSector(''); }} onDistrictChange={(value) => { setDistrict(value); setSector(''); }} onSectorChange={setSector} onTypeChange={setType} onIntentChange={setIntent} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
       </section>
 
       <section className="category-section section container" id="categories">
-        <div className="section-heading split-heading"><div><p className="eyebrow">Browse Categories</p><h2>Find every kind<br /><em>of property.</em></h2></div><div className="category-heading-spacer" aria-hidden="true" /></div>
-        <div className="category-grid premium-category-grid">{categories.map((category) => <a className="premium-category-card" href={`/categories/${category.slug}`} key={category.slug}><span className="premium-category-image" style={{ backgroundImage: `url(${category.image})` }} /><span className="premium-category-copy"><strong>{category.name}</strong><small>{category.detail}</small><Icon name="arrow" size={15} /></span></a>)}</div>
+        <div className="section-heading split-heading"><div><p className="eyebrow">{t(language, 'Browse Categories')}</p><h2>{t(language, 'Find every kind')}<br /><em>{t(language, 'of property.')}</em></h2></div><div className="category-heading-spacer" aria-hidden="true" /></div>
+        <div className="category-grid premium-category-grid">{categories.map((category) => <a className="premium-category-card" href={`/categories/${category.slug}`} key={category.slug}><span className="premium-category-image" style={{ backgroundImage: `url(${category.image})` }} /><span className="premium-category-copy"><strong>{t(language, category.name)}</strong><small>{t(language, category.detail)}</small><Icon name="arrow" size={15} /></span></a>)}</div>
       </section>
 
       <section className="section section-property container" id="properties">
-        <div className="section-heading split-heading"><div><p className="eyebrow">Properties</p><h2>Available listings</h2></div></div>
+        <div className="section-heading split-heading"><div><p className="eyebrow">{t(language, 'Properties')}</p><h2>{t(language, 'Available listings')}</h2></div></div>
         <div className="property-grid">{visibleProperties.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />)}</div>
       </section>
 

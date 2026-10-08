@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/readyz", s.ready)
 	mux.HandleFunc("/api/v1/auth/register", s.register)
 	mux.HandleFunc("/api/v1/auth/dev-admin", s.devAdminLogin)
+	mux.HandleFunc("/api/v1/auth/dev-login", s.devLogin)
 	mux.HandleFunc("/api/v1/auth/request-otp", s.requestOTP)
 	mux.HandleFunc("/api/v1/auth/verify-otp", s.verifyOTP)
 	mux.HandleFunc("/api/v1/auth/google", s.googleAuth)
@@ -229,6 +230,63 @@ func (s *Server) devAdminLogin(w http.ResponseWriter, r *http.Request) {
 	token, err := s.createSession(r, user.ID)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create Admin session")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": user, "access_token": token})
+}
+
+// devLogin creates real database sessions for the documented demo accounts.
+// It is available only in development and must never be exposed by production.
+func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.AppEnv != "development" {
+		errorJSON(w, http.StatusNotFound, "route not found")
+		return
+	}
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var input struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	demoAccounts := map[string]struct{ password, name, role string }{
+		"client@umutungo.test":       {"Client123!", "Umutungo Development Client", "client"},
+		"commissioner@umutungo.test": {"Commissioner123!", "Umutungo Development Komisiyoneri", "komisiyoneri"},
+		"landlord@umutungo.test":     {"Landlord123!", "Umutungo Development Landlord", "property_owner"},
+		"owner@umutungo.test":        {"Owner123!", "Umutungo Development Property Owner", "property_owner"},
+		"admin@umutungo.test":        {"Admin123!", "Umutungo Development Admin", "admin"},
+	}
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	account, ok := demoAccounts[email]
+	if !ok || input.Password != account.password {
+		errorJSON(w, http.StatusUnauthorized, "invalid development credentials")
+		return
+	}
+	var user CurrentUser
+	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1`, email).
+		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	if err == pgx.ErrNoRows {
+		phone := "+2507" + randomDigits(8)
+		err = s.db.QueryRow(r.Context(), `INSERT INTO users(name,email,phone,role,verified_at) VALUES($1,$2,$3,$4,NOW()) RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status`, account.name, email, phone, account.role).
+			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+		if err == nil {
+			_, err = s.db.Exec(r.Context(), `INSERT INTO profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, user.ID)
+		}
+		if err == nil && (user.Role == "komisiyoneri" || user.Role == "property_owner") {
+			_, err = s.db.Exec(r.Context(), `INSERT INTO business_profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, user.ID)
+		}
+	}
+	if err != nil || user.Role != account.role || user.Status != "active" {
+		errorJSON(w, http.StatusUnauthorized, "development account is unavailable")
+		return
+	}
+	token, err := s.createSession(r, user.ID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create development session")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": user, "access_token": token})

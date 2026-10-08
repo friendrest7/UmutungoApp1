@@ -3720,18 +3720,29 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .owner-upgrade-receipt p { margin: 0; overflow-wrap: anywhere; }
 .owner-upgrade-status { padding: 12px; border-radius: 8px; background: #e8f4ff; }
 @media (max-width: 700px) { .owner-upgrade-plans { grid-template-columns: 1fr; } .owner-upgrade-dashboard-link { top: 8px; right: 8px; } }
-.app-realistic .join-role-actions { margin-top: 0; gap: 12px; transform: translateY(2.5cm); }
+.app-realistic .join-role-actions { margin-top: 0; gap: 4px; transform: translateY(.9cm); }
+.app-realistic .join-role-actions .button { min-height: 42px; padding: 9px 12px; font-size: 10px; transform: scaleX(.7); transform-origin: center; }
+.app-realistic .join-role-actions .button:hover { transform: scaleX(.7) translateY(-2px); }
 .app-realistic .hero-video { transform: translate3d(0, 0, 0); animation: none; backface-visibility: hidden; will-change: transform; }
-.app-realistic .landing-search-actions { width: auto; margin-bottom: 0; transform: translateY(.7cm); }
+.app-realistic .landing-search-actions { width: auto; margin-bottom: 0; transform: translateY(.5cm); }
+.app-realistic .landing-search-actions .landing-directory-search { min-height: 56px; }
+.app-realistic .landing-search-actions .landing-directory-search input { font-size: 16px; }
+.app-realistic .hero-copy h1, .app-realistic .hero-copy .hero-lead { text-shadow: 0 2px 9px rgba(0,0,0,.72); }
+.app-realistic .landing-marketplace-description { max-width: 700px; margin: 12px auto 0; color: #fff; font-size: 13px; line-height: 1.55; text-align: center; text-shadow: 0 2px 9px rgba(0,0,0,.72); transform: translateY(-.2cm); }
+.app-realistic .landing-search-reply { width: min(100%, 470px); margin: 8px auto 0; color: #fff; font-size: 12px; line-height: 1.45; text-align: left; text-shadow: 0 1px 8px rgba(0,0,0,.35); }
+@media (min-width: 761px) {
+  .app-realistic .landing-search-actions { position: relative; left: 50%; width: min(90vw, 675px); transform: translate(-50%, .5cm); }
+}
 .auth-password-field { position: relative; display: block; }
 .auth-password-field input { width: 100%; padding-right: 44px; }
 .auth-password-toggle { position: absolute; top: 50%; right: 6px; display: grid; width: 34px; height: 34px; place-items: center; transform: translateY(-50%); border: 0; border-radius: 7px; background: transparent; color: #52665a; cursor: pointer; touch-action: manipulation; }
 .auth-password-toggle:hover, .auth-password-toggle:focus-visible { background: #e8f4ff; color: #123e63; outline: 2px solid #8bbce5; outline-offset: 1px; }
 .auth-password-toggle:disabled { cursor: not-allowed; opacity: .55; }
 @media (max-width: 720px) {
-  .app-realistic .join-role-actions { margin-top: 0; align-items: stretch; transform: translateY(2.5cm); }
-  .app-realistic .join-role-actions .button { width: min(100%, 280px); min-height: 44px; }
-  .app-realistic .landing-search-actions { transform: translateY(.35cm); }
+  .app-realistic .join-role-actions { margin-top: 0; align-items: stretch; gap: 6px; transform: translateY(.9cm); }
+  .app-realistic .join-role-actions .button { width: min(100%, 280px); min-height: 42px; padding: 9px 10px; transform: scaleX(.7); }
+  .app-realistic .join-role-actions .button:hover { transform: scaleX(.7) translateY(-2px); }
+  .app-realistic .landing-search-actions { transform: translateY(.15cm); }
   .app-realistic .hero-image { overflow: hidden; }
   .app-realistic .hero-video { object-position: center; }
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { CookieConsent } from '../components/CookieConsent';
+import { LocaleDomTranslator } from '../components/LocaleDomTranslator';
 import { LanguageProvider } from '../lib/language';
 import { ThemeProvider } from '../lib/theme';
 
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body><ThemeProvider><LanguageProvider>{children}</LanguageProvider></ThemeProvider><CookieConsent /></body>
+      <body><ThemeProvider><LanguageProvider><LocaleDomTranslator />{children}</LanguageProvider></ThemeProvider><CookieConsent /></body>
     </html>
   );
 }

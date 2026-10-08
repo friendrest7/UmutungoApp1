@@ -3725,7 +3725,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 @media (max-width: 700px) { .owner-upgrade-plans { grid-template-columns: 1fr; } .owner-upgrade-dashboard-link { top: 8px; right: 8px; } }
 .app-realistic .join-role-actions { margin-top: 0; gap: 4px; transform: translateY(.9cm); }
 .app-realistic .join-role-actions .button { min-height: 50px; padding: 11px 15px; border: 1px solid rgba(0,0,0,.18) !important; background: #00a84f !important; box-shadow: 0 9px 24px rgba(0,0,0,.42); color: #fff !important; font-size: 12px; font-weight: 900; letter-spacing: .01em; text-shadow: 0 1px 2px rgba(0,0,0,.2); transform: scaleX(.85); transform-origin: center; }
-.app-realistic .join-role-actions .button:hover, .app-realistic .join-role-actions .button:focus-visible { border-color: rgba(0,0,0,.32) !important; background: #078844 !important; box-shadow: 0 12px 28px rgba(0,0,0,.5); color: #fff !important; outline: 2px solid #064e32; outline-offset: 2px; transform: scaleX(.85) translateY(-2px); }
+.app-realistic .join-role-actions .button:hover { background: #078844 !important; color: #fff !important; transform: scaleX(.85) translateY(-2px); }
 .app-realistic .hero-video { transform: translate3d(0, 0, 0); animation: none; backface-visibility: hidden; will-change: transform; }
 .app-realistic .landing-search-actions { width: auto; margin-bottom: 0; transform: translateY(.5cm); }
 .app-realistic .landing-search-actions .landing-directory-search { min-height: 56px; }
@@ -3786,7 +3786,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 @media (max-width: 720px) {
   .app-realistic .join-role-actions { margin-top: 0; align-items: center; flex-wrap: wrap; gap: 6px; transform: translateY(.9cm); }
   .app-realistic .join-role-actions .button { width: auto; min-height: 49px; padding: 10px 12px; font-size: 11px; transform: scaleX(.85); }
-  .app-realistic .join-role-actions .button:hover, .app-realistic .join-role-actions .button:focus-visible { transform: scaleX(.85) translateY(-2px); }
+  .app-realistic .join-role-actions .button:hover { transform: scaleX(.85) translateY(-2px); }
   .app-realistic .landing-search-actions { transform: translateY(.15cm); }
   .app-realistic .hero-image { overflow: hidden; }
   .app-realistic .hero-video { object-position: center; }

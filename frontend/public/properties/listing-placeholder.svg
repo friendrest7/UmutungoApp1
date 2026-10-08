@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" role="img" aria-labelledby="title desc">
+  <title id="title">Listing image unavailable</title>
+  <desc id="desc">Neutral Umutungo placeholder for a listing without uploaded images.</desc>
+  <rect width="960" height="640" fill="#eaf0eb"/>
+  <path d="M300 405 480 250l180 155v125H300z" fill="#d7e4d9" stroke="#47765a" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M425 530V395h110v135M350 430h55v60h-55zm205 0h55v60h-55z" fill="#f8faf7" stroke="#47765a" stroke-width="10"/>
+</svg>

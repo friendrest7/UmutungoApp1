@@ -22,5 +22,5 @@ export default function PropertyOwnerPage() {
 
   if (checking) return <main className="landlord-access-page"><p>Checking your owner account…</p></main>;
   if (!authorized) return <main className="landlord-access-page"><section><span className="post-eyebrow">Property Owner dashboard</span><h1>Manage what<br /><em>you own.</em></h1><p>Sign in as a property owner to manage your listings, enquiries, and property activity.</p><Link className="post-secondary-button" href="/">Back to marketplace</Link></section><AuthModal open role="Property Owner" onClose={() => window.location.assign('/')} onSuccess={() => setAuthorized(true)} /></main>;
-  return <RoleDashboard role="landlord" />;
+  return <><div className="owner-upgrade-dashboard-link"><Link href="/upgrade/owner">View Gold, Silver and Platinum plans <span>One-time payments</span></Link></div><RoleDashboard role="landlord" /></>;
 }

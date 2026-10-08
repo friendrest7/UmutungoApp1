@@ -8,7 +8,7 @@ import { Icon } from '../../components/Icons';
 import { InterfacePreferences } from '../../components/InterfacePreferences';
 import { Logo } from '../../components/Logo';
 import { getDistrictNames, getSectorNames, provinceNames } from '../../data/rwandaLocations';
-import { umutungoApi } from '../../lib/umutungoApi';
+import { uploadListingImage, umutungoApi } from '../../lib/umutungoApi';
 
 type PropertyType = 'House' | 'Apartment' | 'Land' | 'Commercial' | 'Office' | 'Hospitality' | 'Vehicle' | 'Furniture' | 'Appliance' | 'Equipment' | 'Other';
 type PostingRole = 'Komisiyoneri' | 'Landlord' | 'Property Owner';
@@ -95,7 +95,7 @@ export type LandlordListing = {
   bathrooms: string;
   area: string;
   amenities: string[];
-  status: 'Draft' | 'Scheduled';
+  status: 'Draft' | 'Scheduled' | 'Published';
   scheduledFor?: string;
   expiresAt?: string;
   savedAt: string;
@@ -128,7 +128,7 @@ export default function PostPropertyPage() {
   const [villageOptions, setVillageOptions] = useState<string[]>([]);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState('');
-  const [publicationMode, setPublicationMode] = useState<'Draft' | 'Scheduled'>('Draft');
+  const [publicationMode, setPublicationMode] = useState<'Publish now' | 'Draft' | 'Scheduled'>('Publish now');
   const [scheduledFor, setScheduledFor] = useState('');
   const [ownerTier, setOwnerTier] = useState('Silver Â· 90 days');
   const [address, setAddress] = useState('');
@@ -148,8 +148,10 @@ export default function PostPropertyPage() {
   const [landRoadAccess, setLandRoadAccess] = useState('Yes');
   const [amenities, setAmenities] = useState<string[]>(['Parking', 'Security']);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [selectedCover, setSelectedCover] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
+  const [savedListingStatus, setSavedListingStatus] = useState('draft');
   const [accessRole, setAccessRole] = useState<'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri' | null>(null);
   const [postingRole, setPostingRole] = useState<PostingRole | null>(null);
   const [selectionComplete, setSelectionComplete] = useState(false);
@@ -245,6 +247,7 @@ export default function PostPropertyPage() {
     if (!files.length) return;
     const images = await Promise.all(files.slice(0, 6).map(readImage));
     setUploadedImages(images);
+    setUploadFiles(files.slice(0, 6));
     setSelectedCover(null);
   };
 
@@ -261,12 +264,13 @@ export default function PostPropertyPage() {
   const previous = () => setStep((current) => Math.max(1, current - 1));
   const saveListing = async () => {
     if (!district || !sector) { setLocationError('Choose a valid district and sector before saving the listing.'); setStep(2); return; }
+    if (publicationMode === 'Scheduled' && (!scheduledFor || new Date(scheduledFor).getTime() <= Date.now())) { setSaveError('Choose a future date and time for scheduled publication.'); setStep(3); return; }
     const expiryDays = accessRole === 'Commissioner / Komisiyoneri' ? 30 : ownerTier.startsWith('Silver') ? 90 : ownerTier.startsWith('Gold') ? 180 : 365;
     setSaveError('');
     const amount = Number(price.replace(/[^0-9.]/g, '')) || 0;
-    let databaseListing: { id?: string; status?: string; expires_at?: string } | null = null;
+    let databaseListing: { id: string; status: string; expires_at?: string } | null = null;
     try {
-      databaseListing = await umutungoApi<{ id?: string; status?: string; expires_at?: string }>('/api/v1/listings', {
+      databaseListing = await umutungoApi<{ id: string; status: string; expires_at?: string }>('/api/v1/listings', {
         method: 'POST',
         body: JSON.stringify({
           category: propertyType.toLowerCase(),
@@ -281,10 +285,11 @@ export default function PostPropertyPage() {
           cell,
           village,
           publish_at: publicationMode === 'Scheduled' && scheduledFor ? new Date(scheduledFor).toISOString() : null,
+          status: 'draft',
           tags: amenities,
           amenities,
           contact_method: 'message',
-          media: gallery.map((url) => ({ type: 'photo', url })),
+          media: [],
           measurements: propertyType === 'Vehicle'
             ? { make: vehicleMake, model: vehicleModel, year: Number(vehicleYear) || 0, mileage_km: Number(vehicleMileage) || 0, condition: vehicleCondition }
             : isAsset
@@ -294,10 +299,17 @@ export default function PostPropertyPage() {
               : { building_size: Number(area) || 0, bedrooms: Number(bedrooms) || 0, bathrooms: Number(bathrooms) || 0, parking: amenities.includes('Parking') ? 1 : 0 },
         }),
       });
-    } catch {
-      setSaveError('The listing could not be saved to the hosted database. It was kept locally so you can continue testing.');
+      if (!databaseListing?.id) throw new Error('The server did not return a saved listing.');
+      for (const file of uploadFiles) await uploadListingImage(databaseListing.id, file);
+      if (publicationMode === 'Publish now') {
+        await umutungoApi(`/api/v1/listings/${encodeURIComponent(databaseListing.id)}`, { method: 'PATCH', body: JSON.stringify({ status: 'published' }) });
+        databaseListing.status = 'published';
+      }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'The listing could not be saved. Please try again.');
+      return;
     }
-    const listing: LandlordListing = { id: databaseListing?.id ?? `listing-${Date.now()}`, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: selectedIntent.transactionType === 'sell' ? ' asking' : propertyType === 'Hospitality' ? ' / night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? ' / day' : propertyType === 'Land' ? ' lease price' : ' / month', cover, images: gallery, bedrooms: propertyType === 'Vehicle' ? `${vehicleMake} ${vehicleModel}`.trim() || vehicleYear : isAsset ? assetQuantity : isLand ? landTenure : bedrooms, bathrooms: propertyType === 'Vehicle' ? vehicleCondition : isAsset ? assetCondition : isLand ? landRoadAccess : bathrooms, area: propertyType === 'Vehicle' ? vehicleMileage : isAsset ? assetSpecifications : area, amenities, status: publicationMode, savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: databaseListing?.expires_at ?? new Date(Date.now() + expiryDays * 86400000).toISOString() };
+    const listing: LandlordListing = { id: databaseListing.id, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: selectedIntent.transactionType === 'sell' ? ' asking' : propertyType === 'Hospitality' ? ' / night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? ' / day' : propertyType === 'Land' ? ' lease price' : ' / month', cover, images: gallery, bedrooms: propertyType === 'Vehicle' ? `${vehicleMake} ${vehicleModel}`.trim() || vehicleYear : isAsset ? assetQuantity : isLand ? landTenure : bedrooms, bathrooms: propertyType === 'Vehicle' ? vehicleCondition : isAsset ? assetCondition : isLand ? landRoadAccess : bathrooms, area: propertyType === 'Vehicle' ? vehicleMileage : isAsset ? assetSpecifications : area, amenities, status: databaseListing.status === 'scheduled' ? 'Scheduled' : databaseListing.status === 'published' ? 'Published' : 'Draft', savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: databaseListing.expires_at ?? new Date(Date.now() + expiryDays * 86400000).toISOString() };
     const storageKey = accessRole === 'Commissioner / Komisiyoneri' ? 'umutungo-commissioner-properties' : 'umutungo-landlord-properties';
     try {
       const existing = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as LandlordListing[];
@@ -305,14 +317,15 @@ export default function PostPropertyPage() {
     } catch {
       window.localStorage.setItem(storageKey, JSON.stringify([listing]));
     }
-    window.location.assign(accessRole === 'Commissioner / Komisiyoneri' ? '/commissioner' : '/landlord');
+    setSavedListingStatus(databaseListing.status);
+    setPublished(true);
   };
 
   if (checkingAccess) return <main className="landlord-access-page"><p>Checking your landlord accountâ€¦</p></main>;
   if (!selectionComplete) return <><PostingSelection role={postingRole} category={propertyType} signedInRole={accessRole} onRoleChange={(value) => { setPostingRole(value); setSaveError(''); }} onCategoryChange={(value) => { setPropertyType(value); setSaveError(''); }} onContinue={continueToForm} error={saveError} /><AuthModal open={authOpen} role={postingRole === 'Komisiyoneri' ? 'Commissioner / Komisiyoneri' : postingRole === 'Landlord' ? 'Landlord' : postingRole === 'Property Owner' ? 'Property Owner' : undefined} onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { const nextRole = accountRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : accountRole === 'Property Owner' ? 'Property Owner' : accountRole === 'Landlord' ? 'Landlord' : null; if (nextRole) { setAccessRole(accountRole as 'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri'); setPostingRole((current) => current ?? nextRole); setSelectionComplete(true); setSaveError(''); setAuthOpen(false); } else setSaveError('A Komisiyoneri, Landlord, or Property Owner account is required to post a listing.'); }} /></>;
 
   if (published) {
-    return <main className="post-property-page"><header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><InterfacePreferences /><div className="post-header-links"><Link className="post-home-link" href="/"><Icon name="home" size={14} /> Home</Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /> Exit builder</Link></div></header><section className="post-success"><div className="post-success-mark"><Icon name="check" size={30} /></div><p className="post-eyebrow">Listing saved</p><h1>Your place is ready<br /><em>for its next chapter.</em></h1><p>We have saved â€œ{listingTitle}â€ as a new listing draft. Add verification documents from your dashboard when you are ready to publish it publicly.</p><div className="post-success-actions"><Link className="post-primary-button" href="/"><span>Return to marketplace</span><Icon name="arrow" size={15} /></Link><button className="post-secondary-button" type="button" onClick={() => setPublished(false)}>Edit listing</button></div></section></main>;
+    return <main className="post-property-page"><header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><InterfacePreferences /><div className="post-header-links"><Link className="post-home-link" href="/"><Icon name="home" size={14} /> Home</Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /> Exit builder</Link></div></header><section className="post-success"><div className="post-success-mark"><Icon name="check" size={30} /></div><p className="post-eyebrow">Listing saved</p><h1>Your place is ready<br /><em>for its next chapter.</em></h1><p>{savedListingStatus === "scheduled" ? "Scheduled listing saved." : savedListingStatus === "published" ? "Listing is published and available in the marketplace." : "Private draft saved."}</p><div className="post-success-actions"><Link className="post-primary-button" href={accessRole === 'Commissioner / Komisiyoneri' ? '/commissioner' : '/property-owner'}><span>Open dashboard</span><Icon name="arrow" size={15} /></Link><button className="post-secondary-button" type="button" onClick={() => setPublished(false)}>Edit listing</button></div></section></main>;
   }
 
   return <main className="post-property-page">
@@ -345,7 +358,7 @@ export default function PostPropertyPage() {
             <div className="post-field-group"><span className="post-field-label">Highlights</span><div className="post-amenities">{highlightOptions.map((amenity) => <button className={amenities.includes(amenity) ? 'is-selected' : ''} type="button" key={amenity} onClick={() => toggleAmenity(amenity)}>{amenities.includes(amenity) && <Icon name="check" size={12} />}{amenity}</button>)}</div></div>
           </div>}
           {step === 3 && <div className="post-form-section"><div className="post-section-intro"><h3>Let the photos do some talking</h3><p>Choose a cover that sets the mood, then add the details that help someone picture themselves there.</p></div><label className="post-dropzone"><input type="file" accept="image/*" multiple onChange={handleFiles} /><span className="post-upload-icon"><Icon name="download" size={19} /></span><strong>Drop your photos here</strong><small>or click to browse Â· JPG, PNG up to 10MB each</small></label><div className="post-curated-heading"><span>Start with a curated set</span><small>Swap these for your own any time</small></div><div className="post-image-choices">{curatedImages[propertyType].map((image) => <button className={cover === image ? 'is-selected' : ''} type="button" key={image} onClick={() => { setSelectedCover(image); setUploadedImages([]); }}><Image src={image} alt="Suggested property view" fill sizes="120px" />{cover === image && <span><Icon name="check" size={13} /></span>}</button>)}</div><div className="post-amenities-summary"><span>Selected highlights</span><div>{amenities.length ? amenities.map((amenity) => <b key={amenity}>{amenity}</b>) : <small>Add a few highlights above</small>}</div></div></div>}
-          {step === 3 && <div className="post-lifecycle-panel"><div><span className="post-field-label">Publication</span><p>Save privately now or schedule this listing for a future release.</p></div><div className="post-segmented"><button className={publicationMode === 'Draft' ? 'is-selected' : ''} type="button" onClick={() => setPublicationMode('Draft')}>Save as draft</button><button className={publicationMode === 'Scheduled' ? 'is-selected' : ''} type="button" onClick={() => setPublicationMode('Scheduled')}>Schedule</button></div>{publicationMode === 'Scheduled' && <label className="post-field"><span>Publish date and time</span><input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} required /></label>}{(accessRole === 'Landlord' || accessRole === 'Property Owner') && <label className="post-field"><span>Property Owner subscription tier</span><select value={ownerTier} onChange={(event) => setOwnerTier(event.target.value as 'Silver' | 'Gold' | 'Platinum')}><option>Silver Â· 90 days</option><option>Gold Â· 180 days</option><option>Platinum Â· 365 days</option></select></label>}<small className="post-lifecycle-note">{accessRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri listings expire 30 days after publication.' : `Property Owner listings expire according to the ${ownerTier} tier.`}</small></div>}
+          {step === 3 && <div className="post-lifecycle-panel"><div><span className="post-field-label">Publication</span><p>Publish now after photos upload, save a private draft, or schedule a future release.</p></div><div className="post-segmented"><button className={publicationMode === "Publish now" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode("Publish now")}>Publish now</button><button className={publicationMode === "Draft" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode("Draft")}>Save as draft</button><button className={publicationMode === "Scheduled" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode("Scheduled")}>Schedule</button></div>{publicationMode === 'Scheduled' && <label className="post-field"><span>Publish date and time</span><input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} required /></label>}{(accessRole === 'Landlord' || accessRole === 'Property Owner') && <div className="owner-premium-plans"><span className="post-field-label">Property Owner premium plan</span><div>{(['Silver', 'Gold', 'Platinum'] as const).map((plan) => <button className={ownerTier.startsWith(plan) ? 'is-selected' : ''} type="button" key={plan} onClick={() => setOwnerTier(plan)}><img src={`/premium/${plan.toLowerCase()}.svg`} alt={`${plan} premium plan icon`} /><strong>{plan}</strong></button>)}</div><Link href="/upgrade/owner">One-time upgrade payments</Link></div>}<small className="post-lifecycle-note">{accessRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri listings expire 30 days after publication.' : `Property Owner listings expire according to the ${ownerTier} tier.`}</small></div>}
           <div className="post-form-actions">{step > 1 ? <button className="post-secondary-button" type="button" onClick={previous}><Icon name="arrow" size={14} /> Back</button> : <span />}{step < 3 ? <button className="post-primary-button" type="button" onClick={next}><span>Continue</span><Icon name="arrow" size={15} /></button> : <button className="post-primary-button" type="button" onClick={saveListing}><span>{publicationMode === 'Scheduled' ? 'Schedule listing' : 'Save listing draft'}</span><Icon name="arrow" size={15} /></button>}</div>
         </div><aside className="post-preview-wrap">
           <div className="post-preview-label"><span>Live preview</span><small>How it will look in Umutungo</small></div>

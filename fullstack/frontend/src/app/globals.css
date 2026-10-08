@@ -3342,6 +3342,14 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .admin-dashboard .role-dashboard-label { color: #91a99a; }
 .admin-dashboard .role-dashboard-nav { color: #b8c7bb; }
 .admin-dashboard .role-dashboard-nav:hover, .admin-dashboard .role-dashboard-nav.active { background: rgba(177,221,186,.13); color: #e7f7eb; }
+.admin-dashboard .role-dashboard-label,
+.admin-dashboard .role-dashboard-nav,
+.admin-dashboard .role-dashboard-sidebar-bottom a,
+.admin-dashboard .role-dashboard-sidebar-bottom button { color: #fff !important; }
+.admin-dashboard .role-dashboard-nav:hover,
+.admin-dashboard .role-dashboard-nav.active,
+.admin-dashboard .role-dashboard-sidebar-bottom a:hover,
+.admin-dashboard .role-dashboard-sidebar-bottom button:hover { color: #fff !important; }
 .admin-dashboard .role-dashboard-nav.active::before { background: #73d493; }
 .admin-dashboard .role-dashboard-sidebar-bottom { border-color: rgba(255,255,255,.13); }
 .admin-dashboard .role-dashboard-sidebar-bottom a { color: #b8c7bb; }

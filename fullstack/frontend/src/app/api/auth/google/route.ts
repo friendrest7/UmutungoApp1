@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const defaultBackend = 'https://umutungoappbackend1.onrender.com';
+const defaultBackend = 'https://umutungoapp1-backend.onrender.com';
 
 function backendUrl() {
   const configured = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/$/, '');

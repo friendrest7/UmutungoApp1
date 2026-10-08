@@ -3338,7 +3338,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 /* Admin workspace: editorial hierarchy, real activity and a clear media publishing studio. */
 .admin-dashboard { --admin-green: #08743d; --admin-paper: #f4f5f0; --admin-ink: #142119; background: var(--admin-paper); }
 .admin-dashboard .role-dashboard-sidebar { background: #13251a; color: #f7fbf7; border-color: rgba(255,255,255,.1); }
-.admin-dashboard .role-dashboard-sidebar .brand-logo { filter: brightness(0) invert(1); }
+.admin-dashboard .role-dashboard-sidebar .brand-logo { width: 120px; filter: none; }
 .admin-dashboard .role-dashboard-label { color: #91a99a; }
 .admin-dashboard .role-dashboard-nav { color: #b8c7bb; }
 .admin-dashboard .role-dashboard-nav:hover, .admin-dashboard .role-dashboard-nav.active { background: rgba(177,221,186,.13); color: #e7f7eb; }

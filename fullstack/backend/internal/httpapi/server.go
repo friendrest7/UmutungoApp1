@@ -350,20 +350,29 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	var tokenInfo struct {
 		Audience      string          `json:"aud"`
-		ExpiresIn     string          `json:"expires_in"`
+		TokenAudience string          `json:"audience"`
+		IssuedTo      string          `json:"issued_to"`
+		UserID        string          `json:"user_id"`
+		ExpiresIn     json.RawMessage `json:"expires_in"`
 		ExpiresAt     json.RawMessage `json:"exp"`
 		Issuer        string          `json:"iss"`
 		Subject       string          `json:"sub"`
 		Email         string          `json:"email"`
 		EmailVerified json.RawMessage `json:"email_verified"`
+		VerifiedEmail json.RawMessage `json:"verified_email"`
 		Name          string          `json:"name"`
 		Picture       string          `json:"picture"`
 	}
-	if err := json.NewDecoder(io.LimitReader(tokenInfoResponse.Body, 64*1024)).Decode(&tokenInfo); err != nil || !containsString(allowedClientIDs, tokenInfo.Audience) {
+	if err := json.NewDecoder(io.LimitReader(tokenInfoResponse.Body, 64*1024)).Decode(&tokenInfo); err != nil {
+		errorJSON(w, http.StatusUnauthorized, "Google sign-in token is invalid")
+		return
+	}
+	tokenAudience := firstNonEmpty(tokenInfo.Audience, tokenInfo.TokenAudience, tokenInfo.IssuedTo)
+	if !containsString(allowedClientIDs, tokenAudience) {
 		errorJSON(w, http.StatusUnauthorized, "Google sign-in client is not allowed")
 		return
 	}
-	if input.ClientID != "" && strings.TrimSpace(input.ClientID) != tokenInfo.Audience {
+	if input.ClientID != "" && strings.TrimSpace(input.ClientID) != tokenAudience {
 		errorJSON(w, http.StatusUnauthorized, "Google sign-in client does not match the token")
 		return
 	}
@@ -375,8 +384,8 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		Picture       string `json:"picture"`
 	}
 	if strings.TrimSpace(input.Credential) != "" {
-		expires, parseErr := strconv.ParseInt(strings.Trim(string(tokenInfo.ExpiresAt), `"`), 10, 64)
-		verified := strings.Trim(string(tokenInfo.EmailVerified), `"`) == "true"
+		expires, parseErr := parseGoogleInteger(tokenInfo.ExpiresAt)
+		verified := parseGoogleBoolean(tokenInfo.EmailVerified)
 		validIssuer := tokenInfo.Issuer == "accounts.google.com" || tokenInfo.Issuer == "https://accounts.google.com"
 		if parseErr != nil || expires <= time.Now().Unix() || !validIssuer || tokenInfo.Subject == "" || tokenInfo.Email == "" || !verified {
 			errorJSON(w, http.StatusUnauthorized, "Google sign-in credential is invalid or expired")
@@ -388,7 +397,7 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		googleProfile.Name = tokenInfo.Name
 		googleProfile.Picture = tokenInfo.Picture
 	} else {
-		if expires, err := strconv.Atoi(tokenInfo.ExpiresIn); err != nil || expires <= 0 {
+		if expires, err := parseGoogleInteger(tokenInfo.ExpiresIn); err != nil || expires <= 0 {
 			errorJSON(w, http.StatusUnauthorized, "Google sign-in token is expired")
 			return
 		}
@@ -498,6 +507,23 @@ func configuredGoogleClientIDs(value string) []string {
 		}
 	}
 	return items
+}
+
+func parseGoogleInteger(value json.RawMessage) (int64, error) {
+	return strconv.ParseInt(strings.Trim(string(value), `"`), 10, 64)
+}
+
+func parseGoogleBoolean(value json.RawMessage) bool {
+	return strings.Trim(string(value), `"`) == "true"
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func containsString(items []string, target string) bool {

@@ -139,7 +139,7 @@ export function AuthModal({ open, role, onClose, onSuccess }: AuthModalProps) {
             const result = await response.json();
             if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
             const accountRole = (result.role ?? 'Client') as AuthRole;
-            if (!googleRoleAllowed(accountRole, requestedRole)) { setError(`This Google account is registered as ${roleLabel(accountRole)}. Use an account registered as ${roleLabel(requestedRole)}.`); return; }
+            if (role && !googleRoleAllowed(accountRole, requestedRole)) { setError(`This Google account is registered as ${roleLabel(accountRole)}. Use an account registered as ${roleLabel(requestedRole)}.`); return; }
             if (result.access_token) window.localStorage.setItem('umutungo-api-token', result.access_token);
             window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
             reset(); onSuccess(accountRole);

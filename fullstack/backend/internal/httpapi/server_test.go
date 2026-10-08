@@ -214,3 +214,33 @@ func TestConfiguredGoogleClientIDs(t *testing.T) {
 		t.Fatalf("configuredGoogleClientIDs() = %#v, want two unique trimmed IDs", got)
 	}
 }
+
+func TestGoogleTokenInfoAudience(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		fields []string
+		want   string
+	}{
+		{name: "id token aud", fields: []string{"web.apps.googleusercontent.com", "", ""}, want: "web.apps.googleusercontent.com"},
+		{name: "access token audience", fields: []string{"", "web.apps.googleusercontent.com", ""}, want: "web.apps.googleusercontent.com"},
+		{name: "access token issued_to", fields: []string{"", "", "web.apps.googleusercontent.com"}, want: "web.apps.googleusercontent.com"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := firstNonEmpty(test.fields...); got != test.want {
+				t.Fatalf("firstNonEmpty() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestParseGoogleTokenInfoFields(t *testing.T) {
+	for _, raw := range []json.RawMessage{json.RawMessage(`3600`), json.RawMessage(`"3600"`)} {
+		got, err := parseGoogleInteger(raw)
+		if err != nil || got != 3600 {
+			t.Fatalf("parseGoogleInteger(%s) = %d, %v; want 3600, nil", raw, got, err)
+		}
+	}
+	if !parseGoogleBoolean(json.RawMessage(`true`)) || !parseGoogleBoolean(json.RawMessage(`"true"`)) {
+		t.Fatal("parseGoogleBoolean should accept Google's boolean and string forms")
+	}
+}

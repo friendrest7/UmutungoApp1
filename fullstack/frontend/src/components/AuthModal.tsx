@@ -8,7 +8,7 @@ import { usePersistentLanguage } from '../lib/language';
 import { t } from '../data/translations';
 
 export type AuthRole = 'Client' | 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' | 'Admin';
-type AuthModalProps = { open: boolean; role?: AuthRole; onClose: () => void; onSuccess: (role: AuthRole) => void; hideGoogle?: boolean; requireBackendSession?: boolean };
+type AuthModalProps = { open: boolean; role?: AuthRole; onClose: () => void; onSuccess: (role: AuthRole) => void; hideGoogle?: boolean };
 type SignInMethod = 'choose' | 'email' | 'phone' | 'otp';
 type GoogleTokenResponse = { access_token?: string; error?: string; error_description?: string };
 type GoogleApi = { accounts: {
@@ -31,7 +31,7 @@ const demoAccounts: Array<{ role: AuthRole; email: string; password: string }> =
 
 function roleLabel(role?: AuthRole) { return role === 'Tenant' || role === 'Client' ? 'Client' : role ?? 'your Umutungo account'; }
 
-export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false, requireBackendSession = false }: AuthModalProps) {
+export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }: AuthModalProps) {
   const { language } = usePersistentLanguage();
   const copy = (key: string) => t(language, key);
   const [method, setMethod] = useState<SignInMethod>('choose');
@@ -75,19 +75,18 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false, 
     const account = demoAccounts.find((item) => item.email.toLowerCase() === email.trim().toLowerCase() && item.password === password);
     if (!account) { setError('That email or password is not recognized.'); setBusy(false); return; }
     if (role && (account.role === 'Client' ? 'Client' : account.role) !== (role === 'Tenant' ? 'Client' : role)) { setError(`This account is for ${roleLabel(account.role)}. Choose that role to continue.`); setBusy(false); return; }
-    if (!requireBackendSession) { complete(account.role); return; }
     setError('');
     try {
       const response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: account.email, password: account.password }) });
       const result = await response.json() as { error?: string; access_token?: string; user?: { role?: string } };
-      if (response.status === 404) throw new Error('Test credentials require the local backend running with APP_ENV=development. Start the backend and try again.');
-      if (!response.ok || !result.access_token) throw new Error(result.error ?? 'A database session could not be created. Use a verified account or the local development API.');
+      if (response.status === 404) throw new Error('Demo sign-in is unavailable on the Umutungo backend. Use a verified account or contact support.');
+      if (!response.ok || !result.access_token) throw new Error(result.error ?? 'A database session could not be created. Use a verified Umutungo account.');
       const sessionRole: AuthRole = result.user?.role === 'komisiyoneri' ? 'Commissioner / Komisiyoneri' : result.user?.role === 'property_owner' ? (role === 'Landlord' ? 'Landlord' : 'Property Owner') : result.user?.role === 'admin' ? 'Admin' : 'Client';
       if (role && !googleRoleAllowed(sessionRole, role)) throw new Error(`This development account is registered as ${roleLabel(sessionRole)}.`);
       window.localStorage.setItem('umutungo-api-token', result.access_token);
       complete(sessionRole);
     } catch (caught) {
-      setError(caught instanceof TypeError ? 'The local backend is unreachable. Start it at http://localhost:8080, then try again.' : caught instanceof Error ? caught.message : 'A database session could not be created.');
+      setError(caught instanceof TypeError ? 'The Umutungo backend is unreachable. Check your connection and try again.' : caught instanceof Error ? caught.message : 'A database session could not be created.');
       setBusy(false);
     }
   };

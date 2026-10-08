@@ -1286,6 +1286,7 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 .category-save { position: absolute; top: 12px; right: 12px; display: grid; width: 31px; height: 31px; place-items: center; border: 0; border-radius: 50%; background: rgba(255,255,255,.93); color: #465046; cursor: pointer; }
 .category-save.saved, .category-save:hover { color: #b13a2d; }
 .category-verified { position: absolute; bottom: 12px; left: 12px; display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 999px; background: #02a24b; color: #fff; font-size: 8px; font-weight: 800; }
+.category-sample-badge { position: absolute; bottom: 12px; left: 12px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.72); border-radius: 999px; background: rgba(13,28,20,.8); color: #fff; font-size: 8px; font-weight: 800; }
 .category-listing-copy { padding: 16px; }
 .category-listing-copy { display: flex; min-height: 194px; flex-direction: column; }
 .category-listing-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--category-muted); font-size: 9px; font-weight: 700; }

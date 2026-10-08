@@ -10,7 +10,7 @@ import { umutungoApi } from '../lib/umutungoApi';
 import { dashboardPathForAccountRole } from '../lib/accountRouting';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
-type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode };
+type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; readOnly?: boolean };
 type TransactionType = 'rent' | 'buy';
 type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
@@ -39,7 +39,7 @@ function escapeReceiptValue(value: string | number) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character] ?? character);
 }
 
-export function PropertyViewer({ language, property, onClose, initialMode = 'photos' }: PropertyViewerProps) {
+export function PropertyViewer({ language, property, onClose, initialMode = 'photos', readOnly = false }: PropertyViewerProps) {
   const images = property.images?.length ? property.images : [property.image];
   const [activeImage, setActiveImage] = useState(0);
   const [mode, setMode] = useState<ViewerMode>(initialMode);
@@ -338,7 +338,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
           <div className="viewer-thumbnails">{images.map((image, index) => <button className={mode === 'photos' && activeImage === index ? 'is-active' : ''} type="button" key={`${image}-thumb-${index}`} onClick={() => { setMode('photos'); setActiveImage(index); }}><Image src={image} alt="" fill sizes="90px" /></button>)}</div>
         </div>
 
-        <aside className="property-viewer-details"><div className="viewer-price-row"><div><span className="property-type">{t(language, property.type)}</span><strong>{property.price}</strong><small>{t(language, property.priceNote)}</small></div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats"><span><strong>{property.bedrooms}</strong>{t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong>{t(language, 'baths')}</span><span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span></div><p className="viewer-description">{t(language, 'A carefully presented property with clear details, flexible spaces and a location worth exploring in person.')}</p><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Verified owner')}</span><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span><span><Icon name="check" size={15} /> {t(language, 'Virtual tour ready')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button><small className="viewer-listed">{t(language, property.listed)}</small></aside>
+        <aside className="property-viewer-details"><div className="viewer-price-row"><div><span className="property-type">{t(language, property.type)}</span><strong>{property.price}</strong><small>{t(language, property.priceNote)}</small></div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats"><span><strong>{property.bedrooms}</strong>{t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong>{t(language, 'baths')}</span><span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span></div><p className="viewer-description">{t(language, 'A carefully presented property with clear details, flexible spaces and a location worth exploring in person.')}</p>{readOnly ? <p className="viewer-description">Illustrative example only. This is not an available owner listing.</p> : <><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span><span><Icon name="check" size={15} /> {t(language, 'Virtual tour ready')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button></>}<small className="viewer-listed">{t(language, property.listed)}</small></aside>
       </div>
     </section>
     {transactionOpen && (

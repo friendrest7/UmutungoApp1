@@ -3740,7 +3740,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .app-realistic .landing-search-actions .landing-directory-search input { font-size: 16px; }
 .app-realistic .landing-search-actions .landing-directory-search input::placeholder { color: #86efac !important; font-weight: 400; }
 .app-realistic .hero-copy h1, .app-realistic .hero-copy .hero-lead { text-shadow: 0 2px 9px rgba(0,0,0,.72); }
-.app-realistic .landing-marketplace-description { max-width: 700px; margin: 12px auto 0; color: #fff; font-size: 13px; line-height: 1.55; text-align: center; text-shadow: 0 2px 9px rgba(0,0,0,.72); transform: translateY(-.2cm); }
+.app-realistic .landing-marketplace-description { max-width: 700px; margin: 12px auto 0; color: #fff; font-size: 13px; line-height: 1.55; text-align: center; text-shadow: 0 1px 2px #000, 0 2px 5px rgba(0,0,0,.95), 0 5px 14px rgba(0,0,0,.82); transform: translateY(-.2cm); }
 .app-realistic .landing-search-reply { width: min(100%, 470px); margin: 8px auto 0; color: #fff; font-size: 12px; line-height: 1.45; text-align: left; text-shadow: 0 1px 8px rgba(0,0,0,.35); }
 @media (min-width: 761px) {
   .app-realistic .landing-search-actions { position: relative; left: 50%; width: min(90vw, 675px); transform: translate(-50%, .5cm); }

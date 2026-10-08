@@ -6,7 +6,7 @@ import { Icon } from './Icons';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { AuthModal, AuthRole } from './AuthModal';
-import { removeFavorite, type FavoriteItem } from '../lib/umutungoApi';
+import { removeFavorite, umutungoApi, type ApiNotification, type FavoriteItem } from '../lib/umutungoApi';
 
 type NavbarProps = {
   darkMode: boolean;
@@ -144,13 +144,22 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   }, []);
 
   useEffect(() => {
-    const readNotificationCount = () => {
+    let cancelled = false;
+    const readNotificationCount = async () => {
       if (!signedIn) {
         setNotifications([]);
         setNotificationCount(0);
         return;
       }
       try {
+        const remote = await umutungoApi<{ items: ApiNotification[] }>('/api/v1/notifications');
+        if (cancelled) return;
+        if (remote?.items) {
+          const unread = remote.items.filter((item) => !item.read_at);
+          setNotifications(unread.map((item) => ({ id: item.id, title: item.title, body: item.body, created_at: item.created_at })));
+          setNotificationCount(unread.length);
+          return;
+        }
         const keys = ['umutungo-notifications'];
         if (roleKey === 'Landlord') keys.push('umutungo-landlord-notifications');
         if (roleKey === 'Commissioner / Komisiyoneri') keys.push('umutungo-commissioner-notifications');
@@ -162,13 +171,20 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         setNotifications(items);
         setNotificationCount(items.length);
       } catch {
-        setNotifications([]);
-        setNotificationCount(0);
+        // Retain the browser queue when the API is temporarily unavailable.
+        try {
+          const keys = ['umutungo-notifications', ...(roleKey === 'Landlord' ? ['umutungo-landlord-notifications'] : []), ...(roleKey === 'Commissioner / Komisiyoneri' ? ['umutungo-commissioner-notifications'] : []), ...(roleKey === 'Tenant' || roleKey === 'Client' ? ['umutungo-tenant-notifications'] : [])];
+          const items = keys.flatMap((key) => { const stored = JSON.parse(window.localStorage.getItem(key) ?? '[]'); return Array.isArray(stored) ? stored : []; });
+          if (!cancelled) { setNotifications(items); setNotificationCount(items.length); }
+        } catch { if (!cancelled) { setNotifications([]); setNotificationCount(0); } }
       }
     };
-    readNotificationCount();
-    window.addEventListener('umutungo:notifications-changed', readNotificationCount);
-    return () => window.removeEventListener('umutungo:notifications-changed', readNotificationCount);
+    void readNotificationCount();
+    const timer = window.setInterval(() => { void readNotificationCount(); }, 20000);
+    const refresh = () => { void readNotificationCount(); };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('umutungo:notifications-changed', refresh);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('umutungo:notifications-changed', refresh); };
   }, [roleKey, signedIn]);
 
   useEffect(() => {

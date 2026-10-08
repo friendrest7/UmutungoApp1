@@ -192,7 +192,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     setPaymentError('');
     let paymentStatus: 'paid' | 'pending' = 'paid';
     try {
-      const result = await umutungoApi<{ id?: string; status?: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', phone: paymentPhone }) });
+      const result = await umutungoApi<{ id?: string; status?: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, transaction_type: transactionType, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', phone: paymentPhone }) });
       paymentStatus = result?.status?.toLowerCase() === 'successful' || result?.status?.toLowerCase() === 'paid' ? 'paid' : 'pending';
       if (result) window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...result, propertyId: property.id, createdAt: new Date().toISOString() }));
     } catch { /* The API can be enabled with a token; keep the local demo payment available. */ }

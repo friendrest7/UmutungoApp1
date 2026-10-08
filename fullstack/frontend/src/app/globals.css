@@ -3730,6 +3730,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .app-realistic .landing-search-actions { width: auto; margin-bottom: 0; transform: translateY(.5cm); }
 .app-realistic .landing-search-actions .landing-directory-search { min-height: 56px; }
 .app-realistic .landing-search-actions .landing-directory-search input { font-size: 16px; }
+.app-realistic .landing-search-actions .landing-directory-search input::placeholder { color: #60a5fa !important; font-weight: 400; }
 .app-realistic .hero-copy h1, .app-realistic .hero-copy .hero-lead { text-shadow: 0 2px 9px rgba(0,0,0,.72); }
 .app-realistic .landing-marketplace-description { max-width: 700px; margin: 12px auto 0; color: #fff; font-size: 13px; line-height: 1.55; text-align: center; text-shadow: 0 2px 9px rgba(0,0,0,.72); transform: translateY(-.2cm); }
 .app-realistic .landing-search-reply { width: min(100%, 470px); margin: 8px auto 0; color: #fff; font-size: 12px; line-height: 1.45; text-align: left; text-shadow: 0 1px 8px rgba(0,0,0,.35); }

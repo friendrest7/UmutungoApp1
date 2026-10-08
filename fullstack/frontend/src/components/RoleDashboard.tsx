@@ -324,13 +324,11 @@ function DashboardUtilityDock({ isAdmin = false, role }: { isAdmin?: boolean; ro
         return;
       }
       const storedRole = role ?? window.localStorage.getItem('umutungo-demo-user')?.toLowerCase() ?? '';
-      if (!storedRole.includes('commissioner')) {
-        try {
-          const result = await umutungoApi<{ items: ApiNotification[] }>('/api/v1/notifications');
-          if (cancelled) return;
-          if (result?.items) { setNotifications(result.items.filter((item) => !item.read_at)); return; }
-        } catch { /* Use the local notification queue when the API is unavailable. */ }
-      }
+      try {
+        const result = await umutungoApi<{ items: ApiNotification[] }>('/api/v1/notifications');
+        if (cancelled) return;
+        if (result?.items) { setNotifications(result.items.filter((item) => !item.read_at)); return; }
+      } catch { /* Use the local notification queue when the API is unavailable. */ }
       try {
         const key = storedRole.includes('landlord') ? 'umutungo-landlord-notifications' : storedRole.includes('commissioner') ? 'umutungo-commissioner-notifications' : 'umutungo-tenant-notifications';
         const local = JSON.parse(window.localStorage.getItem(key) ?? '[]') as Array<Record<string, string>>;

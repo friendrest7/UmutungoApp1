@@ -1468,14 +1468,24 @@ func (s *Server) createApplication(w http.ResponseWriter, r *http.Request, listi
 		return
 	}
 	info, _ := json.Marshal(input.ApplicantInfo)
-	var appID, ownerID string
-	err := s.db.QueryRow(r.Context(), `INSERT INTO rental_applications(listing_id, applicant_id, message, applicant_info) SELECT $1,$2,$3,$4 WHERE EXISTS(SELECT 1 FROM listings WHERE id=$1 AND status='published') RETURNING id, (SELECT owner_id FROM listings WHERE id=$1)`, listingID, user.ID, input.Message, info).Scan(&appID, &ownerID)
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not start application")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var appID, ownerID, listingTitle string
+	err = tx.QueryRow(r.Context(), `INSERT INTO rental_applications(listing_id, applicant_id, message, applicant_info) SELECT $1,$2,$3,$4 WHERE EXISTS(SELECT 1 FROM listings WHERE id=$1 AND status='published') RETURNING id, (SELECT owner_id FROM listings WHERE id=$1), (SELECT title FROM listings WHERE id=$1)`, listingID, user.ID, input.Message, info).Scan(&appID, &ownerID, &listingTitle)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, "listing is not available for applications")
 		return
 	}
-	if _, err := s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_received','New rental application',$2)`, ownerID, fmt.Sprintf("%s applied to one of your properties", user.Name)); err != nil {
+	if _, err := tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_received','New rental application',$2)`, ownerID, fmt.Sprintf("%s applied for %s", user.Name, listingTitle)); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create application notification")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not save application")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": appID, "status": "pending"})
@@ -1620,12 +1630,13 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		RelatedType string  `json:"related_type"`
-		RelatedID   string  `json:"related_id"`
-		Amount      float64 `json:"amount"`
-		Currency    string  `json:"currency"`
-		Provider    string  `json:"provider"`
-		Phone       string  `json:"phone"`
+		RelatedType     string  `json:"related_type"`
+		RelatedID       string  `json:"related_id"`
+		Amount          float64 `json:"amount"`
+		Currency        string  `json:"currency"`
+		Provider        string  `json:"provider"`
+		Phone           string  `json:"phone"`
+		TransactionType string  `json:"transaction_type"`
 	}
 	if !decodeJSON(w, r, &input) || input.RelatedID == "" || input.Amount <= 0 {
 		errorJSON(w, http.StatusBadRequest, "related_id and a positive amount are required")
@@ -1633,6 +1644,10 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 	}
 	input.RelatedType = strings.ToLower(strings.TrimSpace(input.RelatedType))
 	input.Provider = strings.ToLower(strings.TrimSpace(input.Provider))
+	input.TransactionType = strings.ToLower(strings.TrimSpace(input.TransactionType))
+	if input.TransactionType != "rent" && input.TransactionType != "buy" {
+		input.TransactionType = "rent"
+	}
 	if input.RelatedType != "application" && input.RelatedType != "agreement" && input.RelatedType != "listing" {
 		errorJSON(w, http.StatusBadRequest, "related_type must be application, agreement, or listing")
 		return
@@ -1662,10 +1677,49 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 	if input.Provider == "manual" {
 		status = "successful"
 	}
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not start payment")
+		return
+	}
+	defer tx.Rollback(r.Context())
 	var id string
-	err = s.db.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status,receipt_number) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $8='successful' THEN $7 ELSE NULL END) RETURNING id`, user.ID, input.RelatedType, input.RelatedID, input.Amount, input.Currency, input.Provider, providerReference, status).Scan(&id)
+	err = tx.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status,receipt_number) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $8='successful' THEN $7 ELSE NULL END) RETURNING id`, user.ID, input.RelatedType, input.RelatedID, input.Amount, input.Currency, input.Provider, providerReference, status).Scan(&id)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, "could not create payment")
+		return
+	}
+	if input.RelatedType == "listing" || input.RelatedType == "application" {
+		var ownerID, listingTitle string
+		lookup := `SELECT l.owner_id,l.title FROM listings l WHERE l.id=$1`
+		lookupID := input.RelatedID
+		if input.RelatedType == "application" {
+			lookup = `SELECT l.owner_id,l.title FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.id=$1 AND a.applicant_id=$2`
+		}
+		if input.RelatedType == "application" {
+			err = tx.QueryRow(r.Context(), lookup, lookupID, user.ID).Scan(&ownerID, &listingTitle)
+		} else {
+			err = tx.QueryRow(r.Context(), lookup, lookupID).Scan(&ownerID, &listingTitle)
+		}
+		if err != nil {
+			errorJSON(w, http.StatusBadRequest, "could not find property owner")
+			return
+		}
+		action := "rental"
+		if input.TransactionType == "buy" {
+			action = "purchase"
+		}
+		state := "pending"
+		if status == "successful" {
+			state = "completed"
+		}
+		if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'property_transaction','New property `+action+` request',$2)`, ownerID, fmt.Sprintf("%s submitted a %s request for %s. Payment is %s.", user.Name, action, listingTitle, state)); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not notify property owner")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not save payment")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "provider": input.Provider, "provider_reference": providerReference, "amount": input.Amount, "currency": input.Currency})
@@ -1917,13 +1971,36 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id strin
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	result, err := s.db.Exec(r.Context(), `UPDATE payments SET status='successful', receipt_number=COALESCE(receipt_number,provider_reference) WHERE id=$1 AND user_id=$2 AND status='pending' AND related_type <> 'owner_upgrade'`, id, user.ID)
+	tx, err := s.db.Begin(r.Context())
 	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not confirm payment")
+		errorJSON(w, http.StatusInternalServerError, "could not start payment confirmation")
 		return
 	}
-	if result.RowsAffected() == 0 {
+	defer tx.Rollback(r.Context())
+	var relatedType, relatedID string
+	err = tx.QueryRow(r.Context(), `UPDATE payments SET status='successful', receipt_number=COALESCE(receipt_number,provider_reference) WHERE id=$1 AND user_id=$2 AND status='pending' AND related_type <> 'owner_upgrade' RETURNING related_type,COALESCE(related_id::text,'')`, id, user.ID).Scan(&relatedType, &relatedID)
+	if err != nil {
 		errorJSON(w, http.StatusNotFound, "pending payment not found")
+		return
+	}
+	if relatedType == "listing" || relatedType == "application" {
+		var ownerID, listingTitle string
+		if relatedType == "application" {
+			err = tx.QueryRow(r.Context(), `SELECT l.owner_id,l.title FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.id=$1`, relatedID).Scan(&ownerID, &listingTitle)
+		} else {
+			err = tx.QueryRow(r.Context(), `SELECT owner_id,title FROM listings WHERE id=$1`, relatedID).Scan(&ownerID, &listingTitle)
+		}
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not find property owner")
+			return
+		}
+		if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_confirmed','Property payment confirmed',$2)`, ownerID, fmt.Sprintf("A payment for %s has been confirmed by %s.", listingTitle, user.Name)); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not notify property owner")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not confirm payment")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": "successful"})
@@ -1974,14 +2051,24 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "a valid landlord recipient is required")
 		return
 	}
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not start message")
+		return
+	}
+	defer tx.Rollback(r.Context())
 	var id string
-	err := s.db.QueryRow(r.Context(), `INSERT INTO messages(sender_id,recipient_id,listing_id,body) VALUES($1,$2,NULLIF($3,'')::uuid,$4) RETURNING id`, user.ID, input.RecipientID, input.ListingID, strings.TrimSpace(input.Body)).Scan(&id)
+	err = tx.QueryRow(r.Context(), `INSERT INTO messages(sender_id,recipient_id,listing_id,body) VALUES($1,$2,NULLIF($3,'')::uuid,$4) RETURNING id`, user.ID, input.RecipientID, input.ListingID, strings.TrimSpace(input.Body)).Scan(&id)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, "could not send message")
 		return
 	}
-	if _, err = s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'message_received','New message',$2)`, input.RecipientID, fmt.Sprintf("%s sent you a message", user.Name)); err != nil {
+	if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'message_received','New message',$2)`, input.RecipientID, fmt.Sprintf("%s sent you a message", user.Name)); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create message notification")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not save message")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "sent"})
@@ -2064,10 +2151,24 @@ func (s *Server) bookings(w http.ResponseWriter, r *http.Request) {
 	if input.Guests < 1 {
 		input.Guests = 1
 	}
-	var id string
-	err := s.db.QueryRow(r.Context(), `INSERT INTO bookings(listing_id,guest_id,check_in,check_out,guests) VALUES($1,$2,$3,$4,$5) RETURNING id`, input.ListingID, user.ID, input.CheckIn, input.CheckOut, input.Guests).Scan(&id)
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not start booking")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var id, ownerID, listingTitle string
+	err = tx.QueryRow(r.Context(), `INSERT INTO bookings(listing_id,guest_id,check_in,check_out,guests) SELECT $1,$2,$3,$4,$5 WHERE EXISTS(SELECT 1 FROM listings WHERE id=$1 AND status='published') RETURNING id,(SELECT owner_id FROM listings WHERE id=$1),(SELECT title FROM listings WHERE id=$1)`, input.ListingID, user.ID, input.CheckIn, input.CheckOut, input.Guests).Scan(&id, &ownerID, &listingTitle)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, "could not create booking")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'booking_received','New booking request',$2)`, ownerID, fmt.Sprintf("%s requested a booking for %s from %s to %s.", user.Name, listingTitle, input.CheckIn, input.CheckOut)); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not notify property owner")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not save booking")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "requested"})

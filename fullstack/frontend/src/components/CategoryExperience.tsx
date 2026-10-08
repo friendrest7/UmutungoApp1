@@ -70,6 +70,22 @@ const shopCategories: Array<{ slug: string; label: string; icon: 'home' | 'build
   { slug: 'other', label: 'Other', icon: 'users' },
 ];
 
+const categoryAliases: Record<string, string[]> = {
+  houses: ['house', 'houses', 'residential house', 'residential houses', 'residential'],
+  apartments: ['apartment', 'apartments', 'flat', 'flats'],
+  land: ['land', 'plot', 'plots'],
+  commercial: ['commercial', 'commercial building', 'commercial buildings'],
+  offices: ['office', 'offices'],
+  hospitality: ['hospitality', 'hotel', 'hotels', 'lodge', 'lodges'],
+  vehicles: ['vehicle', 'vehicles', 'car', 'cars'],
+  furniture: ['furniture'],
+  appliances: ['appliance', 'appliances'],
+  equipment: ['equipment'],
+  other: ['other', 'other asset', 'other assets'],
+};
+
+const normalizedCategory = (value: string) => value.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+
 const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlaceholder => {
   const priceMatch = item.price.match(/\s*\/\s*(month|night|day)$/);
   const bedrooms = Number(item.detail.match(/(\d+)\s*beds?/)?.[1] ?? 0);
@@ -107,12 +123,16 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   };
   useEffect(() => {
     let cancelled = false;
-    const categoryName = rawCategory.name.toLowerCase().replace(/s$/, '');
-    void publicUmutungoApi<{ items: DatabaseListing[] }>(`/api/v1/listings?category=${encodeURIComponent(categoryName)}`)
-      .then((result) => { if (!cancelled) setDatabaseListings((result?.items ?? []).map((item) => toDatabaseListing(item, rawCategory))); })
+    const aliases = categoryAliases[slug] ?? [normalizedCategory(rawCategory.name)];
+    void publicUmutungoApi<{ items: DatabaseListing[] }>('/api/v1/listings')
+      .then((result) => {
+        if (cancelled) return;
+        const matchingItems = (result?.items ?? []).filter((item) => aliases.includes(normalizedCategory(item.category)));
+        setDatabaseListings(matchingItems.map((item) => toDatabaseListing(item, rawCategory)));
+      })
       .catch(() => { if (!cancelled) setDatabaseListings([]); });
     return () => { cancelled = true; };
-  }, [rawCategory]);
+  }, [rawCategory, slug]);
   useEffect(() => {
     const readFavorites = () => {
       try {

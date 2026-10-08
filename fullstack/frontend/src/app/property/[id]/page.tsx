@@ -6,8 +6,8 @@ import type { PropertyPlaceholder } from '../../../components/PropertyCard';
 import { Icon } from '../../../components/Icons';
 import { InterfacePreferences } from '../../../components/InterfacePreferences';
 import { PropertyViewer } from '../../../components/PropertyViewer';
-import { getDemoProperty } from '../../../data/propertyCatalog';
 import { publicUmutungoApi } from '../../../lib/umutungoApi';
+import { listedOn, toProperty, type ApiListing as SharedApiListing } from '../../../lib/listings';
 
 type ApiListing = {
   id: string;
@@ -80,15 +80,13 @@ export default function PropertyDetailPage() {
 
   useEffect(() => {
     const id = decodeURIComponent(params.id ?? '');
-    const fallback = getDemoProperty(id) ?? null;
-    setProperty(fallback);
+    setProperty(null);
     void publicUmutungoApi<ApiListing>(`/api/v1/listings/${encodeURIComponent(id)}`)
       .then((result) => {
-        if (result) setProperty(fromApi(result));
+        if (result) setProperty(toProperty(result as SharedApiListing));
       })
       .catch(() => undefined)
       .finally(() => setLoading(false));
-    if (!fallback) setLoading(false);
   }, [params.id]);
 
   if (loading && !property) return <main className="property-detail-page property-detail-loading" aria-busy="true"><div className="property-detail-skeleton" aria-hidden="true"><span /><div><i /><i /><i /></div><section><i /><i /><i /><i /></section></div></main>;

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -53,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/health", s.health)
 	mux.HandleFunc("/readyz", s.ready)
 	mux.HandleFunc("/api/v1/auth/register", s.register)
+	mux.HandleFunc("/api/v1/auth/dev-admin", s.devAdminLogin)
 	mux.HandleFunc("/api/v1/auth/request-otp", s.requestOTP)
 	mux.HandleFunc("/api/v1/auth/verify-otp", s.verifyOTP)
 	mux.HandleFunc("/api/v1/auth/google", s.googleAuth)
@@ -65,6 +67,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/applications/", s.applicationRoute)
 	mux.HandleFunc("/api/v1/payments", s.payments)
 	mux.HandleFunc("/api/v1/payments/", s.paymentRoute)
+	mux.HandleFunc("/api/v1/owner/upgrades", s.ownerUpgrades)
+	mux.HandleFunc("/api/v1/owner/upgrades/", s.ownerUpgradeRoute)
 	mux.HandleFunc("/api/v1/messages", s.messages)
 	mux.HandleFunc("/api/v1/reviews", s.reviews)
 	mux.HandleFunc("/api/v1/bookings", s.bookings)
@@ -180,6 +184,54 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		response["development_code"] = code
 	}
 	writeJSON(w, http.StatusCreated, response)
+}
+
+// devAdminLogin provides a real API session for the documented local Admin
+// test account. It is unavailable outside development and cannot promote an
+// existing non-admin account.
+func (s *Server) devAdminLogin(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.AppEnv != "development" {
+		errorJSON(w, http.StatusNotFound, "route not found")
+		return
+	}
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var input struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &input) || !strings.EqualFold(strings.TrimSpace(input.Email), "admin@umutungo.test") || input.Password != "Admin123!" {
+		errorJSON(w, http.StatusUnauthorized, "invalid development Admin credentials")
+		return
+	}
+	var user CurrentUser
+	err := s.db.QueryRow(r.Context(), `
+		SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status
+		FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1`, "admin@umutungo.test").
+		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	if err == pgx.ErrNoRows {
+		phone := "+2507" + randomDigits(8)
+		err = s.db.QueryRow(r.Context(), `
+			INSERT INTO users(name,email,phone,role,verified_at)
+			VALUES('Umutungo Development Admin','admin@umutungo.test',$1,'admin',NOW())
+			RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status`, phone).
+			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+		if err == nil {
+			_, err = s.db.Exec(r.Context(), `INSERT INTO profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, user.ID)
+		}
+	}
+	if err != nil || user.Role != "admin" || user.Status != "active" {
+		errorJSON(w, http.StatusUnauthorized, "development Admin account is unavailable")
+		return
+	}
+	token, err := s.createSession(r, user.ID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create Admin session")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": user, "access_token": token})
 }
 
 func (s *Server) requestOTP(w http.ResponseWriter, r *http.Request) {
@@ -399,6 +451,20 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// A landing-page Google One Tap may have created this account as a Client
+	// before the user chose a posting role. An explicit posting sign-in can
+	// promote that Client account to the requested business role. Keep any
+	// existing business role unchanged when the same Google account signs in.
+	if err == nil && strings.EqualFold(user.Role, "client") && role != "client" {
+		err = s.db.QueryRow(r.Context(), `
+			UPDATE users SET role=$1
+			WHERE id=$2
+			RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status`, role, user.ID).
+			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	}
+	if err == nil && (user.Role == "komisiyoneri" || user.Role == "property_owner") {
+		_, err = s.db.Exec(r.Context(), `INSERT INTO business_profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, user.ID)
+	}
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
 			errorJSON(w, http.StatusConflict, "a user with this Google email already exists")
@@ -611,6 +677,7 @@ type listingInput struct {
 	Latitude        *float64   `json:"latitude"`
 	Longitude       *float64   `json:"longitude"`
 	PublishAt       *time.Time `json:"publish_at"`
+	Status          string     `json:"status"`
 	Tags            []string   `json:"tags"`
 	Amenities       []string   `json:"amenities"`
 	ContactMethod   string     `json:"contact_method"`
@@ -633,6 +700,10 @@ func (s *Server) listings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
+	if err := s.publishDueListings(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not publish scheduled listings")
+		return
+	}
 	q := r.URL.Query()
 	search := q.Get("search")
 	args := []any{search, q.Get("province"), q.Get("district"), q.Get("sector"), q.Get("category"), q.Get("transaction_type")}
@@ -640,7 +711,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		SELECT l.id, l.owner_id, u.name, u.role, l.category, l.transaction_type,
 		l.title, l.description, l.price, l.currency, l.province, l.district, l.sector,
 		COALESCE(l.cell,''), COALESCE(l.village,''), l.latitude, l.longitude, l.status,
-		l.tags, l.amenities, l.created_at
+		l.tags, l.amenities, l.created_at, l.publish_at
 		, COALESCE((SELECT json_agg(json_build_object('type', lm.media_type, 'url', lm.url) ORDER BY lm.sort_order, lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id), '[]'::json) AS media
 		FROM listings l JOIN users u ON u.id=l.owner_id
 		WHERE l.deleted_at IS NULL AND l.status='published'
@@ -666,16 +737,25 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		var tags, amenities []byte
 		var media []byte
 		var createdAt time.Time
-		if err := rows.Scan(&id, &ownerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &media); err != nil {
+		var publishAt *time.Time
+		if err := rows.Scan(&id, &ownerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &publishAt, &media); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not read listings")
 			return
+		}
+		var mediaItems []map[string]any
+		_ = json.Unmarshal(media, &mediaItems)
+		images := make([]string, 0, len(mediaItems))
+		for _, image := range mediaItems {
+			if imageURL, ok := image["url"].(string); ok {
+				images = append(images, imageURL)
+			}
 		}
 		items = append(items, map[string]any{
 			"id": id, "owner": map[string]string{"id": ownerID, "name": ownerName, "role": ownerRole},
 			"category": category, "transaction_type": transactionType, "title": title, "description": description,
 			"price": price, "currency": currency, "province": province, "district": district, "sector": sector,
 			"cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status,
-			"tags": rawJSON(tags), "amenities": rawJSON(amenities), "media": rawJSON(media), "created_at": createdAt,
+			"tags": rawJSON(tags), "amenities": rawJSON(amenities), "media": rawJSON(media), "images": images, "created_at": createdAt, "publish_at": publishAt,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -683,6 +763,11 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
+}
+
+func (s *Server) publishDueListings(ctx context.Context) error {
+	_, err := s.db.Exec(ctx, `UPDATE listings SET status='published', updated_at=NOW() WHERE status='scheduled' AND publish_at IS NOT NULL AND publish_at <= NOW() AND deleted_at IS NULL`)
+	return err
 }
 
 // directory exposes only active landlord/commissioner profile information that
@@ -762,8 +847,12 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 	}
 	input.TransactionType = strings.ToLower(strings.TrimSpace(input.TransactionType))
 	input.Category = strings.ToLower(strings.TrimSpace(input.Category))
+	if strings.TrimSpace(input.Currency) == "" {
+		input.Currency = "RWF"
+	}
 	requiresDetailedLocation := map[string]bool{"house": true, "houses": true, "apartment": true, "apartments": true, "land": true, "commercial": true, "office": true, "offices": true, "hospitality": true, "hotel": true}
-	if input.Category == "" || input.Title == "" || !validTransaction(input.TransactionType) {
+	validCategories := map[string]bool{"house": true, "houses": true, "apartment": true, "apartments": true, "land": true, "commercial": true, "office": true, "offices": true, "hospitality": true, "hotel": true, "vehicle": true, "vehicles": true, "equipment": true, "furniture": true, "appliance": true, "appliances": true, "other": true}
+	if !validCategories[input.Category] || input.Title == "" || !validTransaction(input.TransactionType) {
 		errorJSON(w, http.StatusBadRequest, "category, title, and transaction_type are required")
 		return
 	}
@@ -788,6 +877,12 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := "published"
+	if input.Status == "draft" {
+		status = "draft"
+	} else if input.Status != "" && input.Status != "published" {
+		errorJSON(w, http.StatusBadRequest, "status must be draft or published")
+		return
+	}
 	if input.PublishAt != nil && input.PublishAt.After(time.Now()) {
 		status = "scheduled"
 	}
@@ -846,7 +941,19 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "could not finish listing creation")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "expires_at": expires})
+	var ownerName, ownerRole string
+	var createdAt time.Time
+	if err := s.db.QueryRow(r.Context(), `SELECT u.name,u.role,l.created_at FROM listings l JOIN users u ON u.id=l.owner_id WHERE l.id=$1`, id).Scan(&ownerName, &ownerRole, &createdAt); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "listing was created but its details could not be loaded")
+		return
+	}
+	media := make([]map[string]any, 0, len(input.Media))
+	images := make([]string, 0, len(input.Media))
+	for index, entry := range input.Media {
+		media = append(media, map[string]any{"type": entry.Type, "url": strings.TrimSpace(entry.URL), "sort_order": index})
+		images = append(images, strings.TrimSpace(entry.URL))
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "category": input.Category, "title": input.Title, "description": input.Description, "price": input.Price, "currency": input.Currency, "owner": map[string]string{"id": user.ID, "name": ownerName, "role": ownerRole}, "status": status, "created_at": createdAt, "publish_at": input.PublishAt, "expires_at": expires, "media": media, "images": images})
 }
 
 func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
@@ -1149,15 +1256,20 @@ func (s *Server) mediaURL(r *http.Request, listingID, filename string) string {
 }
 
 func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
+	if err := s.publishDueListings(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not publish scheduled listing")
+		return
+	}
 	var item map[string]any
 	var ownerID, ownerName, ownerRole, businessName, photoURL, ownerPhone, category, transactionType, title, description, currency, province, district, sector, cell, village, status string
 	var price float64
 	var latitude, longitude *float64
 	var tags, amenities []byte
 	var createdAt, expiresAt time.Time
+	var publishAt *time.Time
 	var ownerVerifiedAt *time.Time
-	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,COALESCE(bp.business_name,''),COALESCE(pr.photo_url,''),COALESCE(u.phone,''),u.verified_at,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.expires_at FROM listings l JOIN users u ON u.id=l.owner_id LEFT JOIN business_profiles bp ON bp.user_id=u.id LEFT JOIN profiles pr ON pr.user_id=u.id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
-		Scan(&ownerID, &ownerName, &ownerRole, &businessName, &photoURL, &ownerPhone, &ownerVerifiedAt, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &expiresAt)
+	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,COALESCE(bp.business_name,''),COALESCE(pr.photo_url,''),COALESCE(u.phone,''),u.verified_at,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.publish_at,l.expires_at FROM listings l JOIN users u ON u.id=l.owner_id LEFT JOIN business_profiles bp ON bp.user_id=u.id LEFT JOIN profiles pr ON pr.user_id=u.id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
+		Scan(&ownerID, &ownerName, &ownerRole, &businessName, &photoURL, &ownerPhone, &ownerVerifiedAt, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &publishAt, &expiresAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			errorJSON(w, http.StatusNotFound, "listing not found")
@@ -1170,7 +1282,7 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 	if ownerVerifiedAt != nil {
 		poster["phone"] = ownerPhone
 	}
-	item = map[string]any{"id": id, "owner": poster, "category": category, "transaction_type": transactionType, "title": title, "description": description, "price": price, "currency": currency, "province": province, "district": district, "sector": sector, "cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status, "tags": rawJSON(tags), "amenities": rawJSON(amenities), "created_at": createdAt, "expires_at": expiresAt}
+	item = map[string]any{"id": id, "owner": poster, "category": category, "transaction_type": transactionType, "title": title, "description": description, "price": price, "currency": currency, "province": province, "district": district, "sector": sector, "cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status, "tags": rawJSON(tags), "amenities": rawJSON(amenities), "created_at": createdAt, "publish_at": publishAt, "expires_at": expiresAt}
 	rows, err := s.db.Query(r.Context(), `SELECT media_type,url,sort_order FROM listing_media WHERE listing_id=$1 ORDER BY sort_order`, id)
 	media := make([]map[string]any, 0)
 	if err != nil {
@@ -1192,6 +1304,11 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	item["media"] = media
+	images := make([]string, 0, len(media))
+	for _, image := range media {
+		images = append(images, image["url"].(string))
+	}
+	item["images"] = images
 	writeJSON(w, http.StatusOK, item)
 }
 
@@ -1470,6 +1587,202 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "provider": input.Provider, "provider_reference": providerReference, "amount": input.Amount, "currency": input.Currency})
 }
 
+func (s *Server) ownerUpgradePrices() map[string]float64 {
+	return map[string]float64{"silver": s.cfg.OwnerSilverPrice, "gold": s.cfg.OwnerGoldPrice, "platinum": s.cfg.OwnerPlatinumPrice}
+}
+
+func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "property_owner" && user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "property owner access required")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		if _, err := s.db.Exec(r.Context(), `UPDATE owner_upgrade_purchases SET status='expired' WHERE status='active' AND expires_at IS NOT NULL AND expires_at <= NOW()`); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not refresh Owner entitlements")
+			return
+		}
+		ownerID := any(user.ID)
+		if user.Role == "admin" {
+			ownerID = nil
+		}
+		rows, err := s.db.Query(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.amount,p.currency,p.status,p.transaction_reference,p.purchased_at,p.activated_at,p.expires_at,p.created_at,COALESCE(pay.status,'pending'),p.provider_transaction_id,p.verified_at,COALESCE(pay.receipt_number,'') FROM owner_upgrade_purchases p LEFT JOIN payments pay ON pay.id=p.payment_id WHERE ($1::uuid IS NULL OR p.owner_id=$1) ORDER BY p.created_at DESC LIMIT 200`, ownerID)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load owner upgrades")
+			return
+		}
+		defer rows.Close()
+		purchases := make([]map[string]any, 0)
+		for rows.Next() {
+			var id, purchaseOwnerID, plan, currency, status, reference, paymentStatus, receipt string
+			var amount float64
+			var purchasedAt, activatedAt, expiresAt *time.Time
+			var providerTransactionID *string
+			var verifiedAt *time.Time
+			var createdAt time.Time
+			if err := rows.Scan(&id, &purchaseOwnerID, &plan, &amount, &currency, &status, &reference, &purchasedAt, &activatedAt, &expiresAt, &createdAt, &paymentStatus, &providerTransactionID, &verifiedAt, &receipt); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not read owner upgrades")
+				return
+			}
+			purchases = append(purchases, map[string]any{"id": id, "owner_id": purchaseOwnerID, "plan": plan, "amount": amount, "currency": currency, "status": status, "payment_status": paymentStatus, "transaction_reference": reference, "receipt_number": receipt, "provider_transaction_id": providerTransactionID, "verified_at": verifiedAt, "purchased_at": purchasedAt, "activated_at": activatedAt, "expires_at": expiresAt, "created_at": createdAt})
+		}
+		if err := rows.Err(); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not read owner upgrades")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"prices": s.ownerUpgradePrices(), "purchases": purchases})
+	case http.MethodPost:
+		var input struct {
+			Plan           string `json:"plan"`
+			Provider       string `json:"provider"`
+			Phone          string `json:"phone"`
+			IdempotencyKey string `json:"idempotency_key"`
+		}
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		input.Plan = strings.ToLower(strings.TrimSpace(input.Plan))
+		input.Provider = strings.ToLower(strings.TrimSpace(input.Provider))
+		price, validPlan := s.ownerUpgradePrices()[input.Plan]
+		if !validPlan || price <= 0 {
+			errorJSON(w, http.StatusBadRequest, "choose a plan with a configured server price")
+			return
+		}
+		if input.IdempotencyKey == "" || len(input.IdempotencyKey) > 100 {
+			errorJSON(w, http.StatusBadRequest, "a valid idempotency_key is required")
+			return
+		}
+		if input.Provider != "mtn_momo" && input.Provider != "airtel_money" && input.Provider != "card" {
+			errorJSON(w, http.StatusBadRequest, "provider must be mtn_momo, airtel_money, or card")
+			return
+		}
+		if (input.Provider == "mtn_momo" || input.Provider == "airtel_money") && strings.TrimSpace(input.Phone) == "" {
+			errorJSON(w, http.StatusBadRequest, "phone is required for mobile money payments")
+			return
+		}
+		tx, err := s.db.Begin(r.Context())
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not begin owner purchase")
+			return
+		}
+		defer tx.Rollback(r.Context())
+		var purchaseID, reference string
+		insertErr := tx.QueryRow(r.Context(), `INSERT INTO owner_upgrade_purchases(owner_id,plan,amount,transaction_reference,idempotency_key) VALUES($1,$2,$3,'pending',$4) ON CONFLICT(owner_id,idempotency_key) DO NOTHING RETURNING id`, user.ID, input.Plan, price, input.IdempotencyKey).Scan(&purchaseID)
+		if insertErr == pgx.ErrNoRows {
+			var existingPlan string
+			if err := tx.QueryRow(r.Context(), `SELECT id,plan,amount,transaction_reference FROM owner_upgrade_purchases WHERE owner_id=$1 AND idempotency_key=$2`, user.ID, input.IdempotencyKey).Scan(&purchaseID, &existingPlan, new(float64), &reference); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not load existing purchase")
+				return
+			}
+			if existingPlan != input.Plan {
+				errorJSON(w, http.StatusConflict, "idempotency key was already used for a different plan")
+				return
+			}
+			var amount float64
+			var purchaseStatus, paymentStatus, currency string
+			var activatedAt, expiresAt *time.Time
+			if err := tx.QueryRow(r.Context(), `SELECT p.amount,p.currency,p.status,p.activated_at,p.expires_at,COALESCE(pay.status,'pending') FROM owner_upgrade_purchases p LEFT JOIN payments pay ON pay.id=p.payment_id WHERE p.id=$1`, purchaseID).Scan(&amount, &currency, &purchaseStatus, &activatedAt, &expiresAt, &paymentStatus); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not read existing purchase")
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"id": purchaseID, "owner_id": user.ID, "plan": existingPlan, "amount": amount, "currency": currency, "status": purchaseStatus, "payment_status": paymentStatus, "transaction_reference": reference, "activated_at": activatedAt, "expires_at": expiresAt, "idempotent_replay": true})
+			return
+		} else if insertErr != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not create owner purchase")
+			return
+		}
+		token, err := randomToken()
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not create payment reference")
+			return
+		}
+		reference = "UM-OWN-" + strings.ToUpper(token[:12])
+		var paymentID string
+		if err := tx.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status) VALUES($1,'owner_upgrade',$2,$3,'RWF',$4,$5,'pending') RETURNING id`, user.ID, purchaseID, price, input.Provider, reference).Scan(&paymentID); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not create payment request")
+			return
+		}
+		if _, err := tx.Exec(r.Context(), `UPDATE owner_upgrade_purchases SET payment_id=$2,transaction_reference=$3 WHERE id=$1`, purchaseID, paymentID, reference); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not attach payment request")
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not save owner purchase")
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"id": purchaseID, "owner_id": user.ID, "plan": input.Plan, "amount": price, "currency": "RWF", "status": "pending", "payment_status": "pending", "provider": input.Provider, "transaction_reference": reference})
+	default:
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET or POST /api/v1/owner/upgrades")
+	}
+}
+
+func (s *Server) ownerUpgradeRoute(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/owner/upgrades/"), "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] != "verify" || r.Method != http.MethodPost {
+		errorJSON(w, http.StatusNotFound, "owner upgrade route not found")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "admin verification required")
+		return
+	}
+	var input struct {
+		ProviderTransactionID string `json:"provider_transaction_id"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if strings.TrimSpace(input.ProviderTransactionID) == "" {
+		errorJSON(w, http.StatusBadRequest, "provider_transaction_id is required after checking the payment with its provider")
+		return
+	}
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not begin payment verification")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var purchaseID, plan, paymentID string
+	var ownerID string
+	err = tx.QueryRow(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.payment_id FROM owner_upgrade_purchases p JOIN payments pay ON pay.id=p.payment_id WHERE p.id=$1 AND p.status='pending' AND pay.status='pending' FOR UPDATE OF p,pay`, parts[0]).Scan(&purchaseID, &ownerID, &plan, &paymentID)
+	if err == pgx.ErrNoRows {
+		errorJSON(w, http.StatusNotFound, "pending owner payment not found")
+		return
+	}
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load payment for verification")
+		return
+	}
+	var verified bool
+	if err := tx.QueryRow(r.Context(), `UPDATE payments SET status='successful',receipt_number=provider_reference WHERE id=$1 AND status='pending' RETURNING TRUE`, paymentID).Scan(&verified); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not verify payment")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `UPDATE owner_upgrade_purchases SET status='expired' WHERE owner_id=$1 AND status='active'`, ownerID); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not close previous owner entitlement")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `UPDATE owner_upgrade_purchases SET status='active',purchased_at=NOW(),activated_at=NOW(),expires_at=NOW()+CASE plan WHEN 'silver' THEN INTERVAL '90 days' WHEN 'gold' THEN INTERVAL '180 days' ELSE INTERVAL '365 days' END,verified_by=$2,provider_transaction_id=$3,verified_at=NOW() WHERE id=$1`, purchaseID, user.ID, strings.TrimSpace(input.ProviderTransactionID)); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not activate owner entitlement")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not commit verified purchase")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": purchaseID, "owner_id": ownerID, "plan": plan, "status": "active", "payment_status": "successful", "activated_at": time.Now().UTC()})
+}
+
 func (s *Server) canPayFor(r *http.Request, userID, relatedType, relatedID string) bool {
 	var exists bool
 	switch relatedType {
@@ -1520,7 +1833,7 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id strin
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	result, err := s.db.Exec(r.Context(), `UPDATE payments SET status='successful', receipt_number=COALESCE(receipt_number,provider_reference) WHERE id=$1 AND user_id=$2 AND status='pending'`, id, user.ID)
+	result, err := s.db.Exec(r.Context(), `UPDATE payments SET status='successful', receipt_number=COALESCE(receipt_number,provider_reference) WHERE id=$1 AND user_id=$2 AND status='pending' AND related_type <> 'owner_upgrade'`, id, user.ID)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not confirm payment")
 		return
@@ -2070,6 +2383,10 @@ func (s *Server) ownerDashboard(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "owner dashboard access required")
 		return
 	}
+	if err := s.publishDueListings(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not publish scheduled listings")
+		return
+	}
 	var listingsCount, activeListings, applicationsCount, tenantsCount int
 	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listings WHERE owner_id=$1 AND deleted_at IS NULL`, user.ID).Scan(&listingsCount)
 	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listings WHERE owner_id=$1 AND status='published'`, user.ID).Scan(&activeListings)
@@ -2092,6 +2409,10 @@ func (s *Server) ownerListings(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "owner dashboard access required")
 		return
 	}
+	if err := s.publishDueListings(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not publish scheduled listings")
+		return
+	}
 	ownerID := user.ID
 	ownerFilter := "l.owner_id=$1"
 	args := []any{ownerID}
@@ -2100,10 +2421,11 @@ func (s *Server) ownerListings(w http.ResponseWriter, r *http.Request) {
 		args = nil
 	}
 	rows, err := s.db.Query(r.Context(), fmt.Sprintf(`
-		SELECT l.id,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,
+		SELECT l.id,l.owner_id,u.name,u.role,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,
 		l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.status,
-		l.tags,l.amenities,l.created_at,COALESCE((SELECT url FROM listing_media lm WHERE lm.listing_id=l.id ORDER BY lm.sort_order LIMIT 1),'')
-		FROM listings l WHERE %s AND l.deleted_at IS NULL ORDER BY l.created_at DESC`, ownerFilter), args...)
+		l.tags,l.amenities,l.created_at,l.publish_at,COALESCE((SELECT url FROM listing_media lm WHERE lm.listing_id=l.id ORDER BY lm.sort_order LIMIT 1),''),
+		COALESCE((SELECT json_agg(json_build_object('type',lm.media_type,'url',lm.url,'sort_order',lm.sort_order) ORDER BY lm.sort_order,lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id),'[]'::json)
+		FROM listings l JOIN users u ON u.id=l.owner_id WHERE %s AND l.deleted_at IS NULL ORDER BY l.created_at DESC`, ownerFilter), args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load owner listings")
 		return
@@ -2111,19 +2433,29 @@ func (s *Server) ownerListings(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	items := make([]map[string]any, 0)
 	for rows.Next() {
-		var id, category, transactionType, title, description, currency, province, district, sector, cell, village, status, cover string
+		var id, listingOwnerID, ownerName, ownerRole, category, transactionType, title, description, currency, province, district, sector, cell, village, status, cover string
 		var price float64
 		var tags, amenities []byte
 		var createdAt time.Time
-		if err := rows.Scan(&id, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &status, &tags, &amenities, &createdAt, &cover); err != nil {
+		var publishAt *time.Time
+		var media []byte
+		if err := rows.Scan(&id, &listingOwnerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &status, &tags, &amenities, &createdAt, &publishAt, &cover, &media); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not read owner listings")
 			return
+		}
+		var mediaItems []map[string]any
+		_ = json.Unmarshal(media, &mediaItems)
+		images := make([]string, 0, len(mediaItems))
+		for _, image := range mediaItems {
+			if imageURL, ok := image["url"].(string); ok {
+				images = append(images, imageURL)
+			}
 		}
 		items = append(items, map[string]any{
 			"id": id, "category": category, "transaction_type": transactionType, "title": title, "description": description,
 			"price": price, "currency": currency, "province": province, "district": district, "sector": sector,
 			"cell": cell, "village": village, "status": status, "tags": rawJSON(tags), "amenities": rawJSON(amenities),
-			"cover": cover, "created_at": createdAt,
+			"owner": map[string]string{"id": listingOwnerID, "name": ownerName, "role": ownerRole}, "cover": cover, "images": images, "media": mediaItems, "created_at": createdAt, "publish_at": publishAt,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})

@@ -25,6 +25,8 @@ export type IconName =
   | 'user'
   | 'users'
   | 'video'
+  | 'eye'
+  | 'eyeOff'
   | 'x';
 
 type IconProps = { name: IconName; size?: number; strokeWidth?: number; filled?: boolean };
@@ -39,6 +41,8 @@ export function Icon({ name, size = 18, strokeWidth = 1.8, filled = false }: Ico
     creditCard: <><rect x="3" y="5" width="18" height="14" rx="2" fill="none" {...common} /><path d="M3 10h18M7 15h3" fill="none" {...common} /></>,
     chevron: <path d="m6 9 6 6 6-6" fill="none" {...common} />,
     download: <><path d="M12 3v11M7 10l5 5 5-5M5 21h14" fill="none" {...common} /></>,
+    eye: <><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" fill="none" {...common} /><circle cx="12" cy="12" r="2.6" fill="none" {...common} /></>,
+    eyeOff: <><path d="m3 3 18 18M10.6 6.2A10.6 10.6 0 0 1 12 6c6.1 0 9.5 6 9.5 6a15.6 15.6 0 0 1-3.1 3.7M6.2 6.2C3.8 7.8 2.5 12 2.5 12s3.4 6 9.5 6c1.1 0 2.1-.2 3-.5" fill="none" {...common} /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" {...common} /></>,
     googlePlay: <><path d="M3.6 2.5c-.4.5-.6 1.1-.6 1.9v15.2c0 .8.2 1.4.6 1.9L14.7 12 3.6 2.5Z" fill="#4285F4" /><path d="m15.8 13 3.2 1.8c1.1.6 1.1 1.8 0 2.4l-3.3 1.8-3.6-3 3.7-3Z" fill="#FBBC04" /><path d="m3.6 2.5 11.1 9.5-3.7 3L3.6 2.5Z" fill="#34A853" /><path d="m3.6 21.5 7.4-6.5 3.7 3-11.1 3.5Z" fill="#EA4335" /></>,
     apple: <path d="M16.8 12.7c0-2.5 2-3.7 2.1-3.8a4.5 4.5 0 0 0-3.5-1.9c-1.5-.2-2.9.9-3.6.9-.7 0-1.8-.9-3-.9a4.5 4.5 0 0 0-3.8 2.3c-1.6 2.8-.4 7 1.1 9.3.8 1.1 1.6 2.4 2.8 2.3 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.2 2.7-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.1-.8-2.1-3.2ZM14.5 5.5c.6-.7 1-1.7.9-2.7-.9 0-1.9.6-2.5 1.2-.5.6-1 1.6-.9 2.5.9.1 1.9-.4 2.5-1Z" fill="currentColor" />,
     instagram: <><rect x="3" y="3" width="18" height="18" rx="5" fill="none" {...common} /><circle cx="12" cy="12" r="4.2" fill="none" {...common} /><circle cx="17.4" cy="6.7" r="1" fill="currentColor" /></>,

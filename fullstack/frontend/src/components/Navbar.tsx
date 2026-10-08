@@ -1,12 +1,12 @@
 import { ReactElement, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Language, t } from '../data/translations';
 import { Icon } from './Icons';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { AuthModal, AuthRole } from './AuthModal';
-import { removeFavorite, type FavoriteItem, umutungoApi } from '../lib/umutungoApi';
+import { removeFavorite, type FavoriteItem } from '../lib/umutungoApi';
 
 type NavbarProps = {
   darkMode: boolean;
@@ -25,18 +25,6 @@ const languages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
 const languageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
 const dashboardPaths: Record<AuthRole, string> = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner', Admin: '/admin' };
 const dashboardPathForRole = (role?: string) => role && role in dashboardPaths ? dashboardPaths[role as AuthRole] : undefined;
-
-async function hasPostingListings(role: AuthRole) {
-  try {
-    const response = await umutungoApi<{ items?: unknown[] }>('/api/v1/owner/listings');
-    if (response?.items) return response.items.length > 0;
-  } catch { /* Local demo listings remain available when the API is offline. */ }
-  try {
-    const key = role === 'Commissioner / Komisiyoneri' ? 'umutungo-commissioner-properties' : 'umutungo-landlord-properties';
-    const items = JSON.parse(window.localStorage.getItem(key) ?? '[]') as unknown;
-    return Array.isArray(items) && items.length > 0;
-  } catch { return false; }
-}
 
 function HoverHint({ text, placement, children }: { text: string; placement: 'right' | 'bottom'; children: ReactElement }) {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -106,7 +94,6 @@ function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChang
 
 export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, isSignedIn = false, onSignIn, onSignOut, onAccount, onLandingVisibilityChange }: NavbarProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [landingVisible, setLandingVisible] = useState(true);
@@ -257,12 +244,11 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
 
   const openSignIn = (requestedRole?: AuthRole, returnTo?: string) => {
     showSignInModal(requestedRole ?? 'Client', returnTo);
-    window.dispatchEvent(new CustomEvent('umutungo:request-google-sign-in', { detail: { role: requestedRole ?? 'Client' } }));
   };
 
   useEffect(() => {
     const requestSignIn = (event: Event) => {
-      const detail = (event as CustomEvent<{ role?: AuthRole; returnTo?: string; fallback?: boolean }>).detail;
+      const detail = (event as CustomEvent<{ role?: AuthRole; returnTo?: string }>).detail;
       const requestedRole = detail?.role;
       const returnTo = detail?.returnTo;
       if (signedIn) {
@@ -270,7 +256,6 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         return;
       }
       showSignInModal(requestedRole ?? 'Client', returnTo);
-      if (!detail?.fallback) window.dispatchEvent(new CustomEvent('umutungo:request-google-sign-in', { detail: { role: requestedRole ?? 'Client' } }));
     };
     window.addEventListener('umutungo:request-sign-in', requestSignIn);
     return () => window.removeEventListener('umutungo:request-sign-in', requestSignIn);
@@ -353,7 +338,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <a className="sidebar-nav-link sidebar-market-link" href="#post-property"><Icon name="arrow" size={17} /><span>{t(language, 'Commercial')}</span></a>
         <HoverHint text={t(language, 'View your saved properties.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} onClick={openFavorites}><Icon name="heart" size={17} /><span>{t(language, 'Favorites')}</span></button></HoverHint>
         <HoverHint text={t(language, 'Check your latest updates.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action notification-action" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')}><Icon name="bell" size={17} /><span>{t(language, 'Notifications')}</span><b>0</b></button></HoverHint>
-       </nav><div className="sidebar-account"><HoverHint text={t(language, 'Access your Umutungo account.')} placement="right"><button className={`sidebar-nav-link ${signedIn ? 'sidebar-account-link' : 'sidebar-sign-in'}`} type="button" title={t(language, signedIn ? 'Log out' : 'Sign in')} aria-label={t(language, signedIn ? 'Log out' : 'Sign in')} onClick={signedIn ? signOut : () => (onSignIn ? onSignIn() : openSignIn())}>{signedIn && <Icon name="user" size={17} />}<span>{t(language, signedIn ? 'Log out' : 'Sign in')}</span></button></HoverHint></div></div>
+       </nav>{signedIn && <div className="sidebar-account"><HoverHint text={t(language, 'Access your Umutungo account.')} placement="right"><button className="sidebar-nav-link sidebar-account-link" type="button" title={t(language, 'Log out')} aria-label={t(language, 'Log out')} onClick={signOut}><Icon name="user" size={17} /><span>{t(language, 'Log out')}</span></button></HoverHint></div>}</div>
     </aside>
 
     <header className={`topbar ${scrolled ? 'is-scrolled' : ''}`}>
@@ -391,16 +376,6 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         </div>
       </div>}
     </header>
-    <AuthModal open={authOpen} role={pendingRole} autoPrompt={pathname === '/'} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={async (accountRole) => {
-      setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed'));
-      const fromLanding = window.location.pathname === '/';
-      let destination = intendedPath ?? (accountRole === 'Admin' ? '/admin' : fromLanding ? '/' : dashboardPaths[accountRole]);
-      if (!intendedPath && fromLanding && (accountRole === 'Commissioner / Komisiyoneri' || accountRole === 'Landlord' || accountRole === 'Property Owner')) {
-        const hasListings = await hasPostingListings(accountRole);
-        destination = hasListings ? dashboardPaths[accountRole] : '/';
-      }
-      setIntendedPath(undefined);
-      router.push(destination);
-    }} />
+    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed')); const destination = intendedPath ?? dashboardPaths[accountRole]; setIntendedPath(undefined); router.push(destination); }} />
   </>;
 }

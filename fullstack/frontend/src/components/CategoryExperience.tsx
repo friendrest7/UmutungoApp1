@@ -13,7 +13,7 @@ import type { PropertyPlaceholder } from './PropertyCard';
 import { PropertyViewer } from './PropertyViewer';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 
-type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'Book'; detail: string; rating: string; image: string; verified?: boolean };
+type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'Book'; detail: string; rating: string; image: string; images?: string[]; listed?: string; verified?: boolean };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[]; listings: Listing[] };
 
 
@@ -76,18 +76,20 @@ const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlac
   const bathrooms = Number(item.detail.match(/(\d+)\s*baths?/)?.[1] ?? 0);
   const area = Number(item.detail.match(/(\d+)\s*m/)?.[1] ?? 0);
   const type = category.name === 'Houses' ? 'House' : category.name === 'Apartments' || category.name === 'Hospitality' ? 'Apartment' : category.name === 'Land' ? 'Land' : category.name;
-  const images = viewerImages[category.name] ?? [item.image];
+  const images = item.images?.length ? item.images : [item.image];
 
-  return { id: item.id, title: item.title, type, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images: [item.image, ...images.filter((image) => image !== item.image)], listed: 'Listed recently', availableFor: item.intent === 'For sale' ? 'sale' : 'rent' };
+  return { id: item.id, title: item.title, type, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images: item.images?.length ? item.images : [item.image], listed: item.listed ?? 'Date unavailable', availableFor: item.intent === 'For sale' ? 'sale' : 'rent' };
 };
 
-type DatabaseListing = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; tags?: string[]; amenities?: string[] };
+type DatabaseListing = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; tags?: string[]; amenities?: string[]; images?: string[]; created_at?: string };
 
 const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Listing => {
   const intent: Listing['intent'] = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
   const location = [item.sector, item.district, item.province].filter(Boolean).join(' Â· ');
-  const detail = [item.description, ...(item.amenities ?? [])].filter(Boolean).join(' Â· ') || 'Details available from the owner';
-  return listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, category.cover, 'New', true);
+  const dateLabel = item.created_at && !Number.isNaN(new Date(item.created_at).getTime()) ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable';
+  const detail = [...[item.description, ...(item.amenities ?? [])].filter(Boolean), dateLabel].join(' Â· ') || 'Details available from the owner';
+  const image = item.images?.[0] ?? '/properties/listing-placeholder.svg';
+  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, 'New', true), images: item.images, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
 };
 
 export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialDistrict = '', initialSector = '', initialIntent = '', initialPriceRange = '' }: { slug: string; initialQuery?: string; initialLocation?: string; initialDistrict?: string; initialSector?: string; initialIntent?: string; initialPriceRange?: string }) {
@@ -130,7 +132,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     return () => window.removeEventListener('umutungo:favorites-changed', readFavorites);
   }, []);
   const translatedCategoryName = t(language, category.name);
-  const listings = useMemo(() => [...databaseListings, ...category.listings].filter((item) => {
+  const listings = useMemo(() => databaseListings.filter((item) => {
     const matchesQuery = `${item.title} ${item.location} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
     const matchesLocation = !initialLocation || initialLocation === 'Kigali' || item.location.toLowerCase().includes(initialLocation.toLowerCase());
     const matchesDistrict = !initialDistrict || item.location.toLowerCase().includes(initialDistrict.toLowerCase());

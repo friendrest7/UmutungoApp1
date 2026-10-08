@@ -139,9 +139,9 @@ export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
   return body as T;
 }
 
-export async function publicUmutungoApi<T>(path: string, init: RequestInit = {}, useFrontendProxy = false) {
+export async function publicUmutungoApi<T>(path: string, init: RequestInit = {}) {
   const base = apiBaseUrl();
-  if (!apiIsAvailable() && !useFrontendProxy) return null;
+  if (!apiIsAvailable()) return null;
   const response = await fetch(`${base}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
@@ -152,8 +152,8 @@ export async function publicUmutungoApi<T>(path: string, init: RequestInit = {},
 }
 
 export async function getAboutVideo() {
-  const result = await publicUmutungoApi<{ video: AboutVideo | null }>('/api/v1/about-video', { cache: 'no-store' }, true);
-  return result?.video ? { ...result.video, url: `${apiBaseUrl()}/api/v1/about-video/media` } : null;
+  const result = await publicUmutungoApi<{ video: AboutVideo | null }>('/api/v1/about-video', { cache: 'no-store' });
+  return result?.video ?? null;
 }
 
 export async function uploadListingImage(listingId: string, file: File) {
@@ -182,7 +182,7 @@ export async function uploadAboutVideo(file: File, title: string) {
   const response = await fetch(`${base}/api/v1/about-video`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
   const body = await response.json().catch(() => ({})) as { video?: AboutVideo; error?: string };
   if (!response.ok || !body.video) throw new Error(body.error ?? 'The About video could not be published.');
-  return { ...body.video, url: `${base}/api/v1/about-video/media` };
+  return body.video;
 }
 
 export async function deleteAboutVideo() {

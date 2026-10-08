@@ -12,7 +12,6 @@ function displayRole(role: unknown): string {
   const normalized = typeof role === 'string' ? role.toLowerCase() : 'client';
   if (normalized === 'komisiyoneri') return 'Commissioner / Komisiyoneri';
   if (normalized === 'property_owner') return 'Property Owner';
-  if (normalized === 'admin') return 'Admin';
   return 'Client';
 }
 

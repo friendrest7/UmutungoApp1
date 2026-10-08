@@ -661,22 +661,7 @@ function AdminLocationWorkspace() {
       setNotice('Administrative location saved. Duplicate values were ignored.');
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Location could not be saved.'); }
   };
-  return <section className="admin-location-workspace">
-    <header className="admin-location-header"><div><span className="admin-location-kicker"><Icon name="pin" size={14} /> PLATFORM SETTINGS <i /> RWANDA</span><h2>Location directory</h2><p>Manage the administrative areas used across listings and property searches.</p></div><span className="admin-location-header-icon"><Icon name="globe" size={22} /></span></header>
-    <div className="admin-location-hierarchy" aria-label="Location hierarchy"><span><b>01</b> Province</span><i /><span><b>02</b> District</span><i /><span><b>03</b> Sector</span><i /><span><b>04</b> Cell</span><i /><span><b>05</b> Village</span></div>
-    <form className="admin-location-form" onSubmit={save}>
-      <div className="admin-location-form-heading"><div><span>LOCATION RECORD</span><h3>Add an administrative area</h3></div><small><Icon name="bookPen" size={13} /> Duplicate entries are ignored</small></div>
-      <div className="admin-location-fields">
-        <label className="admin-location-field-wide"><span>Province</span><select value={province} onChange={(event) => { setProvince(event.target.value); setDistrict(''); setSector(''); setCell(''); setVillage(''); }}>{provinceNames.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label><span>District</span><select value={district} onChange={(event) => { setDistrict(event.target.value); setSector(''); setCell(''); setVillage(''); }}>{districts.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label><span>Sector</span><select value={sector} onChange={(event) => { setSector(event.target.value); setCell(''); setVillage(''); }}>{sectors.length ? sectors.map((item) => <option key={item}>{item}</option>) : <option value="">Use national directory</option>}</select></label>
-        <label><span>Cell <em>OPTIONAL</em></span><input value={cell} onChange={(event) => setCell(event.target.value)} placeholder="Enter cell name" /></label>
-        <label><span>Village <em>OPTIONAL</em></span><input value={village} onChange={(event) => setVillage(event.target.value)} placeholder="Enter village name" /></label>
-      </div>
-      <footer className="admin-location-form-footer"><p>New locations become available to users in property search.</p><button className="role-dashboard-primary" type="submit" disabled={!province || !district || !sector}><Icon name="check" size={15} /> Save location</button></footer>
-    </form>
-    {notice && <p className="admin-location-notice" role="status"><Icon name={notice.includes('could not') ? 'x' : 'check'} size={15} /> {notice}</p>}
-  </section>;
+  return <section className="tenant-workspace-section admin-location-workspace"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">Administrative hierarchy</span><h2>Locations</h2><p>Maintain Province, District, Sector, Cell, and Village values without duplicating existing records.</p></div><span className="tenant-workspace-icon"><Icon name="pin" size={22} /></span></div><form className="listing-editor-form" onSubmit={save}><label>Province<select value={province} onChange={(event) => { setProvince(event.target.value); setDistrict(''); setSector(''); setCell(''); setVillage(''); }}>{provinceNames.map((item) => <option key={item}>{item}</option>)}</select></label><label>District<select value={district} onChange={(event) => { setDistrict(event.target.value); setSector(''); setCell(''); setVillage(''); }}>{districts.map((item) => <option key={item}>{item}</option>)}</select></label><label>Sector<select value={sector} onChange={(event) => { setSector(event.target.value); setCell(''); setVillage(''); }}>{sectors.length ? sectors.map((item) => <option key={item}>{item}</option>) : <option value="">Use national directory</option>}</select></label><label>Cell (optional)<input value={cell} onChange={(event) => setCell(event.target.value)} /></label><label>Village (optional)<input value={village} onChange={(event) => setVillage(event.target.value)} /></label><button className="role-dashboard-primary" type="submit" disabled={!province || !district || !sector}>Save location <Icon name="check" size={15} /></button></form>{notice && <p className="workspace-action-notice" role="status">{notice}</p>}</section>;
 }
 
 function AdminAboutVideoWorkspace() {

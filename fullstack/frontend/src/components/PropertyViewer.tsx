@@ -47,6 +47,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [turn, setTurn] = useState(0);
   const [tilt, setTilt] = useState(0);
   const [tourZoom, setTourZoom] = useState(0);
+  const [navigationMode, setNavigationMode] = useState(false);
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [transactionType, setTransactionType] = useState<TransactionType>('rent');
   const [transactionStep, setTransactionStep] = useState<TransactionStep>('choose');
@@ -297,17 +298,22 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const roomPositions = [{ x: 50, y: 62 }, { x: 71, y: 35 }, { x: 31, y: 29 }];
   const walkTo = (index: number) => { const nextIndex = Math.max(0, Math.min(index, tourImages.length - 1)); setTourStop(nextIndex); setTourZoom(0); };
   const handleGameKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' && navigationMode) { event.preventDefault(); setNavigationMode(false); return; }
     if (event.key === 'ArrowRight') { event.preventDefault(); setTurn((current) => current + 18); }
     if (event.key === 'ArrowLeft') { event.preventDefault(); setTurn((current) => current - 18); }
     if (event.key === 'ArrowUp') { event.preventDefault(); setTilt((current) => Math.max(-35, current - 8)); }
     if (event.key === 'ArrowDown') { event.preventDefault(); setTilt((current) => Math.min(35, current + 8)); }
   };
   const startLook = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button')) return;
+    if (!navigationMode || (event.target as HTMLElement).closest('button')) return;
     dragStart.current = { x: event.clientX, y: event.clientY, turn, tilt, pointerType: event.pointerType };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
-  const dragLook = (event: ReactPointerEvent<HTMLDivElement>) => { if (dragStart.current) { setTurn(dragStart.current.turn + (event.clientX - dragStart.current.x) * .8); setTilt(Math.max(-35, Math.min(35, dragStart.current.tilt + (event.clientY - dragStart.current.y) * .3))); } };
+  const dragLook = (event: ReactPointerEvent<HTMLDivElement>) => { if (dragStart.current) { setTurn(dragStart.current.turn + (event.clientX - dragStart.current.x) * .8); setTilt(Math.max(-45, Math.min(45, dragStart.current.tilt + (event.clientY - dragStart.current.y) * .35))); } };
+  const enterNavigationMode = (event: React.MouseEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    setNavigationMode(true);
+  };
   const stopLook = () => { dragStart.current = null; };
   const handleTourWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -331,8 +337,9 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         <div className="property-viewer-media">
           {mode === 'photos' && <div className="viewer-photo-stage" onPointerDown={startPhotoSwipe} onPointerUp={stopPhotoSwipe} onPointerCancel={() => { photoSwipeStart.current = null; }}><Image src={images[activeImage]} alt={t(language, property.title)} fill sizes="(max-width: 900px) 100vw, 62vw" priority className="viewer-main-image" /><span className="viewer-media-count">{activeImage + 1} / {images.length}</span><button className="viewer-arrow viewer-arrow-prev" type="button" onClick={() => changeImage(-1)} aria-label={t(language, 'Previous property image')}><Icon name="chevron" size={21} /></button><button className="viewer-arrow viewer-arrow-next" type="button" onClick={() => changeImage(1)} aria-label={t(language, 'Next property image')}><Icon name="chevron" size={21} /></button></div>}
 
-          {mode === 'tour' && <div className="viewer-tour-stage viewer-game-stage" tabIndex={0} onKeyDown={handleGameKey} onWheel={handleTourWheel} onPointerDown={startLook} onPointerMove={dragLook} onPointerUp={stopLook} onPointerCancel={stopLook} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 22, 12, .02), rgba(8, 22, 12, .04) 45%, rgba(8, 22, 12, .76)), url(${tourImages[tourStop] ?? images[0]})`, backgroundPosition: `${Math.max(0, Math.min(100, 50 + turn * .6))}% ${Math.max(0, Math.min(100, 50 + tilt))}%`, backgroundSize: `${120 + tourZoom * 14}% auto` }}>
-            <div className="viewer-tour-topline"><span><Icon name="sparkles" size={15} /> {t(language, 'Interactive walkthrough')}</span><small>Drag to look around · scroll to zoom · choose a view</small></div>
+          {mode === 'tour' && <div className={`viewer-tour-stage viewer-game-stage ${navigationMode ? 'is-navigating' : ''}`} tabIndex={0} onDoubleClick={enterNavigationMode} onKeyDown={handleGameKey} onWheel={handleTourWheel} onPointerDown={startLook} onPointerMove={dragLook} onPointerUp={stopLook} onPointerCancel={stopLook} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 22, 12, .02), rgba(8, 22, 12, .04) 45%, rgba(8, 22, 12, .76)), url(${tourImages[tourStop] ?? images[0]})`, backgroundPosition: `${Math.max(0, Math.min(100, 50 + turn * .6))}% ${Math.max(0, Math.min(100, 50 + tilt))}%`, backgroundSize: `${navigationMode ? 220 + tourZoom * 20 : 120 + tourZoom * 14}% auto` }}>
+            <div className="viewer-tour-topline"><span><Icon name="sparkles" size={15} /> {t(language, 'Interactive walkthrough')}</span><small>{navigationMode ? 'Look-around mode · drag to pan · press Esc to exit' : 'Double-click to look around · scroll to zoom · choose a view'}</small></div>
+            <button className="viewer-navigation-exit" type="button" onClick={() => { setNavigationMode((current) => !current); dragStart.current = null; }}>{navigationMode ? 'Exit look-around' : 'Look around'} <Icon name={navigationMode ? 'x' : 'sparkles'} size={13} /></button>
             <div className="viewer-tour-label"><strong>{tourNames[tourStop]}</strong><span>{t(language, 'Walk through the home and explore each stop')}</span></div>
             <div className="viewer-mini-map" aria-label={t(language, 'Interactive floor plan')}><div className="viewer-mini-map-heading"><span>{(isVehicle || isFurniture || isAppliance || isEquipment || isOtherAsset ? 'VIEWS' : t(language, 'FLOOR PLAN'))}</span><small>{tourStop + 1} / {tourImages.length}</small></div><div className="viewer-mini-map-canvas">{tourNames.slice(0, tourImages.length).map((name, index) => <button key={name} className={tourStop === index ? 'is-active' : ''} type="button" style={{ left: `${roomPositions[index].x}%`, top: `${roomPositions[index].y}%` }} onClick={() => walkTo(index)} aria-label={`${t(language, 'Walk to')} ${name}`}><span>{index + 1}</span></button>)}<i style={{ left: `${roomPositions[tourStop].x}%`, top: `${roomPositions[tourStop].y}%` }} /></div></div>
             {tourStop > 0 && <button className="viewer-tour-door viewer-tour-door-back" type="button" onClick={() => walkTo(tourStop - 1)} aria-label={`Back to ${tourNames[tourStop - 1]}`}><Icon name="chevron" size={17} /><span>{tourNames[tourStop - 1]}</span></button>}

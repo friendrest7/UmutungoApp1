@@ -111,11 +111,13 @@ export type AboutVideo = {
   updated_at: string;
 };
 
+const DEFAULT_API_URL = 'https://umutungoapp1-backend.onrender.com';
+
 export function apiBaseUrl() {
   const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').trim().replace(/\/$/, '');
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction) return '';
-  return configured;
+  return configured || DEFAULT_API_URL;
 }
 
 function apiIsAvailable() {

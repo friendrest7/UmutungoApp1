@@ -7,6 +7,7 @@ import { Language, t } from '../data/translations';
 import { PropertyPlaceholder } from './PropertyCard';
 import { AuthModal } from './AuthModal';
 import { umutungoApi } from '../lib/umutungoApi';
+import { dashboardPathForAccountRole } from '../lib/accountRouting';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
 type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode };
@@ -446,6 +447,6 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         </div>}
       </div>
     )}
-    <AuthModal open={authOpen} role="Client" onClose={() => setAuthOpen(false)} onSuccess={() => { setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? 'application' : 'security'); }} />
+    <AuthModal open={authOpen} role="Client" onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { if (accountRole !== 'Client' && accountRole !== 'Tenant') { window.location.assign(dashboardPathForAccountRole(accountRole)); return; } setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? 'application' : 'security'); }} />
   </div>;
 }

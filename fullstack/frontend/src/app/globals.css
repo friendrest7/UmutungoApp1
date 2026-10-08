@@ -3799,3 +3799,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   .app-realistic .hero-image { overflow: hidden; }
   .app-realistic .hero-video { object-position: center; }
 }
+.admin-dashboard .role-dashboard-sidebar nav .role-dashboard-nav > span {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}

@@ -130,6 +130,11 @@ export default function HomePage() {
         window.location.assign(`/categories/${plan.category || 'houses'}${searchParams ? `?${searchParams}` : ''}`);
       }
     }).catch((error: unknown) => {
+      setShopMessages((current) => {
+        const lastMessage = current[current.length - 1];
+        return lastMessage?.role === 'user' && lastMessage.content === query ? current.slice(0, -1) : current;
+      });
+      setShopQuery(query);
       setShopReply(error instanceof Error ? error.message : 'Search is unavailable right now. Please try again.');
     }).finally(() => setShopSearching(false));
   };

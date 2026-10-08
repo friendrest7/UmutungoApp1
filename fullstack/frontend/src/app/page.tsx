@@ -29,6 +29,12 @@ const categories = [
   { name: 'Other assets', slug: 'other', detail: 'Other rentable, sellable, or bookable assets.', image: '/properties/story-detail.jpg' },
 ];
 
+const landingExamples: PropertyPlaceholder[] = [
+  { id: 'landing-example-house', title: 'Rwandan family home', type: 'House', location: 'Kigali, Rwanda', price: 'RWF 950,000', priceNote: '/ month', bedrooms: 4, bathrooms: 3, area: 220, accent: '#39734b', image: '/properties/rwanda-house-01.jpg', images: ['/properties/rwanda-house-01.jpg', '/properties/rwanda-house-02.jpg', '/properties/house-01.jpg'], listed: 'Example only', availableFor: 'rent', sample: true },
+  { id: 'landing-example-apartment', title: 'Bright city apartment', type: 'Apartment', location: 'Kigali, Rwanda', price: 'RWF 1,100,000', priceNote: '/ month', bedrooms: 2, bathrooms: 2, area: 118, accent: '#527b83', image: '/properties/apartment-01.jpg', images: ['/properties/apartment-01.jpg', '/properties/apartment-02.jpg', '/properties/tour-living.jpg'], listed: 'Example only', availableFor: 'rent', sample: true },
+  { id: 'landing-example-land', title: 'Residential development plot', type: 'Land', location: 'Kigali, Rwanda', price: 'RWF 85,000,000', priceNote: ' asking', bedrooms: 0, bathrooms: 0, area: 620, accent: '#788f55', image: '/properties/land-01.jpg', images: ['/properties/land-01.jpg', '/properties/land-02.jpg', '/properties/kigali-neighborhood.jpg'], listed: 'Example only', availableFor: 'sale', sample: true },
+];
+
 export default function HomePage() {
   const { darkMode, toggleTheme } = usePersistentTheme();
   const { language, changeLanguage } = usePersistentLanguage();
@@ -140,6 +146,7 @@ export default function HomePage() {
   };
 
   const toggleFavorite = (property: PropertyPlaceholder) => {
+    if (property.sample) return;
     const item: FavoriteItem = { property_id: property.id, title: property.title, type: property.type, location: property.location, price: `${property.price} ${property.priceNote}`, image: property.image };
     const wasSaved = favorites.includes(property.id);
     const nextItems = wasSaved ? favoriteItems.filter((favorite) => favorite.property_id !== property.id) : [...favoriteItems, item];
@@ -163,6 +170,7 @@ export default function HomePage() {
     const matchesPrice = priceRange === 'Any price' || (priceRange === 'Under RWF 500,000' && numericPrice < 500000) || (priceRange === 'RWF 500,000 - 1,000,000' && numericPrice >= 500000 && numericPrice <= 1000000) || (priceRange === 'Over RWF 1,000,000' && numericPrice > 1000000);
     return matchesType && matchesLocation && matchesDistrict && matchesSector && matchesIntent && matchesPrice;
   });
+  const featuredProperties = [...visibleProperties.slice(0, 3), ...landingExamples.slice(0, Math.max(0, 3 - Math.min(3, visibleProperties.length)))];
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
@@ -185,8 +193,8 @@ export default function HomePage() {
       </section>
 
       <section className="section section-property container" id="properties">
-        <div className="section-heading split-heading"><div><p className="eyebrow">{t(language, 'Properties')}</p><h2>{t(language, 'Available listings')}</h2></div></div>
-        <div className="property-grid">{visibleProperties.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />)}</div>
+        <div className="section-heading split-heading"><div><p className="eyebrow">{t(language, 'Properties')}</p><h2>{t(language, 'Available listings')}</h2></div><a className="featured-shop-link" href="/categories/houses">{t(language, 'View All Properties')} <Icon name="arrow" size={15} /></a></div>
+        <div className="property-grid">{featuredProperties.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />)}</div>
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">
@@ -208,6 +216,6 @@ export default function HomePage() {
       <ReviewPanel language={language} />
     </main>
     <Footer language={language} darkMode={darkMode} />
-    {selectedProperty && <PropertyViewer language={language} property={selectedProperty} onClose={() => setSelectedProperty(null)} />}
+    {selectedProperty && <PropertyViewer language={language} property={selectedProperty} onClose={() => setSelectedProperty(null)} readOnly={selectedProperty.sample} />}
   </div>;
 }

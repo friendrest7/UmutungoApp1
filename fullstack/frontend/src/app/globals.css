@@ -3852,3 +3852,16 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   outline-offset: 3px;
 }
 .viewer-game-stage { background-repeat: no-repeat; }
+.category-experience-hero.no-hero-copy { min-height: 285px; justify-content: center; padding-block: 42px; }
+.category-experience-hero.no-hero-copy .category-search-box { width: min(520px, 100%); }
+.app-realistic .section-property .featured-shop-link { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 1px solid #0b7140; border-radius: 999px; background: #0b7140; color: #fff !important; font-size: 11px; font-weight: 800; text-decoration: none; }
+.app-realistic .section-property .featured-shop-link:hover { background: #075c33; border-color: #075c33; }
+.app-realistic .property-example-badge,
+.app-realistic .verified-badge { color: #fff !important; -webkit-text-fill-color: #fff !important; }
+.app-realistic .property-example-badge { background: #183c2a; border: 1px solid rgba(255,255,255,.8); }
+.app-realistic .property-card .favorite-button:disabled { cursor: not-allowed; opacity: .5; }
+@media (max-width: 720px) {
+  .category-experience-hero.no-hero-copy { min-height: 235px; padding-block: 32px; }
+  .app-realistic .section-property .split-heading { align-items: flex-start; gap: 16px; }
+  .app-realistic .section-property .featured-shop-link { min-height: 38px; padding-inline: 11px; font-size: 9px; white-space: nowrap; }
+}

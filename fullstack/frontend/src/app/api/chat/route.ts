@@ -4,7 +4,7 @@ const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 const MAX_MESSAGES = 12;
 const MAX_MESSAGE_LENGTH = 1200;
-const DEFAULT_BACKEND_URL = 'https://umutungoappbackend1.onrender.com';
+const DEFAULT_BACKEND_URL = 'https://umutungoapp1-backend.onrender.com';
 
 type ChatMessage = {
   role: 'user' | 'assistant';

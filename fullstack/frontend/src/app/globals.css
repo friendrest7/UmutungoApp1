@@ -3882,6 +3882,26 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   .app-realistic .section-property .featured-shop-link { min-height: 38px; padding-inline: 11px; font-size: 9px; white-space: nowrap; }
 }
 
+/* Keep the posting action and mobile preferences anchored to the right side. */
+@media (max-width: 780px) {
+  .app-realistic .topbar-inner { justify-content: space-between; }
+  .app-realistic .nav-actions { flex: 0 0 auto; justify-content: flex-end; gap: 5px; margin-left: auto; }
+  .app-realistic .nav-actions .nav-utility-group { order: 1; flex: 0 0 auto; margin-left: 0; }
+  .app-realistic .nav-actions .mobile-post-action { display: inline-flex; order: 2; flex: 0 0 auto; }
+  .app-realistic .mobile-post-action .nav-post { min-height: 32px; padding: 0 9px; font-size: 9px; }
+  .app-realistic .nav-actions .mobile-menu-button { order: 3; flex: 0 0 32px; }
+  .app-realistic .nav-actions .nav-utility-group .dropdown-panel { right: 0; left: auto; }
+}
+@media (max-width: 380px) {
+  .app-realistic .topbar-inner { padding-right: 8px; padding-left: 8px; }
+  .app-realistic .topbar-brand .brand-logo { width: 78px; }
+  .app-realistic .nav-actions { gap: 3px; }
+  .app-realistic .mobile-post-action .nav-post { padding: 0 7px; font-size: 8px; }
+  .app-realistic .nav-actions .nav-utility-group .nav-dropdown .nav-link,
+  .app-realistic .nav-actions .nav-utility-group .theme-toggle { width: 30px; min-width: 30px; }
+  .app-realistic .nav-actions .mobile-menu-button { width: 29px; flex-basis: 29px; }
+}
+
 /* Keep the property viewer comfortable on narrow phone screens. */
 @media (max-width: 560px) {
   .property-viewer-overlay {

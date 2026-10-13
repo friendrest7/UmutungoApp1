@@ -3881,3 +3881,40 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   .app-realistic .section-property .split-heading { align-items: flex-start; gap: 16px; }
   .app-realistic .section-property .featured-shop-link { min-height: 38px; padding-inline: 11px; font-size: 9px; white-space: nowrap; }
 }
+
+/* Keep the property viewer comfortable on narrow phone screens. */
+@media (max-width: 560px) {
+  .property-viewer-overlay {
+    display: block;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+  .property-viewer {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .property-viewer-header { gap: 12px; }
+  .property-viewer-header > div { min-width: 0; }
+  .property-viewer-header h2 { overflow-wrap: anywhere; }
+  .property-viewer-header p { line-height: 1.45; }
+  .property-viewer-grid { min-width: 0; }
+  .property-viewer-media { min-width: 0; padding: 12px 14px 0; }
+  .viewer-photo-stage, .viewer-tour-stage, .viewer-plan-stage {
+    min-height: 0;
+    height: clamp(220px, 42vh, 310px);
+    height: clamp(220px, 42dvh, 310px);
+    border-radius: 12px;
+  }
+  .viewer-thumbnails { gap: 7px; }
+  .viewer-thumbnails button { flex: 0 0 64px; width: 64px; height: 48px; }
+  .property-viewer-details { padding: 20px 17px calc(24px + env(safe-area-inset-bottom)); }
+  .viewer-request-button { width: 100%; min-height: 48px; }
+}

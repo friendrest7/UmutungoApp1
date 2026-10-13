@@ -1,0 +1,14 @@
+.git/
+.gradle/
+node_modules/
+android/
+dist/
+results/
+.expo/
+.env
+.env.*
+!.env.example
+*.log
+client_secret_*.json
+*.jks
+*.keystore

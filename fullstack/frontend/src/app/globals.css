@@ -2521,6 +2521,11 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   .role-dashboard-profile { display: none; }
 }
 
+@media (max-width: 640px) {
+  .role-dashboard-topbar { gap: 8px; }
+  .role-dashboard-header-actions { margin-left: auto; justify-content: flex-end; flex: 0 0 auto; }
+}
+
 /* Separate the property filters from the photography into a second content board. */
 .app-realistic .landing-search-board {
   position: relative;
@@ -3793,9 +3798,10 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   .about-film-coming { right: 20px; bottom: 20px; max-width: 145px; font-size: 7px; text-align: center; }
 }
 @media (max-width: 720px) {
-  .app-realistic .join-role-actions { margin-top: 0; align-items: center; flex-wrap: wrap; gap: 6px; transform: translateY(.9cm); }
-  .app-realistic .join-role-actions .button { width: auto; min-height: 49px; padding: 10px 12px; font-size: 11px; transform: scaleX(.85); }
-  .app-realistic .join-role-actions .button:hover { transform: scaleX(.85) translateY(-2px); }
+  .app-realistic .join-role-actions { display: grid; width: min(100%, 420px); grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; justify-items: stretch; gap: 8px; margin-top: 0; transform: translateY(.9cm); }
+  .app-realistic .join-role-actions .button { width: 100%; min-height: 49px; box-sizing: border-box; padding: 10px 8px; font-size: 11px; transform: none; }
+  .app-realistic .join-role-actions .button:nth-child(3) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 4px); }
+  .app-realistic .join-role-actions .button:hover { transform: translateY(-2px); }
   .app-realistic .landing-search-actions { transform: translateY(.15cm); }
   .app-realistic .hero-image { overflow: hidden; }
   .app-realistic .hero-video { object-position: center; }

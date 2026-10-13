@@ -10,6 +10,12 @@
     },
     "preview": {
       "environment": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://umutungoapp1-backend.onrender.com",
+        "EXPO_PUBLIC_CHAT_API_URL": "https://umutungo.rw/api/chat",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com"
+      },
       "distribution": "internal",
       "android": {
         "buildType": "apk"
@@ -17,6 +23,12 @@
     },
     "android-apk": {
       "environment": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://umutungoapp1-backend.onrender.com",
+        "EXPO_PUBLIC_CHAT_API_URL": "https://umutungo.rw/api/chat",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com"
+      },
       "distribution": "internal",
       "android": {
         "buildType": "apk"
@@ -24,24 +36,44 @@
     },
     "android-production": {
       "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://umutungoapp1-backend.onrender.com",
+        "EXPO_PUBLIC_CHAT_API_URL": "https://umutungo.rw/api/chat",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com"
+      },
       "android": {
         "buildType": "app-bundle"
       }
     },
     "ios-simulator": {
       "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://umutungoapp1-backend.onrender.com",
+        "EXPO_PUBLIC_CHAT_API_URL": "https://umutungo.rw/api/chat",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com"
+      },
       "ios": {
         "simulator": true
       }
     },
     "ios-production": {
       "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://umutungoapp1-backend.onrender.com",
+        "EXPO_PUBLIC_CHAT_API_URL": "https://umutungo.rw/api/chat",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com"
+      },
       "ios": {
         "distribution": "store"
       }
     },
     "production": {
       "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://umutungoapp1-backend.onrender.com"
+      },
       "android": {
         "buildType": "app-bundle"
       },

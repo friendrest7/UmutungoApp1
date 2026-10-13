@@ -18,7 +18,6 @@ const localDate = (value?: string | null) => value ? new Date(value).toLocaleStr
 export function OwnerUpgrade() {
   const [data, setData] = useState<UpgradeResponse | null>(null);
   const [selected, setSelected] = useState<PlanName>('silver');
-  const [provider, setProvider] = useState('mtn_momo');
   const [phone, setPhone] = useState('');
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,17 +48,17 @@ export function OwnerUpgrade() {
     try {
       const keyStorage = `umutungo-owner-upgrade-key-${selected}`;
       let key = window.localStorage.getItem(keyStorage);
-      if (!key || (purchase?.plan === selected && purchase.status === 'active')) {
+      if (!key || (purchase?.plan === selected && ['active', 'failed'].includes(purchase.status))) {
         key = window.crypto.randomUUID();
         window.localStorage.setItem(keyStorage, key);
       }
       const result = await umutungoApi<Purchase>('/api/v1/owner/upgrades', {
         method: 'POST',
-        body: JSON.stringify({ plan: selected, provider, phone: phone.trim(), idempotency_key: key }),
+        body: JSON.stringify({ plan: selected, provider: 'mtn_momo', phone: phone.trim(), idempotency_key: key }),
       });
       if (!result) throw new Error('Sign in as a Property Owner before starting a payment.');
       setPurchase(result);
-      setMessage('Payment request saved. No charge is initiated by this environment; your plan stays inactive until an administrator verifies the provider transaction.');
+      setMessage(result.payment_status === 'successful' ? 'MTN confirmed your payment and the plan is active.' : 'Approve the payment request on your MTN MoMo phone. This page checks the provider and activates the plan after confirmation.');
       await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not start this payment.');
@@ -80,8 +79,8 @@ export function OwnerUpgrade() {
     </section>
     <section className="owner-upgrade-checkout">
       <h2>One-time payment</h2>
-      <label>Payment method<select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="mtn_momo">MTN MoMo</option><option value="airtel_money">Airtel Money</option><option value="card">Bank card</option></select></label>
-      {provider !== 'card' && <label>Mobile number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>}
+      <p>Payment method: MTN MoMo</p>
+      <label>MTN Rwanda number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>
       <button type="button" disabled={busy || !data || (data.prices?.[selected] ?? 0) <= 0 || (!!purchase && purchase.status === 'pending' && purchase.plan === selected)} onClick={() => void startPayment()}>{busy ? 'Starting…' : `Create RWF ${(data?.prices?.[selected] ?? 0).toLocaleString()} one-time payment request`}</button>
     </section>
     {purchase && <section className="owner-upgrade-receipt" aria-live="polite"><h2>Payment status: {purchase.payment_status}</h2><p>Plan: {purchase.plan}</p><p>Amount: {purchase.currency} {purchase.amount.toLocaleString()}</p><p>Reference: {purchase.transaction_reference}</p>{purchase.receipt_number && <p>Receipt: {purchase.receipt_number}</p>}<p>Purchase date: {localDate(purchase.purchased_at)}</p><p>Activated: {localDate(purchase.activated_at)}</p><p>Expires: {localDate(purchase.expires_at)}</p>{purchase.status !== 'active' && <p>Your entitlement is not active while verification is pending.</p>}</section>}

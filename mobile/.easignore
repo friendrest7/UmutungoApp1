@@ -4,7 +4,10 @@ dist/
 results/
 .git/
 *.log
-android/.gradle/
-android/.kotlin/
-android/build/
-android/app/build/
+android/
+.gradle/
+.gocache-check/
+.next/
+.turbo/
+.cache/
+coverage/

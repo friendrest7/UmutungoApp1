@@ -19,6 +19,11 @@ services:
   api:
     build: .
     restart: unless-stopped
+    env_file:
+      - path: .env.local
+        required: false
+      - path: .env.local.txt
+        required: false
     environment:
       APP_ENV: development
       PORT: 8080

@@ -162,10 +162,6 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
         },
       });
       client.requestAccessToken({ prompt: 'select_account' });
-      window.setTimeout(() => setBusy((current) => {
-        if (current) setError('Google sign-in did not open. Allow pop-ups for this site, then try again.');
-        return false;
-      }), 20000);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Google sign-in could not be completed.');
       setBusy(false);

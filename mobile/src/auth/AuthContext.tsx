@@ -1,5 +1,5 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { clearStoredToken, getMe, getStoredToken } from '../api/client';
+import { ApiError, cacheSession, clearStoredToken, getCachedSession, getMe, getStoredToken } from '../api/client';
 import type { ApiProfile, ApiUser } from '../api/types';
 
 type AuthContextValue = { user: ApiUser | null; profile: ApiProfile | null; loading: boolean; refresh: () => Promise<void>; signOut: () => Promise<void>; setUser: (user: ApiUser) => void; setProfile: (profile: ApiProfile | null) => void };
@@ -15,7 +15,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const result = await getMe();
       setUser(result.user);
       setProfile(result.profile);
-    } catch {
+      await cacheSession(result.user, result.profile);
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === undefined) {
+        const cached = await getCachedSession();
+        if (cached) { setUser(cached.user); setProfile(cached.profile); return; }
+      }
       await clearStoredToken();
       setUser(null);
       setProfile(null);

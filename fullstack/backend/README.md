@@ -15,7 +15,7 @@ The API is available at `http://localhost:8080` and PostgreSQL at port `5432`. T
 ## Run locally
 
 1. Start PostgreSQL and create a database named `umutungo`.
-2. Copy `.env.example` to `.env` and export the values in your shell.
+2. Copy `.env.example` to `.env.local` (or `.env.local.txt`) and fill in local values. These files are ignored by Git; never commit payment credentials.
 3. Run:
 
 ```powershell
@@ -50,8 +50,8 @@ The development API also supports the frontend demo accounts through `POST /api/
 | GET | `/api/v1/applications` | View submitted/received applications |
 | POST | `/api/v1/applications/{id}/decision` | Accept, reject, or request information |
 | POST | `/api/v1/applications/{id}/viewed` | Record that the tenant has seen the house |
-| POST/GET | `/api/v1/payments`, `/api/v1/payments/{id}` | Start and check an MTN MoMo, Airtel Money, card, or manual payment |
-| POST | `/api/v1/payments/{id}/confirm` | Confirm a pending provider payment after provider approval |
+| POST/GET | `/api/v1/payments`, `/api/v1/payments/{id}` | Start and check an MTN MoMo collection request |
+| POST | `/api/v1/payments/{id}/confirm` | Check the payment status directly with MTN |
 | GET/POST | `/api/v1/owner/upgrades` | Read configured Owner plan prices and purchases, or create an idempotent one-time payment request |
 | POST | `/api/v1/owner/upgrades/{id}/verify` | Admin-only provider verification and entitlement activation |
 | POST/GET | `/api/v1/messages` | Contact a landlord and load the tenant conversation |
@@ -74,4 +74,6 @@ The admin About-video upload is stored in the Render PostgreSQL database (`about
 
 ## Production follow-up
 
-The schema and API are the backend foundation. Before production, add the selected SMS, MTN MoMo, Airtel Money, PSP, object storage/CDN, maps, push notification, CAPTCHA, and AI provider adapters. Move OTP/session secrets to a managed secret store, add rate limiting, and place the API behind TLS and an API gateway.
+MTN MoMo Collection request-to-pay and provider status checks are implemented. The API defaults to sandbox (`MTN_TARGET_ENVIRONMENT=sandbox`, `MTN_BASE_URL=https://sandbox.momodeveloper.mtn.com`). Production requires MTN Rwanda onboarding and production credentials; set `MTN_TARGET_ENVIRONMENT=mtnrwanda` and `MTN_BASE_URL=https://momoapi.mtn.com` in the backend hosting environment. The service polls MTN for results and never trusts a client confirmation.
+
+MTN payments are collected into the merchant wallet. Seller settlement, escrow, and refunds are not implemented, so define who receives property-sale and rent payments before enabling those checkout flows for customers. Other remaining production integrations include SMS delivery, Airtel Money, card PSP, object storage/CDN, maps, push notifications, CAPTCHA, and AI. Keep secrets in the hosting secret manager, add rate limiting, and place the API behind TLS and an API gateway.

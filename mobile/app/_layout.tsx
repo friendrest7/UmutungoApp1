@@ -1,12 +1,24 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import NetInfo from '@react-native-community/netinfo';
+import { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
 import { AuthProvider } from '@/auth/AuthContext';
+import { syncOfflineChanges } from '@/api/client';
+import { useI18n } from '@/i18n';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { LocalizationProvider } from '@/i18n';
 
 function AppShell() {
   const { isDark, colors } = useTheme();
-  return <><StatusBar style={isDark ? 'light' : 'dark'} /><Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }} /></>;
+  const { t } = useI18n();
+  const [offline, setOffline] = useState(false);
+  useEffect(() => NetInfo.addEventListener((state) => {
+    const connected = state.isConnected === true && state.isInternetReachable !== false;
+    setOffline(!connected);
+    if (connected) void syncOfflineChanges();
+  }), []);
+  return <><StatusBar style={isDark ? 'light' : 'dark'} />{offline && <View accessibilityRole="alert" style={{ paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#8a5a00' }}><Text style={{ color: '#fff', textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{t('Offline mode · showing saved properties. Changes to favorites will sync when you reconnect.')}</Text></View>}<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }} /></>;
 }
 
 export default function RootLayout() {

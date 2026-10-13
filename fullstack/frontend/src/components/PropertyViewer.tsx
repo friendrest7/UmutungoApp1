@@ -188,18 +188,29 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   };
   const handlePaymentSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const isMobileMoney = paymentMethod === 'momo' || paymentMethod === 'airtel';
-    if (isMobileMoney && paymentPhone.trim().replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number to continue.'); return; }
-    if (!isMobileMoney && cardNumber.replace(/\D/g, '').length < 12) { setPaymentError('Enter a valid card number to continue.'); return; }
-    if (!isMobileMoney && (!cardExpiry.trim() || cardCvv.trim().length < 3)) { setPaymentError('Enter your card expiry date and security code.'); return; }
+    if (paymentPhone.trim().replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number to continue.'); return; }
     setPaymentError('');
-    let paymentStatus: 'paid' | 'pending' = 'paid';
+    let paymentStatus: 'paid' | 'pending' = 'pending';
+    let providerReference = '';
     try {
-      const result = await umutungoApi<{ id?: string; status?: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, transaction_type: transactionType, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', phone: paymentPhone }) });
-      paymentStatus = result?.status?.toLowerCase() === 'successful' || result?.status?.toLowerCase() === 'paid' ? 'paid' : 'pending';
-      if (result) window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...result, propertyId: property.id, createdAt: new Date().toISOString() }));
-    } catch { /* The API can be enabled with a token; keep the local demo payment available. */ }
-    const localPayment: { id: string; related_type: string; related_id: string; amount: number; currency: string; provider: string; status: 'successful' | 'pending'; created_at: string } = { id: `payment-${property.id}-${Date.now()}`, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: paymentMethod === 'momo' ? 'mtn_momo' : paymentMethod === 'airtel' ? 'airtel_money' : 'card', status: paymentStatus === 'paid' ? 'successful' : 'pending', created_at: new Date().toISOString() };
+      const result = await umutungoApi<{ id: string; status: string; amount: number; currency: string; provider_reference: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, transaction_type: transactionType, provider: 'mtn_momo', phone: paymentPhone }) });
+      if (!result) throw new Error('Sign in before starting an MTN MoMo payment.');
+      providerReference = result.provider_reference;
+      let status = result.status;
+      for (let attempt = 0; status === 'pending' && attempt < 15; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 4000));
+        const check = await umutungoApi<{ status: string }>(`/api/v1/payments/${encodeURIComponent(result.id)}/confirm`, { method: 'POST', body: '{}' });
+        if (!check) throw new Error('Sign in again to check your MTN payment.');
+        status = check.status;
+      }
+      if (status === 'failed') throw new Error('MTN did not confirm this payment. Check your MoMo phone and try again.');
+      paymentStatus = status === 'successful' ? 'paid' : 'pending';
+      window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...result, status, propertyId: property.id, createdAt: new Date().toISOString() }));
+    } catch (cause) {
+      setPaymentError(cause instanceof Error ? cause.message : 'MTN payment could not be started.');
+      return;
+    }
+    const localPayment: { id: string; related_type: string; related_id: string; amount: number; currency: string; provider: string; provider_reference: string; status: 'successful' | 'pending'; created_at: string } = { id: `payment-${property.id}-${Date.now()}`, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: 'mtn_momo', provider_reference: providerReference, status: paymentStatus === 'paid' ? 'successful' : 'pending', created_at: new Date().toISOString() };
     const storedPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as typeof localPayment[];
     window.localStorage.setItem('umutungo-payments', JSON.stringify([localPayment, ...storedPayments.filter((item) => item.related_id !== localPayment.related_id)]));
     saveTenantBooking(paymentStatus);
@@ -416,7 +427,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <p className="property-action-intro">Choose a payment option available in Rwanda for this {transactionType === 'rent' ? 'rental request' : 'property request'}.</p>
             <div className="payment-summary"><span>{property.title}</span><strong>{property.price} <small>{property.priceNote}</small></strong></div>
             <div className="payment-method-grid" aria-label="Payment options">
-              {paymentOptions.map((option) => <button className={"payment-method-card " + (paymentMethod === option.id ? 'is-selected' : '')} type="button" key={option.id} onClick={() => { setPaymentMethod(option.id); setPaymentError(''); }}>
+              {paymentOptions.filter((option) => option.id === 'momo').map((option) => <button className={"payment-method-card " + (paymentMethod === option.id ? 'is-selected' : '')} type="button" key={option.id} onClick={() => { setPaymentMethod(option.id); setPaymentError(''); }}>
                 <PaymentLogo method={option.id} />
                 <span><strong>{option.label}</strong><small>{option.detail}</small></span>
                 <Icon name={paymentMethod === option.id ? 'check' : 'chevron'} size={14} />
@@ -429,7 +440,6 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
               {paymentError && <p className="payment-error" role="alert">{paymentError}</p>}
               <button className="property-action-continue" type="submit">Pay {property.price} securely <Icon name="arrow" size={16} /></button>
             </form>
-            <p className="payment-demo-note"><Icon name="check" size={13} /> Demo checkout: no money is charged in this interface.</p>
             <button className="property-flow-back" type="button" onClick={() => setTransactionStep('choose')}><Icon name="arrow" size={13} /> Back to request options</button>
           </>}
 

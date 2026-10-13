@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1638,8 +1639,8 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 		Phone           string  `json:"phone"`
 		TransactionType string  `json:"transaction_type"`
 	}
-	if !decodeJSON(w, r, &input) || input.RelatedID == "" || input.Amount <= 0 {
-		errorJSON(w, http.StatusBadRequest, "related_id and a positive amount are required")
+	if !decodeJSON(w, r, &input) || input.RelatedID == "" {
+		errorJSON(w, http.StatusBadRequest, "related_id is required")
 		return
 	}
 	input.RelatedType = strings.ToLower(strings.TrimSpace(input.RelatedType))
@@ -1652,8 +1653,8 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "related_type must be application, agreement, or listing")
 		return
 	}
-	if input.Provider != "mtn_momo" && input.Provider != "airtel_money" && input.Provider != "card" && input.Provider != "manual" {
-		errorJSON(w, http.StatusBadRequest, "provider must be mtn_momo, airtel_money, card, or manual")
+	if input.Provider != "mtn_momo" {
+		errorJSON(w, http.StatusBadRequest, "only MTN MoMo payments are currently available")
 		return
 	}
 	if (input.Provider == "mtn_momo" || input.Provider == "airtel_money") && strings.TrimSpace(input.Phone) == "" {
@@ -1662,6 +1663,29 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.canPayFor(r, user.ID, input.RelatedType, input.RelatedID) {
 		errorJSON(w, http.StatusForbidden, "you cannot pay for this property request")
+		return
+	}
+	// Never charge a caller-supplied amount. Listing prices and signed rental
+	// agreements are the source of truth for payment amounts.
+	switch input.RelatedType {
+	case "listing":
+		if err := s.db.QueryRow(r.Context(), `SELECT price,currency FROM listings WHERE id=$1 AND status='published' AND owner_id<>$2`, input.RelatedID, user.ID).Scan(&input.Amount, &input.Currency); err != nil {
+			errorJSON(w, http.StatusBadRequest, "could not determine the listing price")
+			return
+		}
+	case "application":
+		if err := s.db.QueryRow(r.Context(), `SELECT l.price,l.currency FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.id=$1 AND a.applicant_id=$2 AND a.viewed_at IS NOT NULL AND a.status='accepted'`, input.RelatedID, user.ID).Scan(&input.Amount, &input.Currency); err != nil {
+			errorJSON(w, http.StatusBadRequest, "the rental application must be accepted before payment")
+			return
+		}
+	case "agreement":
+		if err := s.db.QueryRow(r.Context(), `SELECT rent_amount,currency FROM rental_agreements WHERE id=$1 AND tenant_id=$2 AND status='active'`, input.RelatedID, user.ID).Scan(&input.Amount, &input.Currency); err != nil {
+			errorJSON(w, http.StatusBadRequest, "could not determine the active rental amount")
+			return
+		}
+	}
+	if input.Amount <= 0 || input.Currency == "" {
+		errorJSON(w, http.StatusBadRequest, "the server has no payable amount configured for this request")
 		return
 	}
 	if input.Currency == "" {
@@ -1673,16 +1697,36 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	providerReference := "UM-" + strings.ToUpper(reference[:12])
-	status := "pending"
-	if input.Provider == "manual" {
-		status = "successful"
+	if input.Provider == "mtn_momo" {
+		providerReference = reference[:8] + "-" + reference[8:12] + "-4" + reference[13:16] + "-8" + reference[17:20] + "-" + reference[20:32]
+		// MTN request references must be RFC 4122 UUIDs.
 	}
+	status := "pending"
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not start payment")
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if input.Provider == "mtn_momo" {
+		if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`, user.ID, input.RelatedID); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not lock payment request")
+			return
+		}
+		var pendingID string
+		err := tx.QueryRow(r.Context(), `SELECT id FROM payments WHERE user_id=$1 AND related_type=$2 AND related_id=$3 AND provider='mtn_momo' AND status='pending' ORDER BY created_at DESC LIMIT 1`, user.ID, input.RelatedType, input.RelatedID).Scan(&pendingID)
+		if err == nil {
+			if err := tx.Commit(r.Context()); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not load existing payment")
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"id": pendingID, "status": "pending", "provider": input.Provider, "amount": input.Amount, "currency": input.Currency, "existing_request": true})
+			return
+		} else if err != pgx.ErrNoRows {
+			errorJSON(w, http.StatusInternalServerError, "could not check existing payment")
+			return
+		}
+	}
 	var id string
 	err = tx.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status,receipt_number) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $8='successful' THEN $7 ELSE NULL END) RETURNING id`, user.ID, input.RelatedType, input.RelatedID, input.Amount, input.Currency, input.Provider, providerReference, status).Scan(&id)
 	if err != nil {
@@ -1722,6 +1766,18 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "could not save payment")
 		return
 	}
+	if input.Provider == "mtn_momo" {
+		if err := newMoMoClient(s.cfg).requestToPay(r.Context(), providerReference, input.Phone, input.Amount, input.Currency); err != nil {
+			var requestErr *momoRequestError
+			if errors.As(err, &requestErr) && requestErr.ambiguous {
+				errorJSON(w, http.StatusBadGateway, "MTN has not confirmed whether the request started. Keep this payment open and check its status before trying again.")
+				return
+			}
+			_, _ = s.db.Exec(r.Context(), `UPDATE payments SET status='failed' WHERE id=$1 AND status='pending'`, id)
+			errorJSON(w, http.StatusBadGateway, "MTN could not start this payment. Check the phone number and try again.")
+			return
+		}
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "provider": input.Provider, "provider_reference": providerReference, "amount": input.Amount, "currency": input.Currency})
 }
 
@@ -1749,7 +1805,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		if user.Role == "admin" {
 			ownerID = nil
 		}
-		rows, err := s.db.Query(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.amount,p.currency,p.status,p.transaction_reference,p.purchased_at,p.activated_at,p.expires_at,p.created_at,COALESCE(pay.status,'pending'),p.provider_transaction_id,p.verified_at,COALESCE(pay.receipt_number,'') FROM owner_upgrade_purchases p LEFT JOIN payments pay ON pay.id=p.payment_id WHERE ($1::uuid IS NULL OR p.owner_id=$1) ORDER BY p.created_at DESC LIMIT 200`, ownerID)
+		rows, err := s.db.Query(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.amount,p.currency,p.status,p.transaction_reference,p.purchased_at,p.activated_at,p.expires_at,p.created_at,COALESCE(pay.status,'pending'),p.provider_transaction_id,p.verified_at,COALESCE(pay.receipt_number,''),COALESCE(pay.provider,''),COALESCE(pay.provider_reference,'') FROM owner_upgrade_purchases p LEFT JOIN payments pay ON pay.id=p.payment_id WHERE ($1::uuid IS NULL OR p.owner_id=$1) ORDER BY p.created_at DESC LIMIT 200`, ownerID)
 		if err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not load owner upgrades")
 			return
@@ -1757,15 +1813,37 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		purchases := make([]map[string]any, 0)
 		for rows.Next() {
-			var id, purchaseOwnerID, plan, currency, status, reference, paymentStatus, receipt string
+			var id, purchaseOwnerID, plan, currency, status, reference, paymentStatus, receipt, provider, providerReference string
 			var amount float64
 			var purchasedAt, activatedAt, expiresAt *time.Time
 			var providerTransactionID *string
 			var verifiedAt *time.Time
 			var createdAt time.Time
-			if err := rows.Scan(&id, &purchaseOwnerID, &plan, &amount, &currency, &status, &reference, &purchasedAt, &activatedAt, &expiresAt, &createdAt, &paymentStatus, &providerTransactionID, &verifiedAt, &receipt); err != nil {
+			if err := rows.Scan(&id, &purchaseOwnerID, &plan, &amount, &currency, &status, &reference, &purchasedAt, &activatedAt, &expiresAt, &createdAt, &paymentStatus, &providerTransactionID, &verifiedAt, &receipt, &provider, &providerReference); err != nil {
 				errorJSON(w, http.StatusInternalServerError, "could not read owner upgrades")
 				return
+			}
+			if user.Role != "admin" && status == "pending" && paymentStatus == "pending" && provider == "mtn_momo" {
+				momoStatus, statusErr := newMoMoClient(s.cfg).paymentStatus(r.Context(), providerReference)
+				if statusErr == nil && momoStatus != "pending" && s.syncOwnerPurchase(r.Context(), id, providerReference, momoStatus) == nil {
+					paymentStatus = momoStatus
+					if momoStatus == "successful" {
+						status = "active"
+						now := time.Now().UTC()
+						purchasedAt, activatedAt = &now, &now
+						days := 90
+						if plan == "gold" {
+							days = 180
+						} else if plan == "platinum" {
+							days = 365
+						}
+						expires := now.Add(time.Duration(days) * 24 * time.Hour)
+						expiresAt = &expires
+						receipt = providerReference
+					} else {
+						status = "failed"
+					}
+				}
 			}
 			purchases = append(purchases, map[string]any{"id": id, "owner_id": purchaseOwnerID, "plan": plan, "amount": amount, "currency": currency, "status": status, "payment_status": paymentStatus, "transaction_reference": reference, "receipt_number": receipt, "provider_transaction_id": providerTransactionID, "verified_at": verifiedAt, "purchased_at": purchasedAt, "activated_at": activatedAt, "expires_at": expiresAt, "created_at": createdAt})
 		}
@@ -1795,8 +1873,8 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusBadRequest, "a valid idempotency_key is required")
 			return
 		}
-		if input.Provider != "mtn_momo" && input.Provider != "airtel_money" && input.Provider != "card" {
-			errorJSON(w, http.StatusBadRequest, "provider must be mtn_momo, airtel_money, or card")
+		if input.Provider != "mtn_momo" {
+			errorJSON(w, http.StatusBadRequest, "only MTN MoMo payments are currently available")
 			return
 		}
 		if (input.Provider == "mtn_momo" || input.Provider == "airtel_money") && strings.TrimSpace(input.Phone) == "" {
@@ -1839,7 +1917,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusInternalServerError, "could not create payment reference")
 			return
 		}
-		reference = "UM-OWN-" + strings.ToUpper(token[:12])
+		reference = token[:8] + "-" + token[8:12] + "-4" + token[13:16] + "-8" + token[17:20] + "-" + token[20:32]
 		var paymentID string
 		if err := tx.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status) VALUES($1,'owner_upgrade',$2,$3,'RWF',$4,$5,'pending') RETURNING id`, user.ID, purchaseID, price, input.Provider, reference).Scan(&paymentID); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not create payment request")
@@ -1851,6 +1929,17 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := tx.Commit(r.Context()); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not save owner purchase")
+			return
+		}
+		if err := newMoMoClient(s.cfg).requestToPay(r.Context(), reference, input.Phone, price, "RWF"); err != nil {
+			var requestErr *momoRequestError
+			if errors.As(err, &requestErr) && requestErr.ambiguous {
+				errorJSON(w, http.StatusBadGateway, "MTN has not confirmed whether the request started. Refresh payment status before retrying.")
+				return
+			}
+			_, _ = s.db.Exec(r.Context(), `UPDATE payments SET status='failed' WHERE provider_reference=$1 AND status='pending'`, reference)
+			_, _ = s.db.Exec(r.Context(), `UPDATE owner_upgrade_purchases SET status='failed' WHERE id=$1 AND status='pending'`, purchaseID)
+			errorJSON(w, http.StatusBadGateway, "MTN could not start this payment. Check the phone number and try again.")
 			return
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"id": purchaseID, "owner_id": user.ID, "plan": input.Plan, "amount": price, "currency": "RWF", "status": "pending", "payment_status": "pending", "provider": input.Provider, "transaction_reference": reference})
@@ -1884,6 +1973,25 @@ func (s *Server) ownerUpgradeRoute(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "provider_transaction_id is required after checking the payment with its provider")
 		return
 	}
+	var provider, providerReference string
+	if err := s.db.QueryRow(r.Context(), `SELECT pay.provider,COALESCE(pay.provider_reference,'') FROM owner_upgrade_purchases p JOIN payments pay ON pay.id=p.payment_id WHERE p.id=$1 AND p.status='pending' AND pay.status='pending'`, parts[0]).Scan(&provider, &providerReference); err != nil {
+		errorJSON(w, http.StatusNotFound, "pending owner payment not found")
+		return
+	}
+	if provider != "mtn_momo" {
+		errorJSON(w, http.StatusConflict, "this payment provider cannot be verified automatically")
+		return
+	}
+	providerStatus, err := newMoMoClient(s.cfg).paymentStatus(r.Context(), providerReference)
+	if err != nil {
+		errorJSON(w, http.StatusBadGateway, "MTN payment status is temporarily unavailable")
+		return
+	}
+	if providerStatus != "successful" {
+		errorJSON(w, http.StatusConflict, "MTN has not confirmed a successful payment")
+		return
+	}
+	input.ProviderTransactionID = providerReference
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not begin payment verification")
@@ -1921,6 +2029,34 @@ func (s *Server) ownerUpgradeRoute(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": purchaseID, "owner_id": ownerID, "plan": plan, "status": "active", "payment_status": "successful", "activated_at": time.Now().UTC()})
 }
 
+func (s *Server) syncOwnerPurchase(ctx context.Context, purchaseID, providerReference, providerStatus string) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var ownerID, plan, paymentID string
+	if err := tx.QueryRow(ctx, `SELECT p.owner_id,p.plan,p.payment_id FROM owner_upgrade_purchases p JOIN payments pay ON pay.id=p.payment_id WHERE p.id=$1 AND p.status='pending' AND pay.status='pending' FOR UPDATE OF p,pay`, purchaseID).Scan(&ownerID, &plan, &paymentID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE payments SET status=$2,receipt_number=CASE WHEN $2='successful' THEN provider_reference ELSE receipt_number END WHERE id=$1`, paymentID, providerStatus); err != nil {
+		return err
+	}
+	if providerStatus == "successful" {
+		if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='expired' WHERE owner_id=$1 AND status='active'`, ownerID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='active',purchased_at=NOW(),activated_at=NOW(),expires_at=NOW()+CASE plan WHEN 'silver' THEN INTERVAL '90 days' WHEN 'gold' THEN INTERVAL '180 days' ELSE INTERVAL '365 days' END,provider_transaction_id=$2,verified_at=NOW() WHERE id=$1`, purchaseID, providerReference); err != nil {
+			return err
+		}
+	} else {
+		if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='failed' WHERE id=$1`, purchaseID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *Server) canPayFor(r *http.Request, userID, relatedType, relatedID string) bool {
 	var exists bool
 	switch relatedType {
@@ -1929,7 +2065,7 @@ func (s *Server) canPayFor(r *http.Request, userID, relatedType, relatedID strin
 	case "agreement":
 		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_agreements WHERE id=$1 AND tenant_id=$2)`, relatedID, userID).Scan(&exists)
 	case "listing":
-		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listings WHERE id=$1 AND status='published')`, relatedID).Scan(&exists)
+		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listings WHERE id=$1 AND status='published' AND owner_id<>$2)`, relatedID, userID).Scan(&exists)
 	}
 	return exists
 }
@@ -1962,6 +2098,13 @@ func (s *Server) paymentRoute(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusNotFound, "payment not found")
 		return
 	}
+	if provider == "mtn_momo" && status == "pending" {
+		momoStatus, statusErr := newMoMoClient(s.cfg).paymentStatus(r.Context(), providerReference)
+		if statusErr == nil && momoStatus != "pending" {
+			_, _ = s.db.Exec(r.Context(), `UPDATE payments SET status=$2,receipt_number=CASE WHEN $2='successful' THEN provider_reference ELSE receipt_number END WHERE id=$1 AND status='pending'`, id, momoStatus)
+			status = momoStatus
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "related_type": relatedType, "related_id": relatedID, "amount": amount, "currency": currency, "provider": provider, "provider_reference": providerReference, "status": status, "created_at": createdAt})
 }
 
@@ -1971,6 +2114,28 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id strin
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
+	var provider, reference, status string
+	if err := s.db.QueryRow(r.Context(), `SELECT provider,COALESCE(provider_reference,''),status FROM payments WHERE id=$1 AND user_id=$2`, id, user.ID).Scan(&provider, &reference, &status); err != nil {
+		errorJSON(w, http.StatusNotFound, "payment not found")
+		return
+	}
+	if status != "pending" {
+		writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": status})
+		return
+	}
+	if provider != "mtn_momo" {
+		errorJSON(w, http.StatusConflict, "payment status can only be confirmed by its payment provider")
+		return
+	}
+	providerStatus, err := newMoMoClient(s.cfg).paymentStatus(r.Context(), reference)
+	if err != nil {
+		errorJSON(w, http.StatusBadGateway, "MTN payment status is temporarily unavailable")
+		return
+	}
+	if providerStatus == "pending" {
+		writeJSON(w, http.StatusAccepted, map[string]string{"id": id, "status": "pending"})
+		return
+	}
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not start payment confirmation")
@@ -1978,12 +2143,12 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id strin
 	}
 	defer tx.Rollback(r.Context())
 	var relatedType, relatedID string
-	err = tx.QueryRow(r.Context(), `UPDATE payments SET status='successful', receipt_number=COALESCE(receipt_number,provider_reference) WHERE id=$1 AND user_id=$2 AND status='pending' AND related_type <> 'owner_upgrade' RETURNING related_type,COALESCE(related_id::text,'')`, id, user.ID).Scan(&relatedType, &relatedID)
+	err = tx.QueryRow(r.Context(), `UPDATE payments SET status=$3, receipt_number=CASE WHEN $3='successful' THEN COALESCE(receipt_number,provider_reference) ELSE receipt_number END WHERE id=$1 AND user_id=$2 AND status='pending' AND related_type <> 'owner_upgrade' RETURNING related_type,COALESCE(related_id::text,'')`, id, user.ID, providerStatus).Scan(&relatedType, &relatedID)
 	if err != nil {
 		errorJSON(w, http.StatusNotFound, "pending payment not found")
 		return
 	}
-	if relatedType == "listing" || relatedType == "application" {
+	if providerStatus == "successful" && (relatedType == "listing" || relatedType == "application") {
 		var ownerID, listingTitle string
 		if relatedType == "application" {
 			err = tx.QueryRow(r.Context(), `SELECT l.owner_id,l.title FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.id=$1`, relatedID).Scan(&ownerID, &listingTitle)
@@ -2003,7 +2168,7 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id strin
 		errorJSON(w, http.StatusInternalServerError, "could not confirm payment")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": "successful"})
+	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": providerStatus})
 }
 
 func (s *Server) messages(w http.ResponseWriter, r *http.Request) {

@@ -39,12 +39,12 @@ export default function ProfileScreen() {
     setLanguage(normalizeLanguage(profile?.language ?? activeLanguage));
   }, [profile, user]);
 
-  if (!user) return <ScrollView style={styles.screen} contentContainerStyle={styles.safeContent}><Text style={styles.title}>{t('Your profile')}</Text><Text style={styles.body}>Sign in to manage your account, saved properties, messages, and listings.</Text><SettingsCard /><Pressable style={styles.button} onPress={() => router.push('/auth/sign-in')}><Text style={styles.buttonText}>{t('Sign in')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => router.push('/auth/register')}><Text style={styles.secondaryText}>{t('Create account')}</Text></Pressable></ScrollView>;
+  if (!user) return <ScrollView style={styles.screen} contentContainerStyle={styles.safeContent}><Text style={styles.title}>{t('Your profile')}</Text><Text style={styles.body}>{t('Sign in to manage your account, saved properties, messages, and listings.')}</Text><SettingsCard /><Pressable style={styles.button} onPress={() => router.push('/auth/sign-in')}><Text style={styles.buttonText}>{t('Sign in')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => router.push('/auth/register')}><Text style={styles.secondaryText}>{t('Create account')}</Text></Pressable></ScrollView>;
 
   const canManage = user.role === 'property_owner' || user.role === 'komisiyoneri' || user.role === 'admin';
   const save = async () => {
-    if (!name.trim()) { setError('Name is required.'); return; }
-    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) { setError('Enter a valid email address.'); return; }
+    if (!name.trim()) { setError(t('Name is required.')); return; }
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) { setError(t('Enter a valid email address.')); return; }
     setBusy(true);
     setError('');
     setNotice('');
@@ -69,27 +69,33 @@ export default function ProfileScreen() {
     {notice && <Text style={{ color: colors.greenDark, fontWeight: '700' }}>{notice}</Text>}
     <View style={[styles.card, { gap: 10 }]}>
       {editing ? <>
-        <Text style={styles.label}>Full name</Text>
+        <Text style={styles.label}>{t('Full name')}</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} />
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>{t('Email')}</Text>
         <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-        <Text style={styles.label}>Bio</Text>
+        <Text style={styles.label}>{t('Bio')}</Text>
         <TextInput style={[styles.input, { minHeight: 90, textAlignVertical: 'top', paddingTop: 12 }]} value={bio} onChangeText={setBio} multiline maxLength={1000} />
         <Text style={styles.label}>{t('Language')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{languageOptions.map((item) => <Pressable key={item.code} style={[item.code === language ? styles.button : styles.secondaryButton, { flexGrow: 1, flexBasis: '45%' }]} onPress={() => { setLanguage(item.code); void persistLanguage(item.code); }}><Text style={item.code === language ? styles.buttonText : styles.secondaryText}>{item.label}</Text></Pressable>)}</View>
-        <View style={{ flexDirection: 'row', gap: 8 }}><Pressable style={[styles.button, { flex: 1 }]} disabled={busy} onPress={() => void save()}><Text style={styles.buttonText}>{busy ? 'Saving...' : t('Save')}</Text></Pressable><Pressable style={[styles.secondaryButton, { flex: 1 }]} disabled={busy} onPress={() => setEditing(false)}><Text style={styles.secondaryText}>{t('Cancel')}</Text></Pressable></View>
+        <View style={{ flexDirection: 'row', gap: 8 }}><Pressable style={[styles.button, { flex: 1 }]} disabled={busy} onPress={() => void save()}><Text style={styles.buttonText}>{busy ? t('Saving...') : t('Save')}</Text></Pressable><Pressable style={[styles.secondaryButton, { flex: 1 }]} disabled={busy} onPress={() => setEditing(false)}><Text style={styles.secondaryText}>{t('Cancel')}</Text></Pressable></View>
       </> : <>
-        <Text style={styles.label}>Phone</Text><Text style={styles.heading}>{user.phone || 'Not provided'}</Text>
-        <Text style={styles.label}>Email</Text><Text style={styles.heading}>{user.email || 'Not provided'}</Text>
-        <Text style={styles.label}>Role</Text><Text style={styles.heading}>{user.role}</Text>
-        <Text style={styles.label}>Bio</Text><Text style={styles.body}>{profile?.bio || 'No bio added.'}</Text>
+        <Text style={styles.label}>{t('Phone')}</Text><Text style={styles.heading}>{user.phone || t('Not provided')}</Text>
+        <Text style={styles.label}>{t('Email')}</Text><Text style={styles.heading}>{user.email || t('Not provided')}</Text>
+        <Text style={styles.label}>{t('Role')}</Text><Text style={styles.heading}>{t(user.role)}</Text>
+        <Text style={styles.label}>{t('Bio')}</Text><Text style={styles.body}>{profile?.bio || t('No bio added.')}</Text>
         <Text style={styles.label}>Language</Text><Text style={styles.body}>{profile?.language || 'en'}</Text>
         <Pressable style={styles.secondaryButton} onPress={() => { setError(''); setNotice(''); setEditing(true); }}><Text style={styles.secondaryText}>{t('Edit profile')}</Text></Pressable>
-        <Pressable style={styles.secondaryButton} onPress={() => void refresh()}><Text style={styles.secondaryText}>Refresh account</Text></Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => void refresh()}><Text style={styles.secondaryText}>{t('Refresh account')}</Text></Pressable>
       </>}
     </View>
     <SettingsCard />
-    {canManage && <><Pressable style={styles.button} onPress={() => router.push('/listing/new')}><Text style={styles.buttonText}>Create listing</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => router.push('/listing/manage')}><Text style={styles.secondaryText}>Manage my listings</Text></Pressable></>}
-    <Pressable style={[styles.secondaryButton, { borderColor: colors.danger }]} onPress={() => { void signOut(); }}><Text style={{ color: colors.danger, fontWeight: '800' }}>Sign out</Text></Pressable>
+    <Pressable style={styles.secondaryButton} onPress={() => router.push('/chat' as never)}><Text style={styles.secondaryText}>Umutungo AI assistant</Text></Pressable>
+    <Pressable style={styles.secondaryButton} onPress={() => router.push('/dashboard' as never)}><Text style={styles.secondaryText}>Open role dashboard</Text></Pressable>
+    <Pressable style={styles.secondaryButton} onPress={() => router.push('/messages')}><Text style={styles.secondaryText}>{t('Messages')}</Text></Pressable>
+    <Pressable style={styles.secondaryButton} onPress={() => router.push('/notifications')}><Text style={styles.secondaryText}>Notifications</Text></Pressable>
+    <Pressable style={styles.secondaryButton} onPress={() => router.push('/applications')}><Text style={styles.secondaryText}>Rental applications</Text></Pressable>
+    {canManage && <><Pressable style={styles.button} onPress={() => router.push('/listing/new')}><Text style={styles.buttonText}>{t('Create listing')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => router.push('/listing/manage')}><Text style={styles.secondaryText}>{t('Manage my listings')}</Text></Pressable></>}
+    {user.role === 'property_owner' && <Pressable style={styles.secondaryButton} onPress={() => router.push('/owner-upgrade' as never)}><Text style={styles.secondaryText}>Owner premium plans · MTN MoMo</Text></Pressable>}
+    <Pressable style={[styles.secondaryButton, { borderColor: colors.danger }]} onPress={() => { void signOut(); }}><Text style={{ color: colors.danger, fontWeight: '800' }}>{t('Sign out')}</Text></Pressable>
   </ScrollView>;
 }

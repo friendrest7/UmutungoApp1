@@ -491,7 +491,7 @@ function TenantWorkspaceSection({ view, tenantData, favorites = [], notification
     Messages: { eyebrow: 'Stay connected', title: 'Messages', description: 'Continue conversations with landlords and property contacts from one place.', icon: 'users' },
   };
   const panel = panels[view] ?? panels['Saved properties'];
-  const rows: Array<{ title: string; detail: string; action: string; application?: ApiApplication; propertyID?: string }> = view === 'Applications' && tenantData ? tenantData.applications.map((application) => ({ title: application.listing_title, detail: `${application.status} · ${application.viewed_at ? 'House seen' : 'House not seen yet'}`, action: application.viewed_at ? (application.status === 'accepted' ? 'Pay rent' : 'Await landlord approval') : 'Mark house seen', application })) : view === 'Rent & utilities' && tenantData ? tenantData.payments.map((payment) => ({ title: `${payment.provider} payment`, detail: `${payment.currency} ${payment.amount.toLocaleString()} · ${payment.status}`, action: 'View payment' })) : view === 'Saved properties' ? favorites.map((item) => ({ title: item.title, detail: `${item.type} · ${item.location} · ${item.price}`, action: 'View property', propertyID: item.property_id })) : view === 'Viewings' && tenantData ? tenantData.bookings.map((booking) => ({ title: booking.property_title, detail: `${booking.location} · ${booking.price}`, action: 'View property' })) : [];
+  const rows: Array<{ title: string; detail: string; action: string; application?: ApiApplication; propertyID?: string }> = view === 'Applications' && tenantData ? tenantData.applications.filter((application) => process.env.NODE_ENV !== 'production' || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(application.id)).map((application) => ({ title: application.listing_title, detail: `${application.status} · ${application.viewed_at ? 'House seen' : 'House not seen yet'}`, action: application.viewed_at ? (application.status === 'accepted' ? 'Pay rent' : 'Await landlord approval') : 'Mark house seen', application })) : view === 'Rent & utilities' && tenantData ? tenantData.payments.map((payment) => ({ title: `${payment.provider} payment`, detail: `${payment.currency} ${payment.amount.toLocaleString()} · ${payment.status}`, action: 'View payment' })) : view === 'Saved properties' ? favorites.map((item) => ({ title: item.title, detail: `${item.type} · ${item.location} · ${item.price}`, action: 'View property', propertyID: item.property_id })) : view === 'Viewings' && tenantData ? tenantData.bookings.map((booking) => ({ title: booking.property_title, detail: `${booking.location} · ${booking.price}`, action: 'View property' })) : [];
   const openWorkspaceAction = (action: string) => { if (onPrimaryAction) { onPrimaryAction(action); return; } if (action === 'Add a payment method') setWorkspaceAction('payment-method'); else if (action === 'Create maintenance request') setWorkspaceAction('maintenance'); else if (action === 'Contact Komisiyoneri') setWorkspaceAction('commissioner'); else if (onAction) onAction(action); else window.dispatchEvent(new CustomEvent('umutungo:tenant-workspace-action', { detail: { action } })); };
   const handleAction = (action: string, application?: ApiApplication) => { if (application && action === 'Mark house seen') onViewed?.(application); else if (application && action === 'Pay rent') onPay?.(application); else if (application && action === 'Contact landlord') onContact?.(application); else if (application && action === 'Review property') onReview?.(application); else if (action === 'Start another application' || action === 'Explore homes' || action === 'Explore more properties') window.location.assign('/categories/houses'); else openWorkspaceAction(action); };
   const primaryLabel = view === 'Applications' ? 'Start another application' : view === 'Rent & utilities' ? 'Add a payment method' : view === 'Maintenance' ? 'Create maintenance request' : view === 'Tenants' ? 'Contact Komisiyoneri' : view === 'Messages' ? 'Start a new conversation' : view === 'Viewings' ? 'Find another viewing' : 'Explore more properties';
@@ -575,7 +575,12 @@ function LandlordDashboard() {
     return () => { window.removeEventListener('umutungo:landlord-data-changed', refresh); window.removeEventListener('storage', refresh); };
   }, []);
   const approveApplication = async (application: LandlordApplication, agreedPrice?: number) => {
-    try { await umutungoApi(`/api/v1/applications/${application.id}/decision`, { method: 'POST', body: JSON.stringify({ status: 'accepted', note: agreedPrice ? `Approved at RWF ${agreedPrice.toLocaleString()} per month.` : 'Approved from the landlord dashboard.', ...(agreedPrice ? { rent_amount: agreedPrice } : {}) }) }); } catch { /* The local demo workflow remains available without the hosted API. */ }
+    try {
+      const result = await umutungoApi<{ id: string; status: string }>(`/api/v1/applications/${encodeURIComponent(application.id)}/decision`, { method: 'POST', body: JSON.stringify({ status: 'accepted', note: agreedPrice ? `Approved at RWF ${agreedPrice.toLocaleString()} per month.` : 'Approved from the landlord dashboard.', ...(agreedPrice ? { rent_amount: agreedPrice } : {}) }) });
+      if (!result && process.env.NODE_ENV === 'production') { setNotice('The application could not be accepted by the hosted service. Please sign in again and retry.'); return; }
+    } catch (cause) {
+      if (process.env.NODE_ENV === 'production') { setNotice(cause instanceof Error ? cause.message : 'The application could not be accepted. Please retry.'); return; }
+    }
     const updated = { ...application, status: 'accepted' };
     setApplications((current) => current.map((item) => item.id === application.id ? updated : item));
     try {
@@ -855,7 +860,12 @@ function TenantDashboard() {
   }, []);
 
   const updateApplication = async (application: ApiApplication, viewedAt: string) => {
-    try { await umutungoApi(`/api/v1/applications/${application.id}/viewed`, { method: 'POST', body: '{}' }); } catch { /* local/demo application */ }
+    try {
+      const result = await umutungoApi(`/api/v1/applications/${encodeURIComponent(application.id)}/viewed`, { method: 'POST', body: '{}' });
+      if (!result && process.env.NODE_ENV === 'production') { setNotice('The hosted service could not record this viewing. Please sign in again and retry.'); return; }
+    } catch (cause) {
+      if (process.env.NODE_ENV === 'production') { setNotice(cause instanceof Error ? cause.message : 'The hosted service could not record this viewing. Please retry.'); return; }
+    }
     const next = { ...application, viewed_at: viewedAt };
     setTenantData((current) => ({ ...current, applications: current.applications.map((item) => item.id === application.id ? next : item) }));
     const stored = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as Array<Record<string, unknown>>;
@@ -879,6 +889,8 @@ function TenantDashboard() {
     setPaymentError('');
     setPaymentSubmitting(true);
     try {
+      const viewed = await umutungoApi<{ id: string; status: string }>(`/api/v1/applications/${encodeURIComponent(selectedApplication.id)}/viewed`, { method: 'POST', body: '{}' });
+      if (!viewed) throw new Error('Sign in before starting an MTN MoMo payment.');
       const result = await umutungoApi<{ id: string; status: string; amount: number; currency: string; provider: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify(payload) });
       if (!result) throw new Error('Sign in before starting an MTN MoMo payment.');
       setTenantData((current) => ({ ...current, payments: [{ ...result, related_type: 'application', related_id: selectedApplication.id, created_at: new Date().toISOString() }, ...current.payments] }));

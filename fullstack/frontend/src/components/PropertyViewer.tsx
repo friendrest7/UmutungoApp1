@@ -175,8 +175,21 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         const notifications = JSON.parse(window.localStorage.getItem(ownerNotificationKey) ?? '[]') as Array<Record<string, unknown>>;
         window.localStorage.setItem(ownerNotificationKey, JSON.stringify(notifications.map((item) => item.applicationId === application.id ? { ...item, applicationId: result.id } : item)));
         window.dispatchEvent(new CustomEvent(ownerNotificationKey.includes('commissioner') ? 'umutungo:commissioner-data-changed' : 'umutungo:landlord-data-changed'));
+      } else if (process.env.NODE_ENV === 'production') {
+        throw new Error('The hosted service did not save your application. Please sign in again and retry.');
       }
-    } catch { /* Keep the local application available for the demo workspace. */ }
+    } catch (cause) {
+      if (process.env.NODE_ENV === 'production') {
+        setApplicationId('');
+        const applications = JSON.parse(window.localStorage.getItem('umutungo-rental-applications') ?? '[]') as Array<Record<string, unknown>>;
+        window.localStorage.setItem('umutungo-rental-applications', JSON.stringify(applications.filter((item) => item.id !== application.id)));
+        const notifications = JSON.parse(window.localStorage.getItem(ownerNotificationKey) ?? '[]') as Array<Record<string, unknown>>;
+        window.localStorage.setItem(ownerNotificationKey, JSON.stringify(notifications.filter((item) => item.id !== notification.id)));
+        window.dispatchEvent(new CustomEvent(ownerNotificationKey.includes('commissioner') ? 'umutungo:commissioner-data-changed' : 'umutungo:landlord-data-changed'));
+        setPaymentError(cause instanceof Error ? cause.message : 'Your application could not be sent. Please retry.');
+        return;
+      }
+    }
     setPaymentError('');
     setTransactionStep('success');
   };

@@ -1778,6 +1778,9 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if input.RelatedType == "application" || input.RelatedType == "listing" {
+		_, _ = s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_started','MTN MoMo payment started',$2)`, user.ID, fmt.Sprintf("Approve the RWF %.0f payment request in your MTN MoMo app.", input.Amount))
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "provider": input.Provider, "provider_reference": providerReference, "amount": input.Amount, "currency": input.Currency})
 }
 

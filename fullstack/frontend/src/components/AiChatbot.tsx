@@ -4,23 +4,13 @@ import { Language, t } from '../data/translations';
 
 type Message = { id: number; sender: 'assistant' | 'user'; text: string };
 
-function getReply(language: Language, value: string) {
-  const question = value.toLowerCase();
-  if (question.includes('embassy') || question.includes('embass')) return 'That sounds like a good place to start. The U.S. Embassy is in Kacyiru, Kigali, so I can help you look for rentals around that area. What monthly budget and number of bedrooms do you have in mind?';
-  if (question.includes('rent') || question.includes('kodesh') || question.includes('kod')) return 'Got it — you are looking to rent. Which part of Rwanda would suit you, and what budget or bedroom count should I use to narrow it down?';
-  if (question.includes('buy') || question.includes('gura') || question.includes('nunua')) return 'Absolutely. Are you looking for a home, apartment, land, or commercial space? Tell me the area and budget you are considering, and we can narrow it down together.';
-  if (question.includes('sell') || question.includes('gurish') || question.includes('uza')) return 'I can help you prepare the listing. Where is the property, and are you planning to rent it out or sell it?';
-  if (question.includes('kigali') || question.includes('location') || question.includes('where')) return 'Kigali has several good areas to explore. Tell me what matters most — being near work, schools, transport, or a quieter neighbourhood — and I will suggest where to start.';
-  return 'I’m with you. Tell me what kind of place you want, which area you prefer, and whether you are renting or buying, and we can work it out together.';
-}
-
 export function AiChatbot({ language }: { language: Language }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([{ id: 1, sender: 'assistant', text: t(language, 'Hello! I can help you find a place in Rwanda. Ask me about renting, buying, locations, or property types.') }]);
+  const [messages, setMessages] = useState<Message[]>([{ id: 1, sender: 'assistant', text: t(language, 'Hello! I can help you explore property in Rwanda. Never share a PIN or OTP, or send money based on a chat message. Use only the official Umutungo payment flow.') }]);
   const chatbotRef = useRef<HTMLElement>(null);
   const dragStartRef = useRef({ x: 0, y: 0, originX: 0, originY: 0 });
   const dragPositionRef = useRef(dragPosition);
@@ -96,7 +86,7 @@ export function AiChatbot({ language }: { language: Language }) {
       if (!response.ok || !data.message) throw new Error(data.error || 'Chat unavailable');
       setMessages((current) => [...current, { id: Date.now() + 1, sender: 'assistant', text: data.message as string }]);
     } catch {
-      setMessages((current) => [...current, { id: Date.now() + 1, sender: 'assistant', text: getReply(language, trimmed) }]);
+      setMessages((current) => [...current, { id: Date.now() + 1, sender: 'assistant', text: 'I can’t connect to the property assistant right now. For your safety, never share a PIN or OTP, or send money based on a chat message. Use only the official Umutungo payment flow.' }]);
     } finally {
       setIsSending(false);
     }

@@ -3079,12 +3079,13 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   .app-realistic .mobile-post-action { display: none; }
   .app-realistic .nav-actions .nav-utility-group {
     display: flex;
-    order: 1;
+    order: 2;
     gap: 2px;
     margin-left: auto;
     padding-left: 0;
     border-left: 0;
   }
+  .app-realistic .nav-actions .nav-sign-in { display: none !important; }
   .app-realistic .nav-actions .nav-utility-group .nav-dropdown { display: block; }
   .app-realistic .nav-actions .nav-utility-group .nav-dropdown .nav-link {
     width: 34px;
@@ -3097,7 +3098,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   .app-realistic .nav-actions .nav-utility-group .nav-dropdown .nav-link span { display: none; }
   .app-realistic .nav-actions .nav-utility-group .nav-dropdown .nav-link svg:last-child { display: none; }
   .app-realistic .nav-actions .nav-utility-group .theme-toggle { width: 34px; height: 32px; }
-  .app-realistic .mobile-menu-button { order: 2; flex: 0 0 32px; width: 32px; height: 32px; }
+  .app-realistic .mobile-menu-button { order: 1; flex: 0 0 32px; width: 32px; height: 32px; }
 }
 .landlord-delete-button { border: 1px solid rgba(180, 55, 45, .35); border-radius: 999px; padding: 8px 12px; background: transparent; color: #a33b30; cursor: pointer; font-size: 10px; font-weight: 800; }
 .landlord-delete-button:hover { background: #fff0ee; border-color: #a33b30; }

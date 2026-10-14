@@ -1,4 +1,7 @@
 .git/
+.gocache-check/
+fullstack/
+docs/
 .gradle/
 node_modules/
 android/
@@ -12,3 +15,14 @@ results/
 client_secret_*.json
 *.jks
 *.keystore
+**/node_modules/
+**/.next/
+**/.expo/
+**/dist/
+**/results/
+**/android/
+**/ios/
+**/coverage/
+**/.turbo/
+**/.cache/
+**/*.log

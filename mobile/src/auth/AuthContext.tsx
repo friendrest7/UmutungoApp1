@@ -26,7 +26,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setProfile(null);
     } finally { setLoading(false); }
   };
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void Promise.resolve().then(refresh); }, []);
   const value = useMemo(() => ({ user, profile, loading, refresh, signOut: async () => { await clearStoredToken(); setUser(null); setProfile(null); }, setUser, setProfile }), [user, profile, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -44,7 +44,7 @@ export default function HomeScreen() {
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Properties could not be loaded.'); }
     finally { setLoading(false); setRefreshing(false); }
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void Promise.resolve().then(load); }, []);
   const goToSearch = (params: { search?: string; category?: string; transaction_type?: string } = {}) => router.push({ pathname: '/search', params });
 
   return <ScrollView style={styles.screen} contentContainerStyle={{ width: '100%', maxWidth: 760, alignSelf: 'center', padding: 20, paddingBottom: 28, gap: 22 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={colors.green} />}>

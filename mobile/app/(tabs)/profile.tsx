@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { updateProfile } from '@/api/client';
@@ -31,13 +31,6 @@ export default function ProfileScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-
-  useEffect(() => {
-    setName(user?.name ?? '');
-    setEmail(user?.email ?? '');
-    setBio(profile?.bio ?? '');
-    setLanguage(normalizeLanguage(profile?.language ?? activeLanguage));
-  }, [profile, user]);
 
   if (!user) return <ScrollView style={styles.screen} contentContainerStyle={styles.safeContent}><Text style={styles.title}>{t('Your profile')}</Text><Text style={styles.body}>{t('Sign in to manage your account, saved properties, messages, and listings.')}</Text><SettingsCard /><Pressable style={styles.button} onPress={() => router.push('/auth/sign-in')}><Text style={styles.buttonText}>{t('Sign in')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => router.push('/auth/register')}><Text style={styles.secondaryText}>{t('Create account')}</Text></Pressable></ScrollView>;
 
@@ -84,7 +77,7 @@ export default function ProfileScreen() {
         <Text style={styles.label}>{t('Role')}</Text><Text style={styles.heading}>{t(user.role)}</Text>
         <Text style={styles.label}>{t('Bio')}</Text><Text style={styles.body}>{profile?.bio || t('No bio added.')}</Text>
         <Text style={styles.label}>Language</Text><Text style={styles.body}>{profile?.language || 'en'}</Text>
-        <Pressable style={styles.secondaryButton} onPress={() => { setError(''); setNotice(''); setEditing(true); }}><Text style={styles.secondaryText}>{t('Edit profile')}</Text></Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => { setName(user.name ?? ''); setEmail(user.email ?? ''); setBio(profile?.bio ?? ''); setLanguage(normalizeLanguage(profile?.language ?? activeLanguage)); setError(''); setNotice(''); setEditing(true); }}><Text style={styles.secondaryText}>{t('Edit profile')}</Text></Pressable>
         <Pressable style={styles.secondaryButton} onPress={() => void refresh()}><Text style={styles.secondaryText}>{t('Refresh account')}</Text></Pressable>
       </>}
     </View>

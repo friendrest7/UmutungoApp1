@@ -50,8 +50,8 @@ export default function DashboardScreen() {
       }
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Dashboard data could not be loaded.'); }
     finally { setBusy(false); }
-  }, [user?.role]);
-  useEffect(() => { void load(); }, [load]);
+  }, [user]);
+  useEffect(() => { void Promise.resolve().then(load); }, [load]);
   const metric = (label: string, value: unknown) => <View key={label} style={[styles.card, { flex: 1, minWidth: '44%', gap: 5 }]}><Text style={styles.muted}>{label}</Text><Text style={styles.title}>{String(value ?? 0)}</Text></View>;
   const act = async (application: ApiApplication, decision: 'accepted' | 'rejected') => { try { await decideApplication(application.id, decision); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not update application.'); } };
   const reviewReport = async (report: AdminReport, status: 'reviewing' | 'resolved' | 'dismissed') => { try { await api(`/api/v1/admin/reports/${encodeURIComponent(report.id)}`, { method: 'PATCH', body: JSON.stringify({ status }) }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not update report.'); } };

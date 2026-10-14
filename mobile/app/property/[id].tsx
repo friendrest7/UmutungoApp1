@@ -58,7 +58,7 @@ export default function PropertyDetailScreen() {
     }
   };
 
-  useEffect(() => { void load(); }, [id, user?.id]);
+  useEffect(() => { void Promise.resolve().then(load); }, [id, user?.id]);
 
   const photos = useMemo(() => listing?.media?.filter((item) => item.type === 'photo' && item.url) ?? [], [listing]);
   const galleryWidth = Math.max(260, Math.min(width - 40, 520));

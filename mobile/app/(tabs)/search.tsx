@@ -28,7 +28,7 @@ export default function SearchScreen() {
   const [error, setError] = useState('');
   const [visible, setVisible] = useState(12);
   const load = async () => { setError(''); setVisible(12); try { const result = await listListings({ search, transaction_type: transactionType, category }); setListings(result.items); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Search could not be completed.'); } finally { setLoading(false); setRefreshing(false); } };
-  useEffect(() => { void load(); }, [transactionType, category]);
+  useEffect(() => { void Promise.resolve().then(load); }, [transactionType, category]);
   const shown = useMemo(() => listings.slice(0, visible), [listings, visible]);
   const filter = (key: string, active: boolean, label: string, action: () => void) => <Pressable key={key} style={[styles.filterButton, active ? styles.button : styles.secondaryButton]} onPress={action}><Text style={active ? styles.buttonText : styles.secondaryText}>{label}</Text></Pressable>;
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={colors.green} />}>

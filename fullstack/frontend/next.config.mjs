@@ -6,7 +6,7 @@ const backend = configuredBackend && !(process.env.NODE_ENV === 'production' && 
 
 const nextConfig = {
   images: {
-    formats: ['image/avif', 'image/webp'],
+    formats: ['image/webp'],
   },
   async rewrites() {
     return [{ source: '/api/v1/:path*', destination: `${backend}/api/v1/:path*` }];

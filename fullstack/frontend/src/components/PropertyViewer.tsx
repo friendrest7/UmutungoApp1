@@ -10,7 +10,7 @@ import { umutungoApi } from '../lib/umutungoApi';
 import { dashboardPathForAccountRole } from '../lib/accountRouting';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
-type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; readOnly?: boolean };
+type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode };
 type TransactionType = 'rent' | 'buy';
 type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
@@ -39,7 +39,7 @@ function escapeReceiptValue(value: string | number) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character] ?? character);
 }
 
-export function PropertyViewer({ language, property, onClose, initialMode = 'photos', readOnly = false }: PropertyViewerProps) {
+export function PropertyViewer({ language, property, onClose, initialMode = 'photos' }: PropertyViewerProps) {
   const images = property.images?.length ? property.images : [property.image];
   const [activeImage, setActiveImage] = useState(0);
   const [mode, setMode] = useState<ViewerMode>(initialMode);
@@ -70,6 +70,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [contactOpen, setContactOpen] = useState(false);
   const [messageSent, setMessageSent] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
+  const [contactError, setContactError] = useState('');
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewMessage, setReviewMessage] = useState('');
@@ -262,20 +263,14 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const handleLandlordMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!contactMessage.trim()) return;
-    try { await umutungoApi('/api/v1/messages', { method: 'POST', body: JSON.stringify({ listing_id: property.id, body: contactMessage }) }); } catch { /* Local/demo message */ }
-    const storedPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as Array<{ related_id?: string; status?: string }>;
-    const payment = storedPayments.find((item) => item.related_id === property.id || item.related_id === applicationId);
-    saveTenantBooking(payment?.status === 'successful' || payment?.status === 'paid' ? 'paid' : 'pending');
-    const storedMessages = JSON.parse(window.localStorage.getItem('umutungo-tenant-messages') ?? '[]') as Array<Record<string, string>>;
-    const commissionerListings = JSON.parse(window.localStorage.getItem('umutungo-commissioner-properties') ?? '[]') as Array<{ id?: string }>;
-    const ownerNotificationKey = commissionerListings.some((item) => item.id === property.id) ? 'umutungo-commissioner-notifications' : 'umutungo-landlord-notifications';
-    const storedLandlordNotifications = JSON.parse(window.localStorage.getItem(ownerNotificationKey) ?? '[]') as Array<Record<string, unknown>>;
-    window.localStorage.setItem(ownerNotificationKey, JSON.stringify([{ id: `notification-message-${Date.now()}`, type: 'message_received', title: 'New tenant message', body: `${applicationName || 'A tenant'} sent a message about ${property.title}`, createdAt: new Date().toISOString(), readAt: null }, ...storedLandlordNotifications]));
-    window.localStorage.setItem('umutungo-tenant-messages', JSON.stringify([{ id: `message-${Date.now()}`, sender_id: 'me', sender_name: 'You', recipient_id: '', recipient_name: 'Eric N.', listing_id: property.id, listing_title: property.title, body: contactMessage, created_at: new Date().toISOString() }, ...storedMessages]));
-    window.dispatchEvent(new CustomEvent('umutungo:notifications-changed'));
-    window.dispatchEvent(new CustomEvent(ownerNotificationKey.includes('commissioner') ? 'umutungo:commissioner-data-changed' : 'umutungo:landlord-data-changed'));
-    setMessageSent(true);
-    window.location.assign('/tenant?view=Messages');
+    setContactError('');
+    try {
+      const result = await umutungoApi('/api/v1/messages', { method: 'POST', body: JSON.stringify({ listing_id: property.id, body: contactMessage.trim() }) });
+      if (!result) throw new Error('Sign in to send a message to the property owner.');
+      setMessageSent(true);
+    } catch (cause) {
+      setContactError(cause instanceof Error ? cause.message : 'Your message could not be sent. Please try again.');
+    }
   };
   const handleReport = async () => {
     const reasonInput = window.prompt('Report reason: fraud, duplicate, incorrect information, sold/unavailable, offensive content, or other.');
@@ -347,7 +342,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   return <div className="property-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby="property-viewer-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="property-viewer">
       <header className="property-viewer-header">
-        <div><span className="eyebrow">{t(language, readOnly ? 'Illustrative example' : 'Property details')}</span><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p>{!readOnly && <button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button>}</div>
+        <div><span className="eyebrow">{t(language, 'Property details')}</span><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button></div>
         <button className="property-viewer-close" type="button" onClick={onClose} aria-label={t(language, 'Close property viewer')}><Icon name="x" size={20} /></button>
       </header>
 
@@ -377,7 +372,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
           <div className="viewer-thumbnails">{images.map((image, index) => <button className={mode === 'photos' && activeImage === index ? 'is-active' : ''} type="button" key={`${image}-thumb-${index}`} onClick={() => { setMode('photos'); setActiveImage(index); }}><Image src={image} alt="" fill sizes="90px" /></button>)}</div>
         </div>
 
-        <aside className="property-viewer-details"><div className="viewer-price-row"><div><span className="property-type">{t(language, property.type)}</span><strong>{property.price}</strong><small>{t(language, property.priceNote)}</small></div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats"><span><strong>{property.bedrooms}</strong>{t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong>{t(language, 'baths')}</span><span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span></div><p className="viewer-description">{t(language, 'A carefully presented property with clear details, flexible spaces and a location worth exploring in person.')}</p>{readOnly ? <p className="viewer-description">Illustrative example only. This is not an available owner listing.</p> : <><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span><span><Icon name="check" size={15} /> {t(language, 'Virtual tour ready')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button></>}<small className="viewer-listed">{t(language, property.listed)}</small></aside>
+        <aside className="property-viewer-details"><div className="viewer-price-row"><div><span className="property-type">{t(language, property.type)}</span><strong>{property.price}</strong><small>{t(language, property.priceNote)}</small></div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats"><span><strong>{property.bedrooms}</strong>{t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong>{t(language, 'baths')}</span><span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span></div><p className="viewer-description">{property.description?.trim() || 'Contact the owner for more information about this property.'}</p><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button><small className="viewer-listed">{t(language, property.listed)}</small></aside>
       </div>
     </section>
     {transactionOpen && (
@@ -460,14 +455,13 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <span className="payment-success-mark"><Icon name="check" size={23} /></span>
             <span className="eyebrow">Request received</span>
             <h2 id="property-action-title">You are on your way</h2>
-            <p className="property-action-intro">Your {transactionType === 'rent' ? 'rental' : 'property'} request for <strong>{property.title}</strong> has been recorded. You can now speak with the landlord directly.</p>
+            <p className="property-action-intro">Your {transactionType === 'rent' ? 'rental' : 'property'} request for <strong>{property.title}</strong> has been recorded.</p>
             {transactionType === 'rent' && !houseSeen && <div className="property-seen-card"><strong>Have you finished exploring?</strong><span>{viewingRequested ? 'Visit the property first, then return here and confirm when you are ready to pay.' : 'Choose whether you have visited the property or want to open its location before paying.'}</span><div className="property-seen-actions"><button className="property-contact-button" type="button" onClick={markHouseSeen}>I finished exploring <Icon name="check" size={14} /></button><button className="property-map-button" type="button" onClick={openPropertyMap}><Icon name="pin" size={14} /> No, I want to view it</button></div></div>}
-            <div className="property-landlord-card">
-              <div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong>Eric N.</strong><small>Verified landlord {String.fromCharCode(183)} {property.location}</small></span></div>
-              <button className="property-landlord-view" type="button" onClick={() => setLandlordVisible((current) => !current)}>{landlordVisible ? 'Hide details' : 'View landlord'} <Icon name="arrow" size={14} /></button>
-              {landlordVisible && <div className="property-landlord-details"><span><b>Phone</b> +250 788 214 600</span><span><b>Email</b> eric.n@umutungo.rw</span><small>Ask about availability, viewing times, deposit terms, and anything else you need to know.</small></div>}
-              <button className="property-contact-button" type="button" onClick={() => setContactOpen(true)}><Icon name="bookPen" size={15} /> Open chat with landlord</button>
-            </div>
+            {property.poster && <div className="property-landlord-card">
+              <div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong>{property.poster.businessName || property.poster.name || 'Property owner'}</strong><small>{property.poster.verified ? 'Verified owner' : 'Property owner'} {String.fromCharCode(183)} {property.location}</small></span></div>
+              {property.poster.phone && <><button className="property-landlord-view" type="button" onClick={() => setLandlordVisible((current) => !current)}>{landlordVisible ? 'Hide phone number' : 'View phone number'} <Icon name="arrow" size={14} /></button>{landlordVisible && <div className="property-landlord-details"><span><b>Phone</b> <a href={`tel:${property.poster.phone}`}>{property.poster.phone}</a></span></div>}</>}
+              <button className="property-contact-button" type="button" onClick={() => { setContactError(''); setContactOpen(true); }}><Icon name="bookPen" size={15} /> Message owner</button>
+            </div>}
             {houseSeen && <div className="property-review-card">
               <div><span className="eyebrow">After your request</span><h3>How was this property experience?</h3><p>Share a quick review to help other renters make a confident choice.</p></div>
               {reviewSubmitted ? <p className="property-review-success" role="status"><Icon name="check" size={14} /> Thank you {String.fromCharCode(8212)} your review was submitted.</p> : reviewOpen ? <form className="property-review-form" onSubmit={handleReviewSubmit}><div className="property-review-stars" aria-label="Choose a rating">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" className={value <= reviewRating ? 'is-selected' : ''} aria-label={value + ' stars'} onClick={() => setReviewRating(value)}>{String.fromCharCode(9733)}</button>)}</div><textarea value={reviewMessage} onChange={(event) => setReviewMessage(event.target.value)} placeholder="Tell us about the listing and landlord experience" rows={3} required /><button className="property-review-submit" type="submit">Submit review <Icon name="arrow" size={14} /></button></form> : <button className="property-review-open" type="button" onClick={() => setReviewOpen(true)}>Leave a review <Icon name="arrow" size={14} /></button>}
@@ -477,10 +471,10 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         {contactOpen && <div className="landlord-contact-overlay" role="dialog" aria-modal="true" aria-labelledby="landlord-contact-title">
           <button className="landlord-contact-backdrop" type="button" aria-label="Close landlord chat" onClick={() => setContactOpen(false)} />
           <section className="landlord-contact-panel">
-            <header className="landlord-contact-header"><div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong id="landlord-contact-title">Eric N.</strong><small>Verified landlord {String.fromCharCode(183)} Usually replies within an hour</small></span></div><button className="property-action-close" type="button" aria-label="Close landlord chat" onClick={() => setContactOpen(false)}><Icon name="x" size={18} /></button></header>
+            <header className="landlord-contact-header"><div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong id="landlord-contact-title">{property.poster?.businessName || property.poster?.name || 'Property owner'}</strong><small>{property.poster?.verified ? 'Verified owner' : 'Property owner'}</small></span></div><button className="property-action-close" type="button" aria-label="Close owner chat" onClick={() => setContactOpen(false)}><Icon name="x" size={18} /></button></header>
             <p className="landlord-contact-intro">Ask about viewing times, availability, deposit terms, or any detail about {property.title}.</p>
-            <div className="landlord-chat-messages"><div className="landlord-chat-bubble landlord-chat-received">Hello, I can help you with this property. What would you like to know?</div>{messageSent && <div className="landlord-chat-bubble landlord-chat-sent">{contactMessage}</div>}</div>
-            {!messageSent ? <form className="landlord-contact-form" onSubmit={handleLandlordMessage}><textarea value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} placeholder="Write your message to the landlord" rows={4} required /><button className="property-contact-button" type="submit">Send message <Icon name="arrow" size={15} /></button></form> : <div className="landlord-contact-sent"><Icon name="check" size={15} /> Message sent. The landlord can reply in this conversation.</div>}
+            <div className="landlord-chat-messages">{messageSent && <div className="landlord-chat-bubble landlord-chat-sent">{contactMessage}</div>}</div>
+            {!messageSent ? <form className="landlord-contact-form" onSubmit={handleLandlordMessage}><textarea value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} placeholder="Write your message to the owner" rows={4} required />{contactError && <p className="payment-error" role="alert">{contactError}</p>}<button className="property-contact-button" type="submit">Send message <Icon name="arrow" size={15} /></button></form> : <div className="landlord-contact-sent"><Icon name="check" size={15} /> Message sent to the owner.</div>}
           </section>
         </div>}
       </div>

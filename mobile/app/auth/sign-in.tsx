@@ -12,6 +12,13 @@ import { useI18n } from '@/i18n';
 
 WebBrowser.maybeCompleteAuthSession();
 
+const demoAccounts = [
+  { label: 'Client', email: 'client@umutungo.test', password: 'Client123!' },
+  { label: 'Property Owner', email: 'owner@umutungo.test', password: 'Owner123!' },
+  { label: 'Komisiyoneri', email: 'commissioner@umutungo.test', password: 'Commissioner123!' },
+  { label: 'Admin', email: 'admin@umutungo.test', password: 'Admin123!' },
+];
+
 export default function SignInScreen() {
   const { colors, styles } = useTheme();
   const { t } = useI18n();
@@ -40,24 +47,29 @@ export default function SignInScreen() {
   useEffect(() => {
     if (googleResponse?.type !== 'success') return;
     const accessToken = googleResponse.authentication?.accessToken;
-    if (!accessToken) {
-      setError('Google did not return an access token.');
-      return;
-    }
-    setGoogleBusy(true);
-    setError('');
-    void signInWithGoogle({
-      access_token: accessToken,
-      client_id: Platform.OS === 'android' ? googleAndroidClientId : Platform.OS === 'ios' ? googleIosClientId : googleWebClientId,
-      role: 'client',
-    }).then((result) => {
-      setUser(result.user);
-      setProfile(result.profile);
-      if (router.canGoBack()) router.back();
-      else router.replace('/(tabs)');
-    }).catch((cause) => {
-      setError(cause instanceof Error ? cause.message : 'Google sign-in could not be completed.');
-    }).finally(() => setGoogleBusy(false));
+    void Promise.resolve().then(async () => {
+      if (!accessToken) {
+        setError('Google did not return an access token.');
+        return;
+      }
+      setGoogleBusy(true);
+      setError('');
+      try {
+        const result = await signInWithGoogle({
+          access_token: accessToken,
+          client_id: Platform.OS === 'android' ? googleAndroidClientId : Platform.OS === 'ios' ? googleIosClientId : googleWebClientId,
+          role: 'client',
+        });
+        setUser(result.user);
+        setProfile(result.profile);
+        if (router.canGoBack()) router.back();
+        else router.replace('/(tabs)');
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Google sign-in could not be completed.');
+      } finally {
+        setGoogleBusy(false);
+      }
+    });
   }, [googleResponse, router, setProfile, setUser]);
 
   const submitPhone = async () => {
@@ -78,15 +90,16 @@ export default function SignInScreen() {
     }
   };
 
-  const submitEmail = async () => {
-    if (!email.trim() || !password) { setError('Enter your email and password.'); return; }
+  const signInWithCredentials = async (loginEmail: string, loginPassword: string) => {
+    if (!loginEmail.trim() || !loginPassword) { setError('Enter your email and password.'); return; }
     setBusy(true); setError('');
     try {
-      const result = await signInWithPassword(email.trim(), password);
+      const result = await signInWithPassword(loginEmail.trim(), loginPassword);
       setUser(result.user); setProfile(null); router.replace('/(tabs)');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Email sign-in is unavailable.'); }
     finally { setBusy(false); }
   };
+  const submitEmail = () => void signInWithCredentials(email, password);
 
   const submitCode = async () => {
     if (code.trim().length < 4) {
@@ -118,7 +131,7 @@ export default function SignInScreen() {
         <Text style={styles.secondaryText}>{googleBusy ? t('Connecting to Google...') : googleRequest ? t('Continue with Google') : t('Google sign-in is not configured')}</Text>
       </Pressable>
       <Text style={[styles.muted, { textAlign: 'center' }]}>{t('Google access is verified by the Umutungo API before a session is created.')}</Text>
-      <Pressable style={styles.secondaryButton} onPress={() => { setEmailOpen((open) => !open); setError(''); }}><Text style={styles.secondaryText}>{emailOpen ? t('Use phone sign-in') : t('Sign in with email and password')}</Text></Pressable>
+      <Pressable style={styles.secondaryButton} onPress={() => { setEmailOpen((open) => !open); setError(''); }}><Text style={styles.secondaryText}>{emailOpen ? t('Use phone sign-in') : t('Sign in to an existing account')}</Text></Pressable>
       {emailOpen && <View style={[styles.card, { gap: 9 }]}><Text style={styles.label}>{t('Email')}</Text><TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor={colors.muted} autoCapitalize="none" keyboardType="email-address" autoComplete="email" /><Text style={styles.label}>{t('Password')}</Text><TextInput style={styles.input} value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" /><Pressable style={styles.button} disabled={busy} onPress={() => void submitEmail()}><Text style={styles.buttonText}>{busy ? t('Signing in...') : t('Sign in')}</Text></Pressable><Text style={styles.muted}>{t('Email and password are enabled for development demo accounts only. Use phone verification for live accounts.')}</Text></View>}
       {step === 'phone' ? <View style={{ gap: 10 }}>
         <Text style={styles.label}>{t('Rwanda phone number')}</Text>
@@ -130,6 +143,14 @@ export default function SignInScreen() {
         <TextInput style={styles.input} value={code} onChangeText={setCode} placeholder={t('Enter the code you received')} placeholderTextColor={colors.muted} keyboardType="number-pad" maxLength={6} autoComplete="one-time-code" />
         <Pressable style={styles.button} disabled={busy} onPress={() => void submitCode()}><Text style={styles.buttonText}>{busy ? t('Verifying...') : t('Verify and continue')}</Text></Pressable>
         <Pressable style={styles.secondaryButton} onPress={() => setStep('phone')}><Text style={styles.secondaryText}>{t('Change phone number')}</Text></Pressable>
+      </View>}
+      {__DEV__ && <View style={[styles.card, { gap: 8, marginTop: 12 }]}>
+        <Text style={styles.heading}>Testing credentials</Text>
+        <Text style={styles.muted}>Development builds only. Tap an account to sign in.</Text>
+        {demoAccounts.map((account) => <Pressable key={account.email} style={[styles.secondaryButton, { alignItems: 'flex-start', paddingVertical: 9 }]} disabled={busy} onPress={() => void signInWithCredentials(account.email, account.password)}>
+          <Text style={styles.secondaryText}>{account.label}</Text>
+          <Text style={styles.muted}>{account.email} · {account.password}</Text>
+        </Pressable>)}
       </View>}
       <View style={[styles.card, { gap: 8, marginTop: 12 }]}>
         <Text style={styles.heading}>{t('Apple sign-in')}</Text>

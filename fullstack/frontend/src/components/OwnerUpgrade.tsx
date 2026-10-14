@@ -27,11 +27,12 @@ export function OwnerUpgrade() {
     const result = await umutungoApi<UpgradeResponse>('/api/v1/owner/upgrades');
     if (result) {
       setData(result);
-      setMessage('');
       const latest = result.purchases[0];
       if (latest) setPurchase(latest);
+      return result;
     } else {
       setMessage('Sign in as a Property Owner to view plans and payment status.');
+      return null;
     }
   }, []);
 
@@ -45,8 +46,8 @@ export function OwnerUpgrade() {
   const startPayment = async () => {
     setBusy(true);
     setMessage('');
+    const keyStorage = `umutungo-owner-upgrade-key-${selected}`;
     try {
-      const keyStorage = `umutungo-owner-upgrade-key-${selected}`;
       let key = window.localStorage.getItem(keyStorage);
       if (!key || (purchase?.plan === selected && ['active', 'failed'].includes(purchase.status))) {
         key = window.crypto.randomUUID();
@@ -58,10 +59,23 @@ export function OwnerUpgrade() {
       });
       if (!result) throw new Error('Sign in as a Property Owner before starting a payment.');
       setPurchase(result);
-      setMessage(result.payment_status === 'successful' ? 'MTN confirmed your payment and the plan is active.' : 'Approve the payment request on your MTN MoMo phone. This page checks the provider and activates the plan after confirmation.');
+      if (result.status === 'failed' || result.payment_status === 'failed') {
+        window.localStorage.removeItem(keyStorage);
+        setMessage('MTN could not start this payment. Check your number and balance, then try again.');
+      } else if (result.payment_status === 'successful' || result.status === 'active') {
+        setMessage('MTN confirmed your payment and the plan is active.');
+      } else {
+        setMessage('Payment request sent. Approve it on your MTN MoMo phone; this page will check for confirmation.');
+      }
       await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not start this payment.');
+      // A definitive provider failure is retryable with a fresh idempotency key.
+      // Keep the key when the outcome is still pending or unknown to avoid a duplicate charge.
+      const latest = await refresh().catch(() => null);
+      if (latest?.purchases[0]?.plan === selected && latest.purchases[0].status === 'failed') {
+        window.localStorage.removeItem(keyStorage);
+      }
     } finally {
       setBusy(false);
     }
@@ -83,6 +97,6 @@ export function OwnerUpgrade() {
       <label>MTN Rwanda number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>
       <button type="button" disabled={busy || !data || (data.prices?.[selected] ?? 0) <= 0 || (!!purchase && purchase.status === 'pending' && purchase.plan === selected)} onClick={() => void startPayment()}>{busy ? 'Starting…' : `Create RWF ${(data?.prices?.[selected] ?? 0).toLocaleString()} one-time payment request`}</button>
     </section>
-    {purchase && <section className="owner-upgrade-receipt" aria-live="polite"><h2>Payment status: {purchase.payment_status}</h2><p>Plan: {purchase.plan}</p><p>Amount: {purchase.currency} {purchase.amount.toLocaleString()}</p><p>Reference: {purchase.transaction_reference}</p>{purchase.receipt_number && <p>Receipt: {purchase.receipt_number}</p>}<p>Purchase date: {localDate(purchase.purchased_at)}</p><p>Activated: {localDate(purchase.activated_at)}</p><p>Expires: {localDate(purchase.expires_at)}</p>{purchase.status !== 'active' && <p>Your entitlement is not active while verification is pending.</p>}</section>}
+    {purchase && <section className={`owner-upgrade-receipt is-${purchase.payment_status}`} aria-live="polite"><h2>Payment {purchase.payment_status}</h2><p>Plan: {purchase.plan}</p><p>Amount: {purchase.currency} {purchase.amount.toLocaleString()}</p><p>Reference: {purchase.transaction_reference}</p>{purchase.receipt_number && <p>Receipt: {purchase.receipt_number}</p>}<p>Purchase date: {localDate(purchase.purchased_at)}</p><p>Activated: {localDate(purchase.activated_at)}</p><p>Expires: {localDate(purchase.expires_at)}</p>{purchase.payment_status === 'pending' && <p>Approve the request on your MTN MoMo phone. The plan activates only after MTN confirms payment.</p>}{purchase.payment_status === 'failed' && <p>The plan is not active. Check your phone number and try a new payment request.</p>}</section>}
   </main>;
 }

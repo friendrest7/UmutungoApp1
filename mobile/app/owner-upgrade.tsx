@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import * as Crypto from 'expo-crypto';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getOwnerUpgrades, startOwnerUpgrade, type OwnerPlan, type OwnerPurchase } from '@/api/client';
@@ -14,19 +15,20 @@ export default function OwnerUpgradeScreen() {
   const router = useRouter();
   const [prices, setPrices] = useState<Record<OwnerPlan, number> | null>(null);
   const [purchase, setPurchase] = useState<OwnerPurchase | null>(null);
-  const [selected, setSelected] = useState<OwnerPlan>('silver');
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const idempotencyKeys = useRef<Partial<Record<OwnerPlan, string>>>({});
 
   const load = useCallback(async () => {
     const result = await getOwnerUpgrades();
     setPrices(result.prices);
     setPurchase(result.purchases[0] ?? null);
+    return result;
   }, []);
 
-  useEffect(() => { void load().catch((cause) => setError(cause instanceof Error ? cause.message : 'Could not load Owner plans.')); }, [load]);
+  useEffect(() => { void Promise.resolve().then(load).catch((cause) => setError(cause instanceof Error ? cause.message : 'Could not load Owner plans.')); }, [load]);
   useEffect(() => {
     if (purchase?.status !== 'pending') return;
     const timer = setInterval(() => { void load().catch(() => undefined); }, 8000);
@@ -34,18 +36,28 @@ export default function OwnerUpgradeScreen() {
   }, [purchase?.status, load]);
 
   const start = async (plan: OwnerPlan) => {
-    if (!phone.trim()) { setError('Enter your MTN Rwanda number.'); return; }
+    const normalizedPhone = phone.trim().replace(/[\s()-]/g, '');
+    if (!/^(?:\+?250\d{9}|0\d{9})$/.test(normalizedPhone)) { setError('Enter a valid Rwanda number, for example +250 7XX XXX XXX.'); return; }
     setBusy(true); setError(''); setNotice('Starting MTN MoMo request…');
-    const idempotencyKey = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const idempotencyKey = idempotencyKeys.current[plan] ?? Crypto.randomUUID();
+    idempotencyKeys.current[plan] = idempotencyKey;
     try {
-      const result = await startOwnerUpgrade({ plan, phone: phone.trim(), idempotency_key: idempotencyKey });
+      const result = await startOwnerUpgrade({ plan, phone: normalizedPhone, idempotency_key: idempotencyKey });
       setPurchase(result);
-      setNotice('Approve the request on your phone. This screen will update after MTN confirms it.');
+      if (result.payment_status === 'failed' || result.status === 'failed') {
+        delete idempotencyKeys.current[plan];
+        setNotice('MTN could not start this payment. Check your number and balance, then try again.');
+      } else if (result.payment_status === 'successful' || result.status === 'active') {
+        setNotice('MTN confirmed your payment and the plan is active.');
+      } else {
+        setNotice('Payment request sent. Approve it on your MTN MoMo phone; this screen will check for confirmation.');
+      }
       await load();
     } catch (cause) {
       setNotice('');
       setError(cause instanceof Error ? cause.message : 'MTN payment could not be started.');
-      await load().catch(() => undefined);
+      const latest = await load().catch(() => null);
+      if (latest?.purchases[0]?.plan === plan && latest.purchases[0].status === 'failed') delete idempotencyKeys.current[plan];
     } finally { setBusy(false); }
   };
 
@@ -61,7 +73,7 @@ export default function OwnerUpgradeScreen() {
     {plans.map((plan) => <View key={plan} style={[styles.card, { gap: 8 }]}>
       <Text style={styles.heading}>{plan[0].toUpperCase() + plan.slice(1)}</Text>
       <Text style={styles.body}>{plan === 'silver' ? '90 days' : plan === 'gold' ? '180 days' : '365 days'} · RWF {(prices?.[plan] ?? 0).toLocaleString()}</Text>
-      <Pressable style={styles.button} disabled={busy || (prices?.[plan] ?? 0) <= 0 || purchase?.status === 'pending'} onPress={() => void start(plan)}><Text style={styles.buttonText}>{busy ? 'Starting…' : `Pay RWF ${(prices?.[plan] ?? 0).toLocaleString()} with MTN MoMo`}</Text></Pressable>
+      <Pressable style={styles.button} disabled={busy || (prices?.[plan] ?? 0) <= 0 || (purchase?.status === 'pending' && purchase.plan === plan)} onPress={() => void start(plan)}><Text style={styles.buttonText}>{busy ? 'Starting…' : `Pay RWF ${(prices?.[plan] ?? 0).toLocaleString()} with MTN MoMo`}</Text></Pressable>
     </View>)}
     <View style={[styles.card, { gap: 8 }]}><Text style={styles.heading}>MTN Rwanda phone number</Text><TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="+250 7XX XXX XXX" placeholderTextColor={colors.muted} keyboardType="phone-pad" autoComplete="tel" /></View>
     {notice ? <Text style={{ color: colors.greenDark, fontWeight: '700' }}>{notice}</Text> : null}

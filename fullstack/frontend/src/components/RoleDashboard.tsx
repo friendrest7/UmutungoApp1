@@ -353,17 +353,6 @@ function DashboardUtilityDock({ isAdmin = false, role }: { isAdmin?: boolean; ro
   </div>;
 }
 
-function LegacyTenantWorkspaceSection({ view }: { view: string }) {
-  const panels: Record<string, { eyebrow: string; title: string; description: string; icon: IconName }> = {
-    'Saved properties': { eyebrow: 'Your shortlist', title: 'Saved properties', description: 'Keep the homes, apartments, and spaces you want to compare close at hand.', icon: 'heart' },
-    Viewings: { eyebrow: 'Your calendar', title: 'Upcoming viewings', description: 'See every confirmed visit and keep the next step clear.', icon: 'bookPen' },
-    Messages: { eyebrow: 'Stay connected', title: 'Messages', description: 'Continue conversations with landlords and property contacts from one place.', icon: 'users' },
-  };
-  const panel = panels[view] ?? panels['Saved properties'];
-  const rows = view === 'Saved properties' ? [{ title: 'Light-filled Kacyiru apartment', detail: '2 beds Ã‚Â· Kacyiru Ã‚Â· RWF 1.1M / month', action: 'View property' }, { title: 'Four-bedroom home with garden', detail: 'Gisozi Ã‚Â· RWF 1.25M / month', action: 'Compare' }, { title: 'Nyarutarama family residence', detail: '5 beds Ã‚Â· RWF 2.4M / month', action: 'View property' }] : view === 'Viewings' ? [{ title: 'Kacyiru apartment', detail: 'Tomorrow Ã‚Â· 11:30 AM Ã‚Â· Confirmed', action: 'View details' }, { title: 'Gisozi family home', detail: 'Friday Ã‚Â· 2:00 PM Ã‚Â· Landlord confirmed', action: 'Open visit' }] : [{ title: 'Eric N. Ã‚Â· Kacyiru apartment', detail: 'Landlord replied 10 min ago', action: 'Open message' }, { title: 'Aline M. Ã‚Â· Gisozi family home', detail: 'Viewing details shared yesterday', action: 'Reply' }];
-  return <section className="tenant-workspace-section"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">{panel.eyebrow}</span><h2>{panel.title}</h2><p>{panel.description}</p></div><span className="tenant-workspace-icon"><Icon name={panel.icon} size={22} /></span></div><div className="tenant-workspace-list">{rows.map((row) => <article key={row.title}><span className="tenant-workspace-row-icon"><Icon name={panel.icon} size={16} /></span><div><strong>{row.title}</strong><small>{row.detail}</small></div><button type="button">{row.action}<Icon name="arrow" size={14} /></button></article>)}</div><button className="role-dashboard-primary" type="button"><Icon name={view === 'Messages' ? 'bookPen' : 'search'} size={16} /> {view === 'Saved properties' ? 'Explore more properties' : view === 'Viewings' ? 'Find another viewing' : 'Start a new conversation'}</button></section>;
-}
-
 type TenantWorkspaceProps = { view: string; tenantData?: TenantDashboardData; favorites?: FavoriteItem[]; notifications?: ApiNotification[]; onViewed?: (application: ApiApplication) => void; onPay?: (application: ApiApplication) => void; onContact?: (application: ApiApplication) => void; onReview?: (application: ApiApplication) => void; onAction?: (action: string) => void; onPrimaryAction?: (action: string) => void; notice?: string };
 
 function TenantWorkspaceActionDialog({ action, onClose, onNotice }: { action: 'payment-method' | 'maintenance' | 'commissioner'; onClose: () => void; onNotice: (notice: string) => void }) {

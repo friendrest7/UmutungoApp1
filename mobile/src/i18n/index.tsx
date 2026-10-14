@@ -63,10 +63,10 @@ const LANGUAGE_KEY = 'umutungo-language';
 
 export function LocalizationProvider({ children }: PropsWithChildren) {
   const { profile } = useAuth();
-  const [language, setLanguageState] = useState<Language>('en');
-  useEffect(() => { void SecureStore.getItemAsync(LANGUAGE_KEY).then((stored) => setLanguageState(normalizeLanguage(stored))); }, []);
-  useEffect(() => { if (profile?.language) { const next = normalizeLanguage(profile.language); setLanguageState(next); void SecureStore.setItemAsync(LANGUAGE_KEY, next); } }, [profile?.language]);
-  const setLanguage = async (next: Language) => { setLanguageState(next); await SecureStore.setItemAsync(LANGUAGE_KEY, next); };
+  const [storedLanguage, setStoredLanguage] = useState<Language>('en');
+  useEffect(() => { void SecureStore.getItemAsync(LANGUAGE_KEY).then((stored) => setStoredLanguage(normalizeLanguage(stored))); }, []);
+  const language = normalizeLanguage(profile?.language ?? storedLanguage);
+  const setLanguage = async (next: Language) => { setStoredLanguage(next); await SecureStore.setItemAsync(LANGUAGE_KEY, next); };
   const value = useMemo(() => ({ language, setLanguage, t: (key: string) => t(language, key) }), [language]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

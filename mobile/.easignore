@@ -11,3 +11,18 @@ android/
 .turbo/
 .cache/
 coverage/
+
+# EAS uploads the monorepo context, so ignore generated files by repository path too.
+/.git/
+/mobile/node_modules/
+/mobile/.expo/
+/mobile/dist/
+/mobile/results/
+/mobile/android/
+/mobile/.gradle/
+/mobile/coverage/
+/fullstack/frontend/node_modules/
+/fullstack/frontend/.next/
+/fullstack/frontend/dist/
+/fullstack/frontend/.turbo/
+/fullstack/backend/storage/

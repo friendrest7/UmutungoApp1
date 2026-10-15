@@ -11,6 +11,7 @@ import { PropertySearch } from '../components/PropertySearch';
 import { Language, t } from '../data/translations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 import { toProperty, type ApiListing } from '../lib/listings';
+import { marketReferenceListings } from '../data/marketReferenceListings';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 
@@ -27,6 +28,11 @@ const categories = [
   { name: 'Equipment', slug: 'equipment', detail: 'Tools and equipment for every project.', image: '/properties/commercial-02.jpg' },
   { name: 'Other assets', slug: 'other', detail: 'Other rentable, sellable, or bookable assets.', image: '/properties/story-detail.jpg' },
 ];
+const featuredMarketListings = [
+  'quick-kabeza-rent', 'quick-city-lights-villa', 'rp-gisozi-apartment',
+  'homeland-remera-plot', 'automarket-toyota-chr-2021', 'yheza-new-sofa',
+  'agrimobile-tractor-service', 'farmgate-california-rabbits',
+].map((id) => marketReferenceListings.find((item) => item.id === id)).filter((item): item is NonNullable<typeof item> => Boolean(item));
 
 
 export default function HomePage() {
@@ -188,6 +194,7 @@ export default function HomePage() {
       <section className="section section-property container" id="properties">
         <div className="section-heading split-heading"><div><p className="eyebrow">{t(language, 'Properties')}</p><h2>{t(language, 'Available listings')}</h2></div><a className="featured-shop-link" href="/categories/houses">{t(language, 'View All Properties')} <Icon name="arrow" size={15} /></a></div>
         <div className="property-grid">{featuredProperties.length ? featuredProperties.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />) : <div className="category-empty"><Icon name="home" size={21} /><h3>{t(language, 'No listings are available yet')}</h3><p>{t(language, 'Published properties will appear here when an owner posts them.')}</p></div>}</div>
+        <div className="landing-market-listings"><div className="landing-market-heading"><div><p className="eyebrow">Independent marketplace listings</p><h3>More places and assets across Rwanda</h3></div><p>Advertised by third parties. Confirm current price and availability with the source.</p></div><div className="property-grid">{featuredMarketListings.map((item) => <article className="landing-market-card" key={item.id}><a className="landing-market-image" href={item.sourceUrl} target="_blank" rel="noreferrer" style={{ backgroundImage: `linear-gradient(180deg, transparent 30%, rgba(5, 15, 8, .56)), url(${item.image})` }} aria-label={`View source listing: ${item.title}`}><span>Illustrative image</span></a><div className="landing-market-copy"><small>{item.source} · {item.category}</small><span className={`market-price-tier tier-${item.tier.toLowerCase()}`}>{item.tier}</span><h4>{item.title}</h4><p><Icon name="pin" size={13} /> {item.location}</p><strong>{item.price}</strong><a href={item.sourceUrl} target="_blank" rel="noreferrer">View source <Icon name="arrow" size={13} /></a></div></article>)}</div></div>
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">

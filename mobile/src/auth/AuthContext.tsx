@@ -17,7 +17,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setProfile(result.profile);
       await cacheSession(result.user, result.profile);
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === undefined) {
+      if (cause instanceof ApiError && (cause.status === undefined || cause.status >= 500)) {
         const cached = await getCachedSession();
         if (cached) { setUser(cached.user); setProfile(cached.profile); return; }
       }

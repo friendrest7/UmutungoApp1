@@ -77,6 +77,7 @@ export default function PropertyDetailPage() {
   const [property, setProperty] = useState<PropertyPlaceholder | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewerMode, setViewerMode] = useState<'tour' | 'plan' | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
 
   useEffect(() => {
     const id = decodeURIComponent(params.id ?? '');
@@ -147,19 +148,20 @@ export default function PropertyDetailPage() {
                 <small>{property.poster?.location ?? property.location}</small>
               </div>
             </div>
-            <a className="property-detail-cta" href={`mailto:hello@umutungo.rw?subject=${encodeURIComponent(`Enquiry about ${property.title}`)}`}>
+            <button className="property-detail-cta" type="button" onClick={() => setRequestOpen(true)}>
               Request information →
-            </a>
-            <small className="property-detail-note">Contact details shown here are limited to the poster’s public, verified business information.</small>
+            </button>
+            <small className="property-detail-note">Continue securely to send your request. Payment, when required, uses MTN MoMo.</small>
           </article>
         </section>
       </main>
-      {viewerMode && (
+      {(viewerMode || requestOpen) && (
         <PropertyViewer
           language="English"
           property={property}
-          initialMode={viewerMode}
-          onClose={() => setViewerMode(null)}
+          initialMode={viewerMode ?? undefined}
+          initialRequest={requestOpen}
+          onClose={() => { setViewerMode(null); setRequestOpen(false); }}
         />
       )}
     </>

@@ -111,17 +111,15 @@ export type AboutVideo = {
   updated_at: string;
 };
 
-const DEFAULT_API_URL = 'https://umutungoapp1-backend.onrender.com';
-
 export function apiBaseUrl() {
-  const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').trim().replace(/\/$/, '');
-  const isProduction = process.env.NODE_ENV === 'production';
-  if (isProduction) return '';
-  return configured || DEFAULT_API_URL;
+  // Route browser requests through the same-origin Next.js rewrite. This avoids
+  // CORS failures when local development runs on a port other than 3000.
+  return '';
 }
 
 function apiIsAvailable() {
-  return process.env.NODE_ENV === 'production' || Boolean(apiBaseUrl());
+  // next.config.mjs rewrites /api/v1 requests to the configured backend.
+  return true;
 }
 
 export function apiToken() {

@@ -10,7 +10,7 @@ import { umutungoApi } from '../lib/umutungoApi';
 import { dashboardPathForAccountRole } from '../lib/accountRouting';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
-type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode };
+type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; initialRequest?: boolean };
 type TransactionType = 'rent' | 'buy';
 type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
@@ -39,7 +39,7 @@ function escapeReceiptValue(value: string | number) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character] ?? character);
 }
 
-export function PropertyViewer({ language, property, onClose, initialMode = 'photos' }: PropertyViewerProps) {
+export function PropertyViewer({ language, property, onClose, initialMode = 'photos', initialRequest = false }: PropertyViewerProps) {
   const images = property.images?.length ? property.images : [property.image];
   const [activeImage, setActiveImage] = useState(0);
   const [mode, setMode] = useState<ViewerMode>(initialMode);
@@ -110,6 +110,11 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const isCommercial = property.type === 'Commercial' || property.type === 'Offices';
   const availableFor = property.availableFor ?? (property.priceNote.includes('/ month') || property.priceNote.includes('/ night') ? 'rent' : 'sale');
   const availableActions: TransactionType[] = availableFor === 'both' ? ['rent', 'buy'] : [availableFor === 'rent' ? 'rent' : 'buy'];
+  useEffect(() => {
+    if (!initialRequest) return;
+    setTransactionType(availableFor === 'rent' ? 'rent' : 'buy');
+    setTransactionOpen(true);
+  }, [initialRequest, availableFor, property.id]);
   const openTransaction = () => {
     setTransactionType(availableActions[0]);
     setTransactionStep('choose');
@@ -384,7 +389,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
           {transactionStep === 'choose' && <>
             <span className="eyebrow">Next step</span>
             <h2 id="property-action-title">Buy or rent this property</h2>
-            <p className="property-action-intro">Choose how you would like to continue with this listing.</p>
+            <p className="property-action-intro">Choose how you would like to continue. Purchase requests continue to the MTN MoMo payment prompt. Rental applications are sent first; payment follows owner acceptance.</p>
             <span className="property-availability-badge">{availableFor === 'both' ? 'Available to buy or rent' : availableFor === 'rent' ? 'Available to rent only' : 'Available to buy only'}</span>
             <div className="property-action-options">
               {availableActions.map((option) => <button className={"property-action-option " + (transactionType === option ? 'is-selected' : '')} type="button" key={option} onClick={() => { setTransactionType(option); setPaymentError(''); }}>

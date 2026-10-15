@@ -3550,7 +3550,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .property-detail-poster > div { display: grid; gap: 4px; min-width: 0; }
 .property-detail-poster strong { overflow: hidden; color: #23382a; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .property-detail-poster small, .property-detail-note { color: #78847b; font-size: 10px; line-height: 1.5; }
-.property-detail-cta { display: flex; min-height: 48px; align-items: center; justify-content: center; gap: 9px; border-radius: 11px; background: #0b6b3a; box-shadow: 0 7px 18px rgba(11,107,58,.16); color: #fff; font-size: 12px; font-weight: 800; text-decoration: none; transition: background .2s, transform .2s; }
+.property-detail-cta { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 11px; padding: 0 16px; background: #0b6b3a; box-shadow: 0 7px 18px rgba(11,107,58,.16); color: #fff; font: inherit; font-size: 12px; font-weight: 800; text-decoration: none; cursor: pointer; transition: background .2s, transform .2s; }
 .property-detail-cta:hover { background: #064c29; transform: translateY(-1px); }
 .property-detail-note { display: block; margin-top: 11px; }
 .property-detail-error { display: grid; min-height: 100vh; align-content: center; justify-items: center; padding: 32px; background: #f4f7f3; text-align: center; }

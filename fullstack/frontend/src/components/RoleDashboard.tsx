@@ -578,7 +578,7 @@ function LandlordDashboard() {
       const storedNotifications = JSON.parse(window.localStorage.getItem('umutungo-landlord-notifications') ?? '[]') as Array<Record<string, unknown>>;
       window.localStorage.setItem('umutungo-landlord-notifications', JSON.stringify(storedNotifications.map((item) => item.applicationId === application.id ? { ...item, status: 'accepted', readAt: new Date().toISOString() } : item)));
       const tenantNotifications = JSON.parse(window.localStorage.getItem('umutungo-tenant-notifications') ?? '[]') as Array<Record<string, unknown>>;
-      window.localStorage.setItem('umutungo-tenant-notifications', JSON.stringify([{ id: `notification-decision-${application.id}`, type: 'application_decision', title: 'Rental application accepted', body: `${application.listing_title} was accepted${agreedPrice ? ` at RWF ${agreedPrice.toLocaleString()} per month` : ''}.`, createdAt: new Date().toISOString(), readAt: null }, ...tenantNotifications]));
+      window.localStorage.setItem('umutungo-tenant-notifications', JSON.stringify([{ id: `notification-decision-${application.id}`, type: 'application_decision', title: 'Rental application accepted', body: `${application.listing_title} was accepted${agreedPrice ? ` at RWF ${agreedPrice.toLocaleString()} per month` : ''}. Open Applications, mark the house as seen, then choose Pay rent to start an MTN MoMo payment.`, createdAt: new Date().toISOString(), readAt: null }, ...tenantNotifications]));
       window.dispatchEvent(new CustomEvent('umutungo:notifications-changed'));
     } catch { /* Keep the in-memory approval visible if storage is unavailable. */ }
     window.dispatchEvent(new CustomEvent('umutungo:tenant-data-changed'));
@@ -882,9 +882,28 @@ function TenantDashboard() {
       if (!viewed) throw new Error('Sign in before starting an MTN MoMo payment.');
       const result = await umutungoApi<{ id: string; status: string; amount: number; currency: string; provider: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify(payload) });
       if (!result) throw new Error('Sign in before starting an MTN MoMo payment.');
-      setTenantData((current) => ({ ...current, payments: [{ ...result, related_type: 'application', related_id: selectedApplication.id, created_at: new Date().toISOString() }, ...current.payments] }));
+      let status = result.status;
+      for (let attempt = 0; status === 'pending' && attempt < 15; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 4000));
+        try {
+          const confirmation = await umutungoApi<{ id: string; status: string }>(`/api/v1/payments/${encodeURIComponent(result.id)}/confirm`, { method: 'POST', body: '{}' });
+          if (confirmation) status = confirmation.status;
+        } catch {
+          break;
+        }
+      }
+      const payment = { ...result, status, related_type: 'application', related_id: selectedApplication.id, created_at: new Date().toISOString() };
+      setTenantData((current) => ({ ...current, payments: [payment, ...current.payments.filter((item) => item.id !== result.id)] }));
+      try {
+        const apiNotifications = await umutungoApi<{ items: ApiNotification[] }>('/api/v1/notifications');
+        if (apiNotifications) {
+          const unread = apiNotifications.items.filter((item) => !item.read_at);
+          setNotifications(unread);
+          setTenantData((current) => ({ ...current, notifications: unread }));
+        }
+      } catch { /* Payment result remains visible if notification refresh is delayed. */ }
       closeDialog();
-      setNotice('Approve the payment request on your MTN MoMo phone. Your payment history will update after provider confirmation.');
+      setNotice(status === 'successful' ? 'MTN MoMo confirmed your rent payment.' : status === 'failed' ? 'MTN MoMo did not confirm the payment. You can try again from Applications.' : 'Approve the payment request on your MTN MoMo phone. We are still waiting for confirmation.');
     } catch (cause) {
       setPaymentError(cause instanceof Error ? cause.message : 'MTN payment could not be started.');
     } finally {

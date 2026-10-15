@@ -1588,8 +1588,11 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request, id st
 		_, _ = tx.Exec(r.Context(), `UPDATE users SET role='tenant', updated_at=NOW() WHERE id=$1 AND role='client'`, applicantID)
 	}
 	decisionBody := "Your rental application was " + input.Status
-	if input.Status == "accepted" && input.RentAmount != nil {
-		decisionBody = fmt.Sprintf("Your rental application was accepted at RWF %.0f per month", *input.RentAmount)
+	if input.Status == "accepted" {
+		decisionBody = "Your rental application was accepted. Open Applications, mark the house as seen, then choose Pay rent to start an MTN MoMo payment."
+		if input.RentAmount != nil {
+			decisionBody = fmt.Sprintf("Your rental application was accepted at RWF %.0f per month. Open Applications, mark the house as seen, then choose Pay rent to start an MTN MoMo payment.", *input.RentAmount)
+		}
 	}
 	if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'application_decision','Rental application update',$2)`, applicantID, decisionBody); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create application notification")
@@ -1674,7 +1677,7 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "application":
-		if err := s.db.QueryRow(r.Context(), `SELECT l.price,l.currency FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.id=$1 AND a.applicant_id=$2 AND a.viewed_at IS NOT NULL AND a.status='accepted'`, input.RelatedID, user.ID).Scan(&input.Amount, &input.Currency); err != nil {
+		if err := s.db.QueryRow(r.Context(), `SELECT COALESCE((SELECT ra.rent_amount FROM rental_agreements ra WHERE ra.listing_id=a.listing_id AND ra.tenant_id=a.applicant_id AND ra.status='active' ORDER BY ra.created_at DESC LIMIT 1),l.price), COALESCE((SELECT ra.currency FROM rental_agreements ra WHERE ra.listing_id=a.listing_id AND ra.tenant_id=a.applicant_id AND ra.status='active' ORDER BY ra.created_at DESC LIMIT 1),l.currency) FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.id=$1 AND a.applicant_id=$2 AND a.viewed_at IS NOT NULL AND a.status='accepted'`, input.RelatedID, user.ID).Scan(&input.Amount, &input.Currency); err != nil {
 			errorJSON(w, http.StatusBadRequest, "the rental application must be accepted before payment")
 			return
 		}
@@ -2117,8 +2120,9 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id strin
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	var provider, reference, status string
-	if err := s.db.QueryRow(r.Context(), `SELECT provider,COALESCE(provider_reference,''),status FROM payments WHERE id=$1 AND user_id=$2`, id, user.ID).Scan(&provider, &reference, &status); err != nil {
+	var provider, reference, status, currency string
+	var amount float64
+	if err := s.db.QueryRow(r.Context(), `SELECT provider,COALESCE(provider_reference,''),status,amount,currency FROM payments WHERE id=$1 AND user_id=$2`, id, user.ID).Scan(&provider, &reference, &status, &amount, &currency); err != nil {
 		errorJSON(w, http.StatusNotFound, "payment not found")
 		return
 	}
@@ -2164,6 +2168,15 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id strin
 		}
 		if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_confirmed','Property payment confirmed',$2)`, ownerID, fmt.Sprintf("A payment for %s has been confirmed by %s.", listingTitle, user.Name)); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not notify property owner")
+			return
+		}
+		if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_confirmed','MTN MoMo payment confirmed',$2)`, user.ID, fmt.Sprintf("Your %s %.0f payment for %s was confirmed by MTN MoMo.", currency, amount, listingTitle)); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not notify customer")
+			return
+		}
+	} else if providerStatus == "failed" {
+		if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_failed','MTN MoMo payment failed',$2)`, user.ID, "MTN MoMo could not confirm your payment. Check your phone and try again."); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not notify customer")
 			return
 		}
 	}

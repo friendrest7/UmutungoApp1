@@ -6,7 +6,7 @@ import { AiChatbot } from '../../components/AiChatbot';
 import { Icon } from '../../components/Icons';
 import { InterfacePreferences } from '../../components/InterfacePreferences';
 import { Logo } from '../../components/Logo';
-import { apiBaseUrl, DirectoryProfile, publicUmutungoApi } from '../../lib/umutungoApi';
+import { DirectoryProfile, publicUmutungoApi } from '../../lib/umutungoApi';
 import { usePersistentLanguage } from '../../lib/language';
 
 type DirectoryResponse = { items: DirectoryProfile[]; count: number };
@@ -76,7 +76,7 @@ export default function DirectoryPage() {
           <div><h2>{query ? `Results for “${query}”` : 'Landlords and Komisiyoneri'}</h2></div>
           <span>{loading ? 'Searching…' : `${profiles.length} found`}</span>
         </div>
-        {error && <p className="directory-error" role="alert">{error}{!apiBaseUrl() && process.env.NODE_ENV !== 'production' ? ' Set NEXT_PUBLIC_API_URL for local development.' : ''}</p>}
+        {error && <p className="directory-error" role="alert">{error}</p>}
         {!loading && !error && !profiles.length && <div className="directory-empty"><Icon name="search" size={22} /><h3>{query ? 'No property found' : 'No professionals found'}</h3><p>{query ? 'Try another meaningful search, like “white car”.' : 'Try a different name, business, or location.'}</p></div>}
         <div className="professional-directory-grid">
           {profiles.map((profile) => <article className="professional-card" key={profile.id}>

@@ -126,7 +126,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     return () => { window.removeEventListener('umutungo:auth-changed', readTestingAccount); window.removeEventListener('storage', readTestingAccount); };
   }, []);
   const privateTestingListings: Listing[] = testingAccount ? testingListings.filter((property) => property.categorySlug === slug).map((property) => {
-    const details = [property.bedrooms > 0 ? `${property.bedrooms} bedrooms` : '', property.bathrooms > 0 ? `${property.bathrooms} bathrooms` : '', property.area > 0 ? `${property.area} m²` : ''].filter(Boolean).join(', ');
+    const details = [property.bedrooms > 0 ? `${property.bedrooms} bedrooms` : '', property.bathrooms > 0 ? `${property.bathrooms} bathrooms` : '', property.area > 0 ? `${property.area} mÂ²` : ''].filter(Boolean).join(', ');
     return {
       id: property.id, title: property.title, location: property.location,
       price: `${property.price}${property.priceNote.startsWith('/') ? ` ${property.priceNote}` : property.priceNote}`,

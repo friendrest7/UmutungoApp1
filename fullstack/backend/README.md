@@ -74,6 +74,8 @@ The admin About-video upload is stored in the Render PostgreSQL database (`about
 
 ## Production follow-up
 
+For Render deployment, set the backend service's `DATABASE_URL` from the PostgreSQL database's **Internal Database URL** (or link the database and map that value into the service environment). Do not use `localhost` for a hosted database. The backend intentionally has no production localhost fallback and exits with a configuration error if `DATABASE_URL` is missing.
+
 MTN MoMo Collection request-to-pay and provider status checks are implemented. The API defaults to sandbox (`MTN_TARGET_ENVIRONMENT=sandbox`, `MTN_BASE_URL=https://sandbox.momodeveloper.mtn.com`). Production requires MTN Rwanda onboarding and production credentials; set `MTN_TARGET_ENVIRONMENT=mtnrwanda` and `MTN_BASE_URL=https://momoapi.mtn.com` in the backend hosting environment. The service polls MTN for results and never trusts a client confirmation.
 
 Phone verification uses MTN SMS v3, which has a separate app credential set from MoMo Collection. Configure `MTN_SMS_CLIENT_ID`, `MTN_SMS_CLIENT_SECRET`, and the MTN-approved Rwanda `MTN_SMS_SERVICE_CODE` on the backend. A MoMo `MTN_API_KEY` alone cannot send SMS. Development mode continues to return the fixed verification code unless SMS v3 credentials are configured. Production will return a clear error instead of claiming an SMS was sent when SMS credentials are missing or MTN rejects delivery.

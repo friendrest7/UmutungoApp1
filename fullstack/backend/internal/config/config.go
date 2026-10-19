@@ -33,10 +33,15 @@ type Config struct {
 
 func Load() Config {
 	loadLocalEnv()
+	appEnv := env("APP_ENV", "development")
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" && appEnv == "development" {
+		databaseURL = "postgres://umutungo:umutungo@localhost:5432/umutungo?sslmode=disable"
+	}
 	return Config{
-		AppEnv:               env("APP_ENV", "development"),
+		AppEnv:               appEnv,
 		Port:                 env("PORT", "8080"),
-		DatabaseURL:          env("DATABASE_URL", "postgres://umutungo:umutungo@localhost:5432/umutungo?sslmode=disable"),
+		DatabaseURL:          databaseURL,
 		CorsOrigins:          env("CORS_ORIGINS", "http://localhost:3000"),
 		MigrationsPath:       env("MIGRATIONS_PATH", "migrations"),
 		MediaUploadDir:       env("MEDIA_UPLOAD_DIR", "storage/media"),

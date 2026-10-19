@@ -13,6 +13,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if cfg.DatabaseURL == "" {
+		log.Fatal("DATABASE_URL is required outside development; set it to the Render PostgreSQL internal connection URL")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

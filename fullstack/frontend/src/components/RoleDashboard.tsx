@@ -22,7 +22,7 @@ type OwnerListingRecord = { id: string; category: string; transaction_type: stri
 
 const mapOwnerListing = (item: OwnerListingRecord): DashboardListing => {
   const intent = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
-  return { id: item.id, title: item.title, type: item.category, intent, location: [item.sector, item.district, item.province].filter(Boolean).join(' Ã‚Â· '), price: `${item.currency || 'RWF'} ${item.price.toLocaleString()}`, priceNote: intent === 'For rent' ? '/ month' : ' asking', cover: item.cover || '/properties/house-01.jpg', images: item.cover ? [item.cover] : ['/properties/house-01.jpg'], bedrooms: 'Ã¢â‚¬â€', bathrooms: 'Ã¢â‚¬â€', area: 'Ã¢â‚¬â€', status: item.status, savedAt: item.created_at };
+  return { id: item.id, title: item.title, type: item.category, intent, location: [item.sector, item.district, item.province].filter(Boolean).join(' Ã‚Â· '), price: `${item.currency || 'RWF'} ${item.price.toLocaleString()}`, priceNote: intent === 'For rent' ? '/ month' : '', cover: item.cover || '/properties/house-01.jpg', images: item.cover ? [item.cover] : ['/properties/house-01.jpg'], bedrooms: 'Ã¢â‚¬â€', bathrooms: 'Ã¢â‚¬â€', area: 'Ã¢â‚¬â€', status: item.status, savedAt: item.created_at };
 };
 
 const configs: Record<DashboardRole, DashboardConfig> = {

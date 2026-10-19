@@ -347,7 +347,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   return <div className="property-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby="property-viewer-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="property-viewer">
       <header className="property-viewer-header">
-        <div><span className="eyebrow">{t(language, 'Property details')}</span><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button></div>
+        <div><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button></div>
         <button className="property-viewer-close" type="button" onClick={onClose} aria-label={t(language, 'Close property viewer')}><Icon name="x" size={20} /></button>
       </header>
 
@@ -377,7 +377,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
           <div className="viewer-thumbnails">{images.map((image, index) => <button className={mode === 'photos' && activeImage === index ? 'is-active' : ''} type="button" key={`${image}-thumb-${index}`} onClick={() => { setMode('photos'); setActiveImage(index); }}><Image src={image} alt="" fill sizes="90px" /></button>)}</div>
         </div>
 
-        <aside className="property-viewer-details"><div className="viewer-price-row"><div><span className="property-type">{t(language, property.type)}</span><strong>{property.price}</strong><small>{t(language, property.priceNote)}</small></div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats"><span><strong>{property.bedrooms}</strong>{t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong>{t(language, 'baths')}</span><span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span></div><p className="viewer-description">{property.description?.trim() || 'Contact the owner for more information about this property.'}</p><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button><small className="viewer-listed">{t(language, property.listed)}</small></aside>
+        <aside className="property-viewer-details"><div className="viewer-price-row"><div><strong>{property.price}</strong>{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <small>{t(language, property.priceNote)}</small>}</div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats"><span><strong>{property.bedrooms}</strong>{t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong>{t(language, 'baths')}</span><span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span></div><p className="viewer-description">{property.description?.trim() || 'Contact the owner for more information about this property.'}</p><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button><small className="viewer-listed">{t(language, property.listed)}</small></aside>
       </div>
     </section>
     {transactionOpen && (
@@ -438,7 +438,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <span className="eyebrow">Secure payment</span>
             <h2 id="property-action-title">Pay to continue</h2>
             <p className="property-action-intro">Choose a payment option available in Rwanda for this {transactionType === 'rent' ? 'rental request' : 'property request'}.</p>
-            <div className="payment-summary"><span>{property.title}</span><strong>{property.price} <small>{property.priceNote}</small></strong></div>
+            <div className="payment-summary"><span>{property.title}</span><strong>{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{property.priceNote}</small></>}</strong></div>
             <div className="payment-method-grid" aria-label="Payment options">
               {paymentOptions.filter((option) => option.id === 'momo').map((option) => <button className={"payment-method-card " + (paymentMethod === option.id ? 'is-selected' : '')} type="button" key={option.id} onClick={() => { setPaymentMethod(option.id); setPaymentError(''); }}>
                 <PaymentLogo method={option.id} />

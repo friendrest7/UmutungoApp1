@@ -84,7 +84,7 @@ const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlac
 
   const isRentOnly = item.intent === 'For rent' || item.intent === 'For lease';
   const isBoth = item.intent === 'For sale or rent' || item.intent === 'For sale or lease';
-  return { id: item.id, title: item.title, type, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : isBoth ? item.intent === 'For sale or lease' ? ' sale or lease' : ' sale or rent' : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images, listed: item.listed ?? 'Date unavailable', description: item.detail, availableFor: isBoth ? 'both' : isRentOnly ? 'rent' : 'sale' };
+  return { id: item.id, title: item.title, type, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : isBoth ? item.intent === 'For sale or lease' ? ' sale or lease' : ' sale or rent' : '', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images, listed: item.listed ?? 'Date unavailable', description: item.detail, availableFor: isBoth ? 'both' : isRentOnly ? 'rent' : 'sale' };
 };
 
 type DatabaseListing = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; tags?: string[]; amenities?: string[]; images?: string[]; media?: { url: string; type?: string; sort_order?: number }[]; created_at?: string; owner?: { verified?: boolean } };
@@ -220,6 +220,6 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
         </article>)}</div>
       </> : null}
     </section>
-    {activeListing && <PropertyViewer language={language} property={toViewerProperty(activeListing, rawCategory)} onClose={() => setActiveListing(null)} />}
+    {activeListing && <PropertyViewer language={language} property={toViewerProperty(activeListing, rawCategory)} initialMode="tour" onClose={() => setActiveListing(null)} />}
   </main><AiChatbot language={language} /></div>;
 }

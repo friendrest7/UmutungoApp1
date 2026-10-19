@@ -204,6 +204,6 @@ export default function HomePage() {
 
     </main>
     <Footer language={language} darkMode={darkMode} />
-    {selectedProperty && <PropertyViewer language={language} property={selectedProperty} onClose={() => setSelectedProperty(null)} />}
+    {selectedProperty && <PropertyViewer language={language} property={selectedProperty} initialMode="tour" onClose={() => setSelectedProperty(null)} />}
   </div>;
 }

@@ -3603,6 +3603,10 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .property-detail-view-actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 13px 0; }
 .property-detail-view-actions button { display: inline-flex; min-height: 39px; align-items: center; gap: 8px; padding: 0 13px; border: 1px solid #dce6dd; border-radius: 10px; background: #fff; color: #294634; cursor: pointer; font: inherit; font-size: 11px; font-weight: 750; transition: background .2s, border-color .2s; }
 .property-detail-view-actions button:hover { border-color: #a9c9b1; background: #eff7f0; }
+.property-detail-view-actions button:first-child { min-height: 44px; padding: 0 17px; border-color: #00a84f; border-radius: 999px; background: #00a84f; color: #fff; box-shadow: 0 7px 18px rgba(0, 168, 79, .2); font-size: 12px; }
+.property-detail-view-actions button:first-child:hover { border-color: #008d43; background: #008d43; }
+body.theme-dark .property-detail-view-actions button:first-child { border-color: #00a84f; background: #00a84f; color: #fff; }
+body.theme-dark .property-detail-view-actions button:first-child:hover { border-color: #11bd60; background: #11bd60; }
 .property-detail-gallery { display: flex; gap: 10px; overflow-x: auto; padding: 3px 1px 8px; }
 .property-detail-gallery img { width: 105px; height: 76px; flex: 0 0 auto; border: 1px solid #e0e7e0; border-radius: 10px; background: #e5ece5; object-fit: cover; }
 .property-detail-copy { position: sticky; top: 94px; padding: 28px; border: 1px solid #e1e8e1; border-radius: 18px; background: #fff; box-shadow: 0 14px 38px rgba(19,47,28,.07); }
@@ -3816,8 +3820,13 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .app-realistic .property-search .search-control select { border-radius: 6px; background-color: #e8f4ff !important; color: #17324a !important; -webkit-text-fill-color: #17324a; color-scheme: light; }
 .app-realistic .property-search .search-control select option { background: #e8f4ff; color: #17324a; }
 .app-realistic .property-search .search-control select:disabled { background-color: #edf2f6 !important; color: #657482 !important; -webkit-text-fill-color: #657482; }
-.app.theme-dark.app-realistic .property-search .search-control select { background-color: #e8f4ff !important; color: #17324a !important; -webkit-text-fill-color: #17324a; color-scheme: light; }
-.app.theme-dark.app-realistic .property-search .search-control select option { background: #e8f4ff; color: #17324a; }
+.app.theme-dark.app-realistic .property-search .search-control select { background-color: transparent !important; color: #f5f7fa !important; -webkit-text-fill-color: #f5f7fa; color-scheme: dark; }
+.app.theme-dark.app-realistic .property-search .search-control select option { background: #102b3e; color: #f5f7fa; }
+.app.theme-dark.app-realistic .property-search { border-color: rgba(171, 219, 185, .24) !important; background: rgba(10, 34, 49, .94) !important; box-shadow: 0 20px 48px rgba(0, 0, 0, .3) !important; }
+.app.theme-dark.app-realistic .property-search .search-control { border-radius: 9px !important; background: rgba(245, 247, 250, .07) !important; }
+.app.theme-dark.app-realistic .property-search .search-control:hover,
+.app.theme-dark.app-realistic .property-search .search-control:focus-within { background: rgba(245, 247, 250, .12) !important; }
+.app.theme-dark.app-realistic .property-search .search-control select:disabled { color: #a8b8c8 !important; -webkit-text-fill-color: #a8b8c8; }
 .owner-premium-plans > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
 .owner-premium-plans > div button { display: grid; justify-items: center; gap: 7px; padding: 12px 8px; border: 1px solid var(--post-line); border-radius: 10px; background: #fff; color: var(--post-ink); cursor: pointer; }
 .owner-premium-plans > div button.is-selected { border-color: #0b7140; box-shadow: 0 0 0 2px rgba(11,113,64,.14); }
@@ -4125,4 +4134,148 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   .hero-role-join { gap: 8px; }
   .hero-role-join .button { min-width: min(100%, 145px); flex: 1 1 145px; }
   .app-realistic .landing-hero-title { font-size: clamp(13px, 3.6vw, 18px) !important; }
+}
+
+/* Sharper hierarchy for the property details panel. */
+.app-realistic .property-viewer-header {
+  padding: 24px 30px 18px;
+}
+.app-realistic .property-viewer-header h2 {
+  margin: 0 0 8px;
+  font-size: clamp(24px, 2.6vw, 34px);
+  font-weight: 600;
+  letter-spacing: -.04em;
+}
+.app-realistic .property-viewer-header p { font-size: 12px; }
+.app-realistic .property-viewer-details {
+  gap: 0;
+  padding: 28px;
+  background: color-mix(in srgb, var(--paper) 54%, var(--surface));
+}
+.app-realistic .viewer-price-row {
+  align-items: center;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.app-realistic .viewer-price-row .property-type {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+.app-realistic .viewer-price-row strong {
+  color: var(--green-dark);
+  font-size: clamp(23px, 2vw, 29px);
+  font-weight: 700;
+  letter-spacing: -.04em;
+}
+.app-realistic .viewer-stats {
+  gap: 8px;
+  margin: 18px 0;
+  padding: 0;
+  border: 0;
+}
+.app-realistic .viewer-stats span {
+  min-height: 66px;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 10px;
+}
+.app-realistic .viewer-stats strong { color: var(--ink); font-size: 18px; }
+.app-realistic .viewer-description {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.app-realistic .viewer-highlights { margin: 16px 0 20px; }
+.app-realistic .viewer-highlights span {
+  width: fit-content;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green-dark);
+  font-size: 10px;
+  font-weight: 700;
+}
+.app-realistic .viewer-request-button {
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+.app-realistic .property-viewer-details .viewer-share,
+.app-realistic .property-viewer-details .viewer-request-button {
+  border-color: #00a84f;
+  background: #00a84f;
+  color: #fff;
+}
+.app-realistic .property-viewer-details .viewer-share:hover,
+.app-realistic .property-viewer-details .viewer-request-button:hover {
+  border-color: #007f3c;
+  background: #007f3c;
+  color: #fff;
+}
+.app-realistic .property-search .search-control {
+  position: relative;
+  cursor: pointer;
+}
+.app-realistic .property-search .search-control-copy {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 3px;
+  pointer-events: none;
+}
+.app-realistic .property-search .search-control-copy small { margin: 0; }
+.app-realistic .property-search .search-control:focus-within {
+  outline: 1px solid rgba(120, 134, 125, .55) !important;
+  outline-offset: 1px;
+  border-radius: 8px !important;
+}
+.app.theme-dark.app-realistic .property-search .search-control:focus-within {
+  outline-color: rgba(210, 224, 214, .45) !important;
+}
+.app-realistic .property-search .search-control-copy strong {
+  overflow: hidden;
+  color: #111;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-realistic .property-search .search-control-native {
+  position: absolute !important;
+  z-index: 2;
+  inset: 0;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  cursor: pointer;
+  color-scheme: light;
+}
+.app-realistic .property-search .search-control-native:disabled { cursor: not-allowed; }
+.app.theme-dark.app-realistic .property-search .search-control-copy strong { color: #f5f7fa; }
+.app.theme-dark.app-realistic .property-search .search-control-native { color-scheme: dark; }
+.app.theme-dark.app-realistic .property-search .search-control.is-disabled .search-control-copy strong { color: #a8b8c8; }
+.app-realistic .topbar .nav-sign-in,
+.app.theme-dark.app-realistic .topbar .nav-sign-in {
+  border-color: #00a84f !important;
+  background: #00a84f !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.app-realistic .topbar .nav-sign-in:hover,
+.app.theme-dark.app-realistic .topbar .nav-sign-in:hover {
+  border-color: #008d43 !important;
+  background: #008d43 !important;
+  color: #fff !important;
+}
+@media (max-width: 900px) {
+  .app-realistic .property-viewer-details { padding: 22px; }
 }

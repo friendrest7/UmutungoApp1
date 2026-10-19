@@ -29,7 +29,7 @@ export const testingListings: TestingListing[] = categories.flatMap((category) =
     id: `test-${category.slug}-${index + 1}`, categorySlug: category.slug, testingOnly: true as const,
     title: `${category.title} in ${location}`, type: category.type, location: `${location}, Rwanda`,
     price: `RWF ${(category.price + category.increment * index).toLocaleString('en-RW')}`,
-    priceNote: category.mode === 'book' ? '/ night' : category.mode === 'sale-lease' && isRent ? ' lease price' : category.mode === 'sale-hire' && isRent ? '/ day' : saleOrRent ? isRent ? '/ month' : ' asking' : category.note,
+    priceNote: category.mode === 'book' ? '/ night' : category.mode === 'sale-lease' && isRent ? ' lease price' : category.mode === 'sale-hire' && isRent ? '/ day' : saleOrRent ? isRent ? '/ month' : '' : category.note.replace(' asking', ''),
     bedrooms, bathrooms, area, accent: '#39734b', image, images: [image], listed: 'Testing account listing',
     availableFor: category.mode === 'book' || isRent ? 'rent' : 'sale',
     description: `Testing account listing for ${category.type.toLowerCase()} in ${location}.`,

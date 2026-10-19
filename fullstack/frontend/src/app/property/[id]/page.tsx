@@ -46,7 +46,7 @@ function fromApi(item: ApiListing): PropertyPlaceholder {
     type,
     location: [item.sector, item.district, item.province].filter(Boolean).join(' - '),
     price: `${item.currency ?? 'RWF'} ${Number(item.price).toLocaleString()}`,
-    priceNote: isRent ? '/ month' : ' asking',
+    priceNote: isRent ? '/ month' : '',
     bedrooms: 0,
     bathrooms: 0,
     area: 0,
@@ -77,9 +77,9 @@ export default function PropertyDetailPage() {
   const [property, setProperty] = useState<PropertyPlaceholder | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewerMode, setViewerMode] = useState<'tour' | 'plan' | null>(null);
-  const [requestOpen, setRequestOpen] = useState(false);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('view') === '3d') setViewerMode('tour');
     const id = decodeURIComponent(params.id ?? '');
     setProperty(null);
     void publicUmutungoApi<ApiListing>(`/api/v1/listings/${encodeURIComponent(id)}`)
@@ -118,7 +118,7 @@ export default function PropertyDetailPage() {
             <div className="property-detail-view-actions" aria-label="Property media">
               <button type="button" onClick={() => setViewerMode('tour')}>
                 <Icon name="sparkles" size={15} />
-                3D view
+                Explore in 3D
               </button>
               <button type="button" onClick={() => setViewerMode('plan')}>
                 <Icon name="home" size={15} />
@@ -130,10 +130,9 @@ export default function PropertyDetailPage() {
             </div>
           </div>
           <article className="property-detail-copy">
-            <span className="property-type">{property.type}</span>
             <h1>{property.title}</h1>
             <p className="property-detail-location">{property.location}</p>
-            <strong className="property-detail-price">{property.price} <small>{property.priceNote}</small></strong>
+            <strong className="property-detail-price">{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{property.priceNote}</small></>}</strong>
             <div className="property-detail-stats">
               <span><b>{property.bedrooms}</b> beds</span>
               <span><b>{property.bathrooms}</b> baths</span>
@@ -148,20 +147,15 @@ export default function PropertyDetailPage() {
                 <small>{property.poster?.location ?? property.location}</small>
               </div>
             </div>
-            <button className="property-detail-cta" type="button" onClick={() => setRequestOpen(true)}>
-              Request information →
-            </button>
-            <small className="property-detail-note">Continue securely to send your request. Payment, when required, uses MTN MoMo.</small>
           </article>
         </section>
       </main>
-      {(viewerMode || requestOpen) && (
+      {viewerMode && (
         <PropertyViewer
           language="English"
           property={property}
           initialMode={viewerMode ?? undefined}
-          initialRequest={requestOpen}
-          onClose={() => { setViewerMode(null); setRequestOpen(false); }}
+          onClose={() => setViewerMode(null)}
         />
       )}
     </>

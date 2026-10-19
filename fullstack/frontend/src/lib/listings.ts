@@ -54,7 +54,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     type,
     location: [item.sector, item.district, item.province].filter(Boolean).join(' - ') || 'Rwanda',
     price: `${item.currency ?? 'RWF'} ${Number(item.price).toLocaleString()}`,
-    priceNote: both ? ' for sale or rent' : book ? '/ night' : rent ? '/ month' : ' asking',
+    priceNote: both ? ' for sale or rent' : book ? '/ night' : rent ? '/ month' : '',
     bedrooms: Number(item.bedrooms ?? item.measurements?.bedrooms ?? 0),
     bathrooms: Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0),
     area: Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0),

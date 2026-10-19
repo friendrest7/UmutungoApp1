@@ -82,6 +82,10 @@ export default function HomeScreen() {
       </View>
     </ImageBackground>
 
+    {!user && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {([['komisiyoneri', 'Join as Komisiyoneri'], ['landlord', 'Join as Landlord'], ['property_owner', 'Join as Property Owner']] as const).map(([role, label]) => <Pressable key={role} onPress={() => router.push({ pathname: '/auth/register', params: { role: role === 'landlord' ? 'property_owner' : role } })} style={[styles.secondaryButton, { flexGrow: 1, flexBasis: '30%', paddingHorizontal: 8 }]}><Text style={[styles.secondaryText, { textAlign: 'center' }]}>{t(label)}</Text></Pressable>)}
+    </View>}
+
     <Pressable onPress={() => router.push('/chat' as never)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, borderRadius: 16, backgroundColor: colors.greenSoft }}><Ionicons name="sparkles-outline" size={21} color={colors.green} /><View style={{ flex: 1, gap: 3 }}><Text style={{ color: colors.ink, fontWeight: '800' }}>{t('Ask the Umutungo assistant')}</Text><Text style={styles.muted}>{t('Describe the home, location, or budget you have in mind.')}</Text></View><Ionicons name="arrow-forward" size={17} color={colors.green} /></Pressable>
 
     <View style={{ gap: 12, padding: 15, borderRadius: 18, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line }}>
@@ -90,7 +94,7 @@ export default function HomeScreen() {
         <Pressable onPress={() => router.push('/dashboard' as never)} style={[styles.button, { flex: 1 }]}><Text style={styles.buttonText}>{t('Open dashboard')}</Text></Pressable>
         {(user.role === 'property_owner' || user.role === 'komisiyoneri' || user.role === 'admin') && <Pressable onPress={() => router.push('/listing/new')} style={[styles.secondaryButton, { flex: 1 }]}><Text style={styles.secondaryText}>{t('Post a property')}</Text></Pressable>}
       </View> : <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {([['client', 'client', 'Join as Client'], ['tenant', 'tenant', 'Join as Tenant'], ['komisiyoneri', 'komisiyoneri', 'Join as Komisiyoneri'], ['landlord', 'property_owner', 'Join as Landlord'], ['property_owner', 'property_owner', 'Join as Property Owner']] as const).map(([key, role, label]) => <Pressable key={key} onPress={() => router.push({ pathname: '/auth/register', params: { role } })} style={[styles.secondaryButton, { flexGrow: 1, flexBasis: '45%' }]}><Text style={styles.secondaryText}>{t(label)}</Text></Pressable>)}
+        {([['client', 'client', 'Join as Client'], ['tenant', 'tenant', 'Join as Tenant']] as const).map(([key, role, label]) => <Pressable key={key} onPress={() => router.push({ pathname: '/auth/register', params: { role } })} style={[styles.secondaryButton, { flexGrow: 1, flexBasis: '45%' }]}><Text style={styles.secondaryText}>{t(label)}</Text></Pressable>)}
       </View>}
     </View>
 

@@ -58,7 +58,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     bedrooms: Number(item.bedrooms ?? item.measurements?.bedrooms ?? 0),
     bathrooms: Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0),
     area: Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0),
-    accent: '#0f4a36',
+    accent: '#00a84f',
     image: images[0] ?? '/properties/listing-placeholder.svg',
     images,
     listed: listingDate,

@@ -110,6 +110,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   const [saved, setSaved] = useState<string[]>([]);
   const [activeListing, setActiveListing] = useState<Listing | null>(null);
   const [databaseListings, setDatabaseListings] = useState<Listing[]>([]);
+  const [listingLoadError, setListingLoadError] = useState(false);
   const [testingAccount, setTestingAccount] = useState(false);
   const [testingFirstName, setTestingFirstName] = useState('Umutungo');
   useEffect(() => {
@@ -141,13 +142,14 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   useEffect(() => {
     let cancelled = false;
     const aliases = categoryAliases[slug] ?? [normalizedCategory(rawCategory.name)];
-    void publicUmutungoApi<{ items: DatabaseListing[] }>('/api/v1/listings')
+    void publicUmutungoApi<{ items: DatabaseListing[] }>('/api/v1/listings', { cache: 'no-store' })
       .then((result) => {
         if (cancelled) return;
+        setListingLoadError(false);
         const matchingItems = (result?.items ?? []).filter((item) => aliases.includes(normalizedCategory(item.category)) && (item.images?.some(Boolean) || item.media?.some((media) => Boolean(media.url))));
         setDatabaseListings(matchingItems.map((item) => toDatabaseListing(item, rawCategory)));
       })
-      .catch(() => { if (!cancelled) setDatabaseListings([]); });
+      .catch(() => { if (!cancelled) { setDatabaseListings([]); setListingLoadError(true); } });
     return () => { cancelled = true; };
   }, [rawCategory, slug]);
   useEffect(() => {
@@ -216,7 +218,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
             <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><button className="category-view-button" type="button" onClick={() => setActiveListing(item)}>View property <Icon name="arrow" size={13} /></button></div>
           </div>
         </article>)}</div>
-      </> : <div className="category-empty"><Icon name="search" size={21} /><h3>No listings are available yet</h3><p>Published property listings will appear here when an owner posts them.</p></div>}
+      </> : null}
     </section>
     {activeListing && <PropertyViewer language={language} property={toViewerProperty(activeListing, rawCategory)} onClose={() => setActiveListing(null)} />}
   </main><AiChatbot language={language} /></div>;

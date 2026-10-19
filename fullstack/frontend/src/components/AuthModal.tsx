@@ -71,7 +71,7 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
 
   const reset = () => { setMethod('choose'); setEmail(''); setPassword(''); setPhone(''); setCode(''); setError(''); setNotice(''); setBusy(false); };
   const close = () => { if (!busy) { reset(); onClose(); } };
-  const complete = (accountRole: AuthRole) => { window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: accountRole, signedInAt: new Date().toISOString() })); reset(); onSuccess(accountRole); };
+  const complete = (accountRole: AuthRole, testingAccount = false, accountName?: string) => { window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: accountRole, testingAccount, testingFirstName: accountName?.trim().split(/\s+/)[0] || 'Umutungo', signedInAt: new Date().toISOString() })); reset(); onSuccess(accountRole); };
   const submitEmail = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
@@ -80,12 +80,12 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
     setError('');
     try {
       const response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: account.email, password: account.password }) });
-      const result = await response.json() as { error?: string; access_token?: string; user?: { role?: string } };
+      const result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; name?: string } };
       if (response.status === 404) throw new Error('These testing credentials are only enabled on a development backend. On the live site, sign in with your registered account using Google or phone verification.');
       if (!response.ok || !result.access_token) throw new Error(result.error ?? 'A database session could not be created. Use a verified Umutungo account.');
       const sessionRole = accountRoleFromApi(result.user?.role, account.role);
       window.localStorage.setItem('umutungo-api-token', result.access_token);
-      complete(sessionRole);
+      complete(sessionRole, true, result.user?.name);
     } catch (caught) {
       setError(caught instanceof TypeError ? 'The Umutungo backend is unreachable. Check your connection and try again.' : caught instanceof Error ? caught.message : 'A database session could not be created.');
       setBusy(false);

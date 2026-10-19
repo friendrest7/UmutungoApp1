@@ -9,11 +9,12 @@ import { Navbar } from './Navbar';
 import { Language, t } from '../data/translations';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
+import { testingListings } from '../data/testingListings';
 import type { PropertyPlaceholder } from './PropertyCard';
 import { PropertyViewer } from './PropertyViewer';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 
-type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean };
+type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; testingOnly?: boolean; ownerName?: string };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[] };
 
 
@@ -81,18 +82,22 @@ const toViewerProperty = (item: Listing, category: CategoryConfig): PropertyPlac
   const type = category.name === 'Houses' ? 'House' : category.name === 'Apartments' || category.name === 'Hospitality' ? 'Apartment' : category.name === 'Land' ? 'Land' : category.name;
   const images = item.images?.length ? item.images : [item.image];
 
-  return { id: item.id, title: item.title, type, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images, listed: item.listed ?? 'Date unavailable', description: item.detail, availableFor: item.intent === 'For sale' ? 'sale' : 'rent' };
+  const isRentOnly = item.intent === 'For rent' || item.intent === 'For lease';
+  const isBoth = item.intent === 'For sale or rent' || item.intent === 'For sale or lease';
+  return { id: item.id, title: item.title, type, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price.replace(/\s*\/\s*(month|night|day)$/, ''), priceNote: priceMatch ? `/ ${priceMatch[1]}` : isBoth ? item.intent === 'For sale or lease' ? ' sale or lease' : ' sale or rent' : ' asking', bedrooms, bathrooms, area, accent: category.accent, image: item.image, images, listed: item.listed ?? 'Date unavailable', description: item.detail, availableFor: isBoth ? 'both' : isRentOnly ? 'rent' : 'sale' };
 };
 
-type DatabaseListing = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; tags?: string[]; amenities?: string[]; images?: string[]; created_at?: string; owner?: { verified?: boolean } };
+type DatabaseListing = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; tags?: string[]; amenities?: string[]; images?: string[]; media?: { url: string; type?: string; sort_order?: number }[]; created_at?: string; owner?: { verified?: boolean } };
 
 const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Listing => {
-  const intent: Listing['intent'] = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
+  const intent: Listing['intent'] = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'both' ? category.name === 'Land' ? 'For sale or lease' : 'For sale or rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
   const location = [item.sector, item.district, item.province].filter(Boolean).join(' Â· ');
   const dateLabel = item.created_at && !Number.isNaN(new Date(item.created_at).getTime()) ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable';
   const detail = [...[item.description, ...(item.amenities ?? [])].filter(Boolean), dateLabel].join(' Â· ') || 'Details available from the owner';
-  const image = item.images?.[0] ?? '/properties/listing-placeholder.svg';
-  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, item.owner?.verified ?? false), images: item.images, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
+  const imageList = item.images?.filter(Boolean) ?? [];
+  const images = imageList.length ? imageList : item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((media) => media.url).filter(Boolean) ?? [];
+  const image = images[0] ?? '/properties/listing-placeholder.svg';
+  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, item.owner?.verified ?? false), images, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
 };
 
 export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialDistrict = '', initialSector = '', initialIntent = '', initialPriceRange = '' }: { slug: string; initialQuery?: string; initialLocation?: string; initialDistrict?: string; initialSector?: string; initialIntent?: string; initialPriceRange?: string }) {
@@ -105,6 +110,31 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   const [saved, setSaved] = useState<string[]>([]);
   const [activeListing, setActiveListing] = useState<Listing | null>(null);
   const [databaseListings, setDatabaseListings] = useState<Listing[]>([]);
+  const [testingAccount, setTestingAccount] = useState(false);
+  const [testingFirstName, setTestingFirstName] = useState('Umutungo');
+  useEffect(() => {
+    const readTestingAccount = () => {
+      try {
+        const account = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as { testingAccount?: boolean; testingFirstName?: string } | null;
+        setTestingAccount(account?.testingAccount === true);
+        setTestingFirstName(account?.testingFirstName || 'Umutungo');
+      } catch { setTestingAccount(false); setTestingFirstName('Umutungo'); }
+    };
+    readTestingAccount();
+    window.addEventListener('umutungo:auth-changed', readTestingAccount);
+    window.addEventListener('storage', readTestingAccount);
+    return () => { window.removeEventListener('umutungo:auth-changed', readTestingAccount); window.removeEventListener('storage', readTestingAccount); };
+  }, []);
+  const privateTestingListings: Listing[] = testingAccount ? testingListings.filter((property) => property.categorySlug === slug).map((property) => {
+    const details = [property.bedrooms > 0 ? `${property.bedrooms} bedrooms` : '', property.bathrooms > 0 ? `${property.bathrooms} bathrooms` : '', property.area > 0 ? `${property.area} m�` : ''].filter(Boolean).join(', ');
+    return {
+      id: property.id, title: property.title, location: property.location,
+      price: `${property.price}${property.priceNote.startsWith('/') ? ` ${property.priceNote}` : property.priceNote}`,
+      intent: property.type === 'Hospitality' ? 'Book' : property.type === 'Land' && property.availableFor === 'rent' ? 'For lease' : property.availableFor === 'rent' ? 'For rent' : 'For sale',
+      detail: details || `${property.type} listing`, image: property.image, images: property.images, listed: property.listed, testingOnly: true,
+      verified: false, ownerName: testingFirstName,
+    };
+  }) : [];
   const changeLanguage = (nextLanguage: Language) => {
     setLanguage(nextLanguage);
   };
@@ -114,7 +144,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     void publicUmutungoApi<{ items: DatabaseListing[] }>('/api/v1/listings')
       .then((result) => {
         if (cancelled) return;
-        const matchingItems = (result?.items ?? []).filter((item) => aliases.includes(normalizedCategory(item.category)));
+        const matchingItems = (result?.items ?? []).filter((item) => aliases.includes(normalizedCategory(item.category)) && (item.images?.some(Boolean) || item.media?.some((media) => Boolean(media.url))));
         setDatabaseListings(matchingItems.map((item) => toDatabaseListing(item, rawCategory)));
       })
       .catch(() => { if (!cancelled) setDatabaseListings([]); });
@@ -139,17 +169,20 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     return () => window.removeEventListener('umutungo:favorites-changed', readFavorites);
   }, []);
   const translatedCategoryName = t(language, category.name);
-  const listings = useMemo(() => databaseListings.filter((item) => {
-    const matchesQuery = `${item.title} ${item.location} ${item.detail}`.toLowerCase().includes(query.toLowerCase());
+  const listings = useMemo(() => [...databaseListings, ...privateTestingListings].filter((item) => {
+    const ignoredQueryWords = ['in', 'near', 'for', 'a', 'the', 'to', 'with', 'buy', 'sell', 'sale', 'rent', 'lease', ...(categoryAliases[slug] ?? []).flatMap((alias) => alias.split(' '))];
+    const queryWords = query.toLowerCase().split(/\s+/).filter((word) => word && !ignoredQueryWords.includes(word));
+    const searchableText = `${item.title} ${item.location} ${item.detail} ${category.name}`.toLowerCase();
+    const matchesQuery = queryWords.every((word) => searchableText.includes(word));
     const matchesLocation = !initialLocation || initialLocation === 'Kigali' || item.location.toLowerCase().includes(initialLocation.toLowerCase());
     const matchesDistrict = !initialDistrict || item.location.toLowerCase().includes(initialDistrict.toLowerCase());
     const matchesSector = !initialSector || item.location.toLowerCase().includes(initialSector.toLowerCase());
-    const matchesIntent = !initialIntent || initialIntent === 'Buy or rent' || (initialIntent === 'Rent' && item.intent === 'For rent') || (initialIntent === 'Buy' && item.intent === 'For sale');
+    const matchesIntent = !initialIntent || initialIntent === 'Buy or rent' || (initialIntent === 'Rent' && (item.intent === 'For rent' || item.intent === 'For sale or rent' || item.intent === 'For lease' || item.intent === 'For sale or lease')) || (initialIntent === 'Buy' && (item.intent === 'For sale' || item.intent === 'For sale or rent' || item.intent === 'For sale or lease'));
     const numericPrice = Number(item.price.replace(/[^0-9]/g, ''));
     const matchesPrice = !initialPriceRange || initialPriceRange === 'Any price' || (initialPriceRange === 'Under RWF 500,000' && numericPrice < 500000) || (initialPriceRange === 'RWF 500,000 - 1,000,000' && numericPrice >= 500000 && numericPrice <= 1000000) || (initialPriceRange === 'Over RWF 1,000,000' && numericPrice > 1000000);
-    const matchesFilter = filter.startsWith('All') || (filter === 'For rent' && item.intent === 'For rent') || (filter === 'For sale' && item.intent === 'For sale') || (filter === 'Book now' && item.intent === 'Book') || ['Residential', 'Commercial', 'Private office', 'Open workspace'].includes(filter);
+    const matchesFilter = filter.startsWith('All') || (filter === 'For rent' && ['For rent', 'For sale or rent', 'For lease', 'For sale or lease'].includes(item.intent)) || (filter === 'For sale' && ['For sale', 'For sale or rent', 'For sale or lease'].includes(item.intent)) || (filter === 'Book now' && item.intent === 'Book') || ['Residential', 'Commercial', 'Private office', 'Open workspace'].includes(filter);
     return matchesQuery && matchesLocation && matchesDistrict && matchesSector && matchesIntent && matchesPrice && matchesFilter;
-  }).map(normalizeListing), [category, databaseListings, filter, initialDistrict, initialIntent, initialLocation, initialPriceRange, initialSector, query, slug]);
+  }).map(normalizeListing).slice(0, 10), [category, databaseListings, filter, initialDistrict, initialIntent, initialLocation, initialPriceRange, initialSector, privateTestingListings, query, slug]);
   const toggleListingFavorite = (item: Listing) => {
     const wasSaved = saved.includes(item.id);
     const favorite: FavoriteItem = { property_id: item.id, title: item.title, type: category.name, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price, image: item.image };
@@ -167,7 +200,24 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic category-shell`}><Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} /><main className="category-experience" style={{ '--category-accent': category.accent } as React.CSSProperties}>
     <header className="category-experience-header"><Link href="/" className="category-back"><Icon name="home" size={15} /> {t(language, 'Home')}</Link><nav className="category-shop-nav" aria-label={t(language, 'Property shop categories')}>{shopCategories.map((item) => <Link className={item.slug === slug ? 'is-active' : ''} href={`/categories/${item.slug}`} key={item.slug}><Icon name={item.icon} size={14} />{t(language, item.label)}</Link>)}</nav><div><span>{translatedCategoryName}</span><Link href="/">Umutungo <Icon name="arrow" size={14} /></Link></div><InterfacePreferences /></header>
     <section className={`category-experience-hero ${slug === 'apartments' ? 'no-hero-copy' : ''}`} style={{ backgroundImage: `linear-gradient(90deg, rgba(8, 18, 10, .78), rgba(8, 18, 10, .2)), url(${category.cover})` }}>{slug !== 'apartments' && <div><span className="category-experience-eyebrow">{t(language, category.eyebrow)}</span><h1>{t(language, 'Find your next')}<br /><em>{translatedCategoryName.toLowerCase()} {t(language, 'space.')}</em></h1><p>{t(language, category.description)}</p></div>}<div className="category-search-box"><Icon name="search" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`${t(language, 'Search')} ${translatedCategoryName.toLowerCase()} ${t(language, 'by location or feature')}`} /><button type="button" aria-label={t(language, 'Search category')} onClick={() => setQuery(query.trim())}><Icon name="arrow" size={15} /></button></div></section>
-    <section className="category-experience-body"><div className="category-results-heading"><div><span className="category-experience-eyebrow">{listings.length} Umutungo owner listings</span><h2>Explore {category.name.toLowerCase()}</h2></div><button className="category-map-button" type="button"><Icon name="pin" size={15} /> Map view</button></div><div className="category-filter-row">{category.filters.map((item) => <button className={filter === item ? 'active' : ''} key={item} type="button" onClick={() => setFilter(item)}>{item}</button>)}</div>{listings.length ? <><div className="owner-listing-heading"><h2>Umutungo owner listings</h2><p>Listings posted directly to Umutungo</p></div><div className="category-listing-grid">{listings.map((item) => <article className="category-listing-card" key={item.id}><div className="category-listing-image" style={{ backgroundImage: `linear-gradient(180deg, transparent 45%, rgba(5, 15, 8, .64)), url(${item.image})` }}><button className={`category-save ${saved.includes(item.id) ? 'saved' : ''}`} type="button" aria-label={`Save ${item.title}`} onClick={() => toggleListingFavorite(item)}><Icon name="heart" size={16} filled={saved.includes(item.id)} /></button>{item.verified && <span className="category-verified"><Icon name="check" size={12} /> Verified</span>}</div><div className="category-listing-copy"><div className="category-listing-meta"><span className={`listing-intent ${item.intent === 'For sale' ? 'for-sale' : item.intent === 'For rent' ? 'for-rent' : ''}`}>{item.intent}</span></div><h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p><div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><button className="category-view-button" type="button" onClick={() => setActiveListing(item)}>View property <Icon name="arrow" size={13} /></button></div></div></article>)}</div></> : <div className="category-empty"><Icon name="search" size={21} /><h3>No listings are available yet</h3><p>Published property listings will appear here when an owner posts them.</p></div>}</section>
+    <section className="category-experience-body">
+      <div className="category-results-heading"><div><span className="category-experience-eyebrow">{listings.length} property listings</span><h2>Property listings: {category.name.toLowerCase()}</h2></div></div>
+      <div className="category-filter-row">{category.filters.map((item) => <button className={filter === item ? 'active' : ''} key={item} type="button" onClick={() => setFilter(item)}>{item}</button>)}</div>
+      {listings.length ? <>
+        <div className="owner-listing-heading"><h2>Property listings</h2><p>{listings.some((item) => item.testingOnly) ? 'Testing account listings appear alongside published listings for review.' : 'Listings posted directly to Umutungo.'}</p></div>
+        <div className="category-listing-grid">{listings.map((item) => <article className="category-listing-card" key={item.id}>
+          <div className="category-listing-image" style={{ backgroundImage: `linear-gradient(180deg, transparent 45%, rgba(5, 15, 8, .64)), url(${item.image})` }}>
+            <button className={`category-save ${saved.includes(item.id) ? 'saved' : ''}`} type="button" aria-label={`Save ${item.title}`} onClick={() => toggleListingFavorite(item)}><Icon name="heart" size={16} filled={saved.includes(item.id)} /></button>
+            {item.testingOnly && <span className="category-demo-badge">Testing listing</span>}
+            {item.verified && <span className="category-verified"><Icon name="check" size={12} /> Verified</span>}
+          </div>
+          <div className="category-listing-copy"><div className="category-listing-meta"><span className={`listing-intent ${item.intent === 'For sale' ? 'for-sale' : item.intent === 'For rent' ? 'for-rent' : ''}`}>{item.intent}</span></div>
+            <h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p>{item.testingOnly && <small className="listing-owner-name"><span>{item.ownerName?.slice(0, 1).toUpperCase()}</span> Listed by {item.ownerName}</small>}
+            <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><button className="category-view-button" type="button" onClick={() => setActiveListing(item)}>View property <Icon name="arrow" size={13} /></button></div>
+          </div>
+        </article>)}</div>
+      </> : <div className="category-empty"><Icon name="search" size={21} /><h3>No listings are available yet</h3><p>Published property listings will appear here when an owner posts them.</p></div>}
+    </section>
     {activeListing && <PropertyViewer language={language} property={toViewerProperty(activeListing, rawCategory)} onClose={() => setActiveListing(null)} />}
   </main><AiChatbot language={language} /></div>;
 }

@@ -65,7 +65,7 @@ export function OwnerUpgrade() {
       } else if (result.payment_status === 'successful' || result.status === 'active') {
         setMessage('MTN confirmed your payment and the plan is active.');
       } else {
-        setMessage('Payment request sent. Approve it on your MTN MoMo phone; this page will check for confirmation.');
+        setMessage(`Payment request sent to ${phone.trim()}. Check your phone for the MTN MoMo prompt, confirm the amount, and enter your MoMo PIN in that official MTN prompt. Umutungo never asks for or stores your PIN. This page will check the payment status.`);
       }
       await refresh();
     } catch (error) {
@@ -95,8 +95,9 @@ export function OwnerUpgrade() {
       <h2>One-time payment</h2>
       <p>Payment method: MTN MoMo</p>
       <label>MTN Rwanda number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>
-      <button type="button" disabled={busy || !data || (data.prices?.[selected] ?? 0) <= 0 || (!!purchase && purchase.status === 'pending' && purchase.plan === selected)} onClick={() => void startPayment()}>{busy ? 'Starting…' : `Create RWF ${(data?.prices?.[selected] ?? 0).toLocaleString()} one-time payment request`}</button>
+      <p>After you pay, check this number for the MTN MoMo approval prompt. Review the amount and enter your PIN in the official MTN prompt on your phone. Do not enter your PIN on Umutungo.</p>
+      <button type="button" disabled={busy || !data || (data.prices?.[selected] ?? 0) <= 0 || (!!purchase && purchase.status === 'pending' && purchase.plan === selected)} onClick={() => void startPayment()}>{busy ? 'Sending request…' : `Pay RWF ${(data?.prices?.[selected] ?? 0).toLocaleString()} with MTN MoMo`}</button>
     </section>
-    {purchase && <section className={`owner-upgrade-receipt is-${purchase.payment_status}`} aria-live="polite"><h2>Payment {purchase.payment_status}</h2><p>Plan: {purchase.plan}</p><p>Amount: {purchase.currency} {purchase.amount.toLocaleString()}</p><p>Reference: {purchase.transaction_reference}</p>{purchase.receipt_number && <p>Receipt: {purchase.receipt_number}</p>}<p>Purchase date: {localDate(purchase.purchased_at)}</p><p>Activated: {localDate(purchase.activated_at)}</p><p>Expires: {localDate(purchase.expires_at)}</p>{purchase.payment_status === 'pending' && <p>Approve the request on your MTN MoMo phone. The plan activates only after MTN confirms payment.</p>}{purchase.payment_status === 'failed' && <p>The plan is not active. Check your phone number and try a new payment request.</p>}</section>}
+    {purchase && <section className={`owner-upgrade-receipt is-${purchase.payment_status}`} aria-live="polite"><h2>Payment {purchase.payment_status}</h2><p>Plan: {purchase.plan}</p><p>Amount: {purchase.currency} {purchase.amount.toLocaleString()}</p><p>Reference: {purchase.transaction_reference}</p>{purchase.receipt_number && <p>Receipt: {purchase.receipt_number}</p>}<p>Purchase date: {localDate(purchase.purchased_at)}</p><p>Activated: {localDate(purchase.activated_at)}</p><p>Expires: {localDate(purchase.expires_at)}</p>{purchase.payment_status === 'pending' && <p>On your phone, open the MTN MoMo prompt, check the amount, and enter your PIN there. This page checks MTN for confirmation every few seconds. Your plan activates only after MTN confirms payment.</p>}{purchase.payment_status === 'failed' && <p>The plan is not active. Check your number or balance, then start a new payment request.</p>}</section>}
   </main>;
 }

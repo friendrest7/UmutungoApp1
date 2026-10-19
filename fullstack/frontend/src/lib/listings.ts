@@ -43,6 +43,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
   const category = item.category.toLowerCase();
   const type = ({ houses: 'House', house: 'House', apartments: 'Apartment', apartment: 'Apartment', vehicles: 'Vehicle', vehicle: 'Vehicle', appliances: 'Appliance', appliance: 'Appliance', offices: 'Office', office: 'Office', hospitality: 'Hospitality' } as Record<string, string>)[category] ?? item.category.replace(/\b\w/g, (letter) => letter.toUpperCase());
   const rent = ['rent', 'rent_out'].includes(item.transaction_type);
+  const both = item.transaction_type === 'both';
   const book = item.transaction_type === 'book';
   const listingDate = item.status === 'scheduled' && item.publish_at
     ? `Available from ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.publish_at))}`
@@ -53,7 +54,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     type,
     location: [item.sector, item.district, item.province].filter(Boolean).join(' - ') || 'Rwanda',
     price: `${item.currency ?? 'RWF'} ${Number(item.price).toLocaleString()}`,
-    priceNote: book ? '/ night' : rent ? '/ month' : ' asking',
+    priceNote: both ? ' for sale or rent' : book ? '/ night' : rent ? '/ month' : ' asking',
     bedrooms: Number(item.bedrooms ?? item.measurements?.bedrooms ?? 0),
     bathrooms: Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0),
     area: Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0),
@@ -61,6 +62,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     image: images[0] ?? '/properties/listing-placeholder.svg',
     images,
     listed: listingDate,
+    availableFor: both ? 'both' : rent ? 'rent' : 'sale',
     description: item.description,
     poster: {
       name: item.owner?.name ?? 'Property owner',

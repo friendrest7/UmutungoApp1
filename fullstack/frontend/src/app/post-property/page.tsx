@@ -12,16 +12,16 @@ import { apiToken, uploadListingImage, umutungoApi } from '../../lib/umutungoApi
 
 type PropertyType = 'House' | 'Apartment' | 'Land' | 'Commercial' | 'Office' | 'Hospitality' | 'Vehicle' | 'Furniture' | 'Appliance' | 'Equipment' | 'Other';
 type PostingRole = 'Komisiyoneri' | 'Landlord' | 'Property Owner';
-type Intent = 'For rent' | 'For sale' | 'For lease' | 'For hire' | 'Book a stay';
-type TransactionType = 'rent_out' | 'sell' | 'book';
+type Intent = 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'For hire' | 'Book a stay';
+type TransactionType = 'rent_out' | 'sell' | 'both' | 'book';
 type IntentOption = { label: Intent; transactionType: TransactionType };
 
 function getIntentOptions(type: PropertyType): IntentOption[] {
   if (type === 'Other' || type === 'Furniture' || type === 'Appliance') return [{ label: 'For sale', transactionType: 'sell' }];
-  if (type === 'Land') return [{ label: 'For lease', transactionType: 'rent_out' }, { label: 'For sale', transactionType: 'sell' }];
+  if (type === 'Land') return [{ label: 'For sale', transactionType: 'sell' }, { label: 'For lease', transactionType: 'rent_out' }, { label: 'For sale or lease', transactionType: 'both' }];
   if (type === 'Hospitality') return [{ label: 'Book a stay', transactionType: 'book' }, { label: 'For sale', transactionType: 'sell' }];
   if (type === 'Vehicle') return [{ label: 'For hire', transactionType: 'rent_out' }, { label: 'For sale', transactionType: 'sell' }];
-  return [{ label: 'For rent', transactionType: 'rent_out' }, { label: 'For sale', transactionType: 'sell' }];
+  return [{ label: 'For sale', transactionType: 'sell' }, { label: 'For rent', transactionType: 'rent_out' }, { label: 'For sale or rent', transactionType: 'both' }];
 }
 
 const steps = [
@@ -267,10 +267,19 @@ export default function PostPropertyPage() {
     if (publicationMode === 'Scheduled' && (!scheduledFor || new Date(scheduledFor).getTime() <= Date.now())) { setSaveError('Choose a future date and time for scheduled publication.'); setStep(3); return; }
     if (!apiToken()) { setSelectionComplete(false); setAuthOpen(true); setSaveError('Your current session is local only. Sign in with a database-backed test account before publishing.'); return; }
     const expiryDays = accessRole === 'Commissioner / Komisiyoneri' ? 30 : ownerTier.startsWith('Silver') ? 90 : ownerTier.startsWith('Gold') ? 180 : 365;
+    const desiredStatus = publicationMode === 'Draft' ? 'draft' : publicationMode === 'Scheduled' ? 'scheduled' : 'published';
     setSaveError('');
     const amount = Number(price.replace(/[^0-9.]/g, '')) || 0;
     let databaseListing: { id: string; status: string; expires_at?: string } | null = null;
     try {
+      let photoFiles = uploadFiles;
+      if (!photoFiles.length) {
+        const photoResponse = await fetch(cover);
+        if (!photoResponse.ok) throw new Error('Choose a property photo before saving this listing.');
+        const photoBlob = await photoResponse.blob();
+        const filename = cover.split('/').pop() || 'property-cover.jpg';
+        photoFiles = [new File([photoBlob], filename, { type: photoBlob.type || 'image/jpeg' })];
+      }
       databaseListing = await umutungoApi<{ id: string; status: string; expires_at?: string }>('/api/v1/listings', {
         method: 'POST',
         body: JSON.stringify({
@@ -286,7 +295,7 @@ export default function PostPropertyPage() {
           cell,
           village,
           publish_at: publicationMode === 'Scheduled' && scheduledFor ? new Date(scheduledFor).toISOString() : null,
-          status: publicationMode === 'Draft' ? 'draft' : 'published',
+          status: 'draft',
           tags: amenities,
           amenities,
           contact_method: 'message',
@@ -301,12 +310,19 @@ export default function PostPropertyPage() {
         }),
       });
       if (!databaseListing?.id) throw new Error('The server did not return a saved listing.');
-      for (const file of uploadFiles) await uploadListingImage(databaseListing.id, file);
+      for (const file of photoFiles) await uploadListingImage(databaseListing.id, file);
+      if (desiredStatus !== 'draft') {
+        await umutungoApi(`/api/v1/listings/${encodeURIComponent(databaseListing.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: desiredStatus }),
+        });
+        databaseListing.status = desiredStatus;
+      }
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'The listing could not be saved. Please try again.');
       return;
     }
-    const listing: LandlordListing = { id: databaseListing.id, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: selectedIntent.transactionType === 'sell' ? ' asking' : propertyType === 'Hospitality' ? ' / night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? ' / day' : propertyType === 'Land' ? ' lease price' : ' / month', cover, images: gallery, bedrooms: propertyType === 'Vehicle' ? `${vehicleMake} ${vehicleModel}`.trim() || vehicleYear : isAsset ? assetQuantity : isLand ? landTenure : bedrooms, bathrooms: propertyType === 'Vehicle' ? vehicleCondition : isAsset ? assetCondition : isLand ? landRoadAccess : bathrooms, area: propertyType === 'Vehicle' ? vehicleMileage : isAsset ? assetSpecifications : area, amenities, status: databaseListing.status === 'scheduled' ? 'Scheduled' : databaseListing.status === 'published' ? 'Published' : 'Draft', savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: databaseListing.expires_at ?? new Date(Date.now() + expiryDays * 86400000).toISOString() };
+    const listing: LandlordListing = { id: databaseListing.id, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? ' sale or lease' : ' sale or rent' : selectedIntent.transactionType === 'sell' ? ' asking' : propertyType === 'Hospitality' ? ' / night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? ' / day' : propertyType === 'Land' ? ' lease price' : ' / month', cover, images: gallery, bedrooms: propertyType === 'Vehicle' ? `${vehicleMake} ${vehicleModel}`.trim() || vehicleYear : isAsset ? assetQuantity : isLand ? landTenure : bedrooms, bathrooms: propertyType === 'Vehicle' ? vehicleCondition : isAsset ? assetCondition : isLand ? landRoadAccess : bathrooms, area: propertyType === 'Vehicle' ? vehicleMileage : isAsset ? assetSpecifications : area, amenities, status: databaseListing.status === 'scheduled' ? 'Scheduled' : databaseListing.status === 'published' ? 'Published' : 'Draft', savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: databaseListing.expires_at ?? new Date(Date.now() + expiryDays * 86400000).toISOString() };
     const storageKey = accessRole === 'Commissioner / Komisiyoneri' ? 'umutungo-commissioner-properties' : 'umutungo-landlord-properties';
     try {
       const existing = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as LandlordListing[];
@@ -326,9 +342,9 @@ export default function PostPropertyPage() {
   }
 
   return <main className="post-property-page">
-    <header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><InterfacePreferences /><div className="post-header-center"><span className="post-live-dot" /> Draft autosaved</div><div className="post-header-links"><Link className="post-home-link" href="/"><Icon name="home" size={14} /> Home</Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /> Exit builder</Link></div></header>
+    <header className="post-property-header"><div className="post-header-brand"><Link href="/" aria-label="Umutungo home"><Logo /></Link><span>PROPERTY STUDIO</span></div><div className="post-header-center"><span className="post-live-dot" /> Draft autosaved</div><div className="post-header-actions"><InterfacePreferences /><nav className="post-header-links" aria-label="Listing builder navigation"><Link className="post-home-link" href="/"><Icon name="home" size={14} /><span>Home</span></Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /><span>Exit builder</span></Link></nav></div></header>
     <div className="post-property-layout">
-      <aside className="post-property-sidebar"><div><p className="post-eyebrow">New listing</p><h1>Make a place<br /><em>feel possible.</em></h1><p className="post-sidebar-copy">Tell the story clearly. The right people are already looking.</p></div><nav className="post-progress" aria-label="Listing steps">{steps.map((item) => <button className={step === item.number ? 'is-active' : step > item.number ? 'is-complete' : ''} type="button" key={item.number} onClick={() => setStep(item.number)}><span className="post-step-number">{step > item.number ? <Icon name="check" size={13} /> : `0${item.number}`}</span><span><strong>{item.label}</strong><small>{item.note}</small></span></button>)}</nav><div className="post-sidebar-tip"><Icon name="sparkles" size={17} /><span><strong>Small detail, big difference</strong><small>Listings with 5+ photos get more attention.</small></span></div></aside>
+      <aside className="post-property-sidebar"><div><p className="post-eyebrow">New listing</p><h1>List your<br /><em>property.</em></h1><p className="post-sidebar-copy">Share the details buyers, renters, and clients need.</p></div><nav className="post-progress" aria-label="Listing steps">{steps.map((item) => <button className={step === item.number ? 'is-active' : step > item.number ? 'is-complete' : ''} type="button" key={item.number} onClick={() => setStep(item.number)}><span className="post-step-number">{step > item.number ? <Icon name="check" size={13} /> : `0${item.number}`}</span><span><strong>{item.label}</strong><small>{item.note}</small></span></button>)}</nav><div className="post-sidebar-tip"><Icon name="sparkles" size={17} /><span><strong>Small detail, big difference</strong><small>Listings with 5+ photos get more attention.</small></span></div></aside>
       <section className="post-property-main">{saveError && <p className="post-save-error" role="alert">{saveError}</p>}
         <div className="post-main-heading"><div><p className="post-eyebrow">Step 0{step} of 03</p><h2>{steps[step - 1].label}</h2></div><span className="post-save-status"><Icon name="check" size={13} /> Saved locally</span></div>
         <div className="post-builder-grid"><div className="post-form-card">{step === 2 && <RwandaLocationFields province={location} onProvinceChange={(value) => { setLocation(value); setLocationError(''); }} district={district} districtOptions={districtOptions} onDistrictChange={(value) => { setDistrict(value); setSector(''); setCell(''); setVillage(''); }} sector={sector} sectorOptions={locationOptions} onSectorChange={(value) => { setSector(value); setCell(''); setVillage(''); }} cell={cell} cellOptions={cellOptions} onCellChange={(value) => { setCell(value); setVillage(''); }} village={village} villageOptions={villageOptions} onVillageChange={setVillage} loading={locationLoading} error={locationError} gpsPin={gpsPin} onCaptureGps={() => navigator.geolocation?.getCurrentPosition((position) => { setGpsPin(`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`); setLocationError(''); }, () => setLocationError('Location access was not available. You can continue with the administrative location.'))} />}
@@ -336,7 +352,7 @@ export default function PostPropertyPage() {
           {step === 2 && <div className="post-form-section">
             <div className="post-section-intro"><h3>{isAsset ? 'Set the collection area and item details' : 'Give it a sense of place'}</h3><p>{isAsset ? 'Add a general area for pickup, then describe the item.' : 'A clear location and honest numbers make a listing feel trustworthy.'}</p></div>
             {isAsset ? <label className="post-field"><span>Pickup area <small>Optional</small></span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="e.g. Kimihurura, Kigali" /></label> : <label className="post-field"><span>{isLand ? 'Area or nearby landmark' : 'Neighbourhood'}</span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder={isLand ? 'e.g. near the main road' : 'e.g. Kacyiru, near the offices'} /></label>}
-            <div className="post-price-field"><label className="post-field"><span>{selectedIntent.transactionType === 'sell' ? 'Asking price' : propertyType === 'Hospitality' ? 'Nightly rate' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'Hire price' : propertyType === 'Land' ? 'Lease price' : 'Monthly price'}</span><div className="post-input-prefix"><b>RWF</b><input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="numeric" /></div></label><span className="post-price-note">{selectedIntent.transactionType === 'sell' ? 'total asking price' : propertyType === 'Hospitality' ? 'per night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'per day' : propertyType === 'Land' ? 'lease terms' : 'per month'}</span></div>
+            <div className="post-price-field"><label className="post-field"><span>{selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? 'Sale or lease price' : 'Sale or rent price' : selectedIntent.transactionType === 'sell' ? 'Asking price' : propertyType === 'Hospitality' ? 'Nightly rate' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'Hire price' : propertyType === 'Land' ? 'Lease price' : 'Monthly price'}</span><div className="post-input-prefix"><b>RWF</b><input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="numeric" /></div></label><span className="post-price-note">{selectedIntent.transactionType === 'both' ? 'Enter the price for either option' : selectedIntent.transactionType === 'sell' ? 'total asking price' : propertyType === 'Hospitality' ? 'per night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'per day' : propertyType === 'Land' ? 'lease terms' : 'per month'}</span></div>
             <div className="post-form-grid post-stats-grid">
               {isAsset ? <>
                 <label className="post-field"><span>Quantity</span><div className="post-input-suffix"><input value={assetQuantity} onChange={(event) => setAssetQuantity(event.target.value)} inputMode="numeric" /><b>items</b></div></label>
@@ -361,7 +377,7 @@ export default function PostPropertyPage() {
           <div className="post-preview-label"><span>Live preview</span><small>How it will look in Umutungo</small></div>
           <article className="post-preview-card">
             <div className="post-preview-image"><Image src={cover} alt="Property preview" fill sizes="(max-width: 900px) 100vw, 350px" /><span className="post-preview-badge">{intent}</span><button type="button" aria-label="Save preview"><Icon name="heart" size={17} /></button><div className="post-preview-dots">{gallery.slice(0, 4).map((_, index) => <i className={index === 0 ? 'is-active' : ''} key={index} />)}</div></div>
-            <div className="post-preview-content"><span className="post-preview-type">{propertyType} Â· Verified after review</span><h3>{listingTitle}</h3><p><Icon name="pin" size={13} /> {address || `${sector || district}, ${district}`}, {location}</p><strong>RWF {price || '0'} <small>{selectedIntent.transactionType === 'sell' ? 'asking' : propertyType === 'Hospitality' ? '/ night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? '/ day' : propertyType === 'Land' ? 'lease' : '/ month'}</small></strong>
+            <div className="post-preview-content"><span className="post-preview-type">{propertyType} Â· Verified after review</span><h3>{listingTitle}</h3><p><Icon name="pin" size={13} /> {address || `${sector || district}, ${district}`}, {location}</p><strong>RWF {price || '0'} <small>{selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? 'sale or lease' : 'sale or rent' : selectedIntent.transactionType === 'sell' ? 'asking' : propertyType === 'Hospitality' ? '/ night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? '/ day' : propertyType === 'Land' ? 'lease' : '/ month'}</small></strong>
               <div className="post-preview-stats">{isAsset ? <><span>{assetQuantity}<small>items</small></span><span>{assetCondition}<small>condition</small></span><span>{assetSpecifications || 'Details'}<small>specifications</small></span></> : isLand ? <><span>{area}<small>mÂ²</small></span><span>{landTenure}<small>tenure</small></span><span>{landRoadAccess}<small>road access</small></span></> : <><span>{bedrooms}<small>beds</small></span><span>{bathrooms}<small>baths</small></span><span>{area}<small>mÂ²</small></span></>}</div>
             </div>
           </article>

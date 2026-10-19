@@ -21,6 +21,11 @@ type Config struct {
 	MTNSubscriptionKey   string
 	MTNTargetEnvironment string
 	MTNBaseURL           string
+	MTNSMSClientID       string
+	MTNSMSClientSecret   string
+	MTNSMSServiceCode    string
+	MTNSMSBaseURL        string
+	MTNSMSTokenURL       string
 	OwnerSilverPrice     float64
 	OwnerGoldPrice       float64
 	OwnerPlatinumPrice   float64
@@ -42,6 +47,11 @@ func Load() Config {
 		MTNSubscriptionKey:   env("MTN_SUBSCRIPTION_KEY_PRIMARY", ""),
 		MTNTargetEnvironment: env("MTN_TARGET_ENVIRONMENT", "sandbox"),
 		MTNBaseURL:           strings.TrimRight(env("MTN_BASE_URL", "https://sandbox.momodeveloper.mtn.com"), "/"),
+		MTNSMSClientID:       env("MTN_SMS_CLIENT_ID", ""),
+		MTNSMSClientSecret:   env("MTN_SMS_CLIENT_SECRET", ""),
+		MTNSMSServiceCode:    env("MTN_SMS_SERVICE_CODE", ""),
+		MTNSMSBaseURL:        strings.TrimRight(env("MTN_SMS_BASE_URL", "https://api.mtn.com/v3/sms"), "/"),
+		MTNSMSTokenURL:       env("MTN_SMS_TOKEN_URL", "https://api.mtn.com/v1/oauth/access_token/accesstoken?grant_type=client_credentials"),
 		OwnerSilverPrice:     envFloat("OWNER_SILVER_PRICE_RWF"),
 		OwnerGoldPrice:       envFloat("OWNER_GOLD_PRICE_RWF"),
 		OwnerPlatinumPrice:   envFloat("OWNER_PLATINUM_PRICE_RWF"),

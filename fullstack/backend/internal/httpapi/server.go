@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -154,9 +155,19 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "invalid registration role")
 		return
 	}
+	phone, err := normalizeRwandaPhone(input.Phone)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if s.cfg.AppEnv != "development" && !newMTNSMSClient(s.cfg).configured() {
+		errorJSON(w, http.StatusServiceUnavailable, "SMS verification is not configured. Set MTN SMS credentials and the approved service code.")
+		return
+	}
+	input.Phone = phone
 
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `
+	err = s.db.QueryRow(r.Context(), `
 		INSERT INTO users(name, email, phone, role) VALUES($1, NULLIF($2, ''), $3, $4)
 		RETURNING id, name, COALESCE(email, ''), phone, role, status`,
 		strings.TrimSpace(input.Name), strings.TrimSpace(input.Email), strings.TrimSpace(input.Phone), input.Role).
@@ -181,8 +192,21 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "could not create OTP challenge")
 		return
 	}
-	response := map[string]any{"user": user, "message": "registration created; verify phone with OTP"}
-	if s.cfg.AppEnv == "development" {
+	sms := newMTNSMSClient(s.cfg)
+	if s.cfg.AppEnv != "development" || sms.configured() {
+		if err := sms.sendVerificationCode(r.Context(), input.Phone, code); err != nil {
+			log.Printf("MTN SMS registration delivery failed: %v", err)
+			_, _ = s.db.Exec(r.Context(), `DELETE FROM otp_challenges WHERE phone=$1 AND used_at IS NULL`, input.Phone)
+			errorJSON(w, http.StatusBadGateway, "MTN did not accept the verification SMS. Check the SMS API credentials, approved service code, and phone number, then try again.")
+			return
+		}
+	}
+	message := "Registration created; verification code sent by SMS."
+	if s.cfg.AppEnv == "development" && !sms.configured() {
+		message = "Registration created; use the development verification code."
+	}
+	response := map[string]any{"user": user, "message": message}
+	if s.cfg.AppEnv == "development" && !sms.configured() {
 		response["development_code"] = code
 	}
 	writeJSON(w, http.StatusCreated, response)
@@ -305,19 +329,41 @@ func (s *Server) requestOTP(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "phone is required")
 		return
 	}
+	phone, err := normalizeRwandaPhone(input.Phone)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if s.cfg.AppEnv != "development" && !newMTNSMSClient(s.cfg).configured() {
+		errorJSON(w, http.StatusServiceUnavailable, "SMS verification is not configured. Set MTN SMS credentials and the approved service code.")
+		return
+	}
 	var code string
 	if s.cfg.AppEnv == "development" {
 		code = "111111"
 	} else {
 		code = randomDigits(6)
 	}
-	_, err := s.db.Exec(r.Context(), `INSERT INTO otp_challenges(phone, code_hash, expires_at) VALUES($1, $2, NOW() + INTERVAL '10 minutes')`, input.Phone, hash(code))
+	_, err = s.db.Exec(r.Context(), `INSERT INTO otp_challenges(phone, code_hash, expires_at) VALUES($1, $2, NOW() + INTERVAL '10 minutes')`, phone, hash(code))
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create OTP challenge")
 		return
 	}
-	response := map[string]any{"message": "OTP sent"}
-	if s.cfg.AppEnv == "development" {
+	sms := newMTNSMSClient(s.cfg)
+	if s.cfg.AppEnv != "development" || sms.configured() {
+		if err := sms.sendVerificationCode(r.Context(), phone, code); err != nil {
+			log.Printf("MTN SMS OTP delivery failed: %v", err)
+			_, _ = s.db.Exec(r.Context(), `DELETE FROM otp_challenges WHERE phone=$1 AND used_at IS NULL`, phone)
+			errorJSON(w, http.StatusBadGateway, "MTN did not accept the verification SMS. Check the SMS API credentials, approved service code, and phone number, then try again.")
+			return
+		}
+	}
+	message := "Verification code sent by SMS."
+	if s.cfg.AppEnv == "development" && !sms.configured() {
+		message = "Use the development verification code."
+	}
+	response := map[string]any{"message": message}
+	if s.cfg.AppEnv == "development" && !sms.configured() {
 		response["development_code"] = code
 	}
 	writeJSON(w, http.StatusOK, response)
@@ -336,6 +382,11 @@ func (s *Server) verifyOTP(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "phone and code are required")
 		return
 	}
+	phone, phoneErr := normalizeRwandaPhone(input.Phone)
+	if phoneErr != nil {
+		errorJSON(w, http.StatusBadRequest, phoneErr.Error())
+		return
+	}
 	var challengeID string
 	var codeHash string
 	var userID string
@@ -343,7 +394,7 @@ func (s *Server) verifyOTP(w http.ResponseWriter, r *http.Request) {
 		SELECT c.id, c.code_hash, u.id
 		FROM otp_challenges c JOIN users u ON u.phone = c.phone
 		WHERE c.phone=$1 AND c.used_at IS NULL AND c.expires_at > NOW()
-		ORDER BY c.created_at DESC LIMIT 1`, input.Phone).Scan(&challengeID, &codeHash, &userID)
+		ORDER BY c.created_at DESC LIMIT 1`, phone).Scan(&challengeID, &codeHash, &userID)
 	if err != nil || hash(input.Code) != codeHash {
 		errorJSON(w, http.StatusUnauthorized, "invalid or expired OTP")
 		return
@@ -806,7 +857,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 			OR l.village ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%')
 		AND ($2='' OR l.province=$2) AND ($3='' OR l.district=$3)
 		AND ($4='' OR l.sector=$4) AND ($5='' OR l.category=$5)
-		AND ($6='' OR l.transaction_type=$6)
+		AND ($6='' OR l.transaction_type=$6 OR (l.transaction_type='both' AND $6 IN ('buy','sell','rent','rent_out')))
 		ORDER BY l.created_at DESC LIMIT 100`, args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load listings")
@@ -1782,7 +1833,7 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if input.RelatedType == "application" || input.RelatedType == "listing" {
-		_, _ = s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_started','MTN MoMo payment started',$2)`, user.ID, fmt.Sprintf("Approve the RWF %.0f payment request in your MTN MoMo app.", input.Amount))
+		_, _ = s.db.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_started','MTN MoMo payment started',$2)`, user.ID, fmt.Sprintf("A RWF %.0f prompt was sent to your phone. Review the amount and enter your PIN in the official MTN MoMo prompt. Umutungo never asks for your PIN.", input.Amount))
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "provider": input.Provider, "provider_reference": providerReference, "amount": input.Amount, "currency": input.Currency})
 }
@@ -3046,7 +3097,7 @@ func validRole(role string) bool {
 
 func validTransaction(value string) bool {
 	switch value {
-	case "buy", "sell", "rent", "rent_out", "book":
+	case "buy", "sell", "rent", "rent_out", "book", "both":
 		return true
 	default:
 		return false

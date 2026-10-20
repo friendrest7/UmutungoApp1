@@ -4128,7 +4128,12 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
 }
 .app-realistic .hero-copy > .landing-search-actions { margin-top: 12px !important; }
 @media (min-width: 641px) {
-  .app-realistic .hero-copy { transform: translate(-1.5cm, 33px) !important; }
+  .app-realistic .hero-copy {
+    width: min(100%, 760px);
+    margin: 0 auto;
+    transform: translateY(33px) !important;
+    text-align: center;
+  }
 }
 @media (max-width: 640px) {
   .app-realistic .landing-search-heading {

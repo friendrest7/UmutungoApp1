@@ -4131,6 +4131,11 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   .app-realistic .hero-copy { transform: translate(-1.5cm, 33px) !important; }
 }
 @media (max-width: 640px) {
+  .app-realistic .landing-search-heading {
+    width: calc(100% - 1.2cm);
+    margin: 0 1.2cm 8px auto !important;
+    text-align: right;
+  }
   .hero-role-join { gap: 8px; }
   .hero-role-join .button { min-width: min(100%, 145px); flex: 1 1 145px; }
   .app-realistic .landing-hero-title { font-size: clamp(13px, 3.6vw, 18px) !important; }

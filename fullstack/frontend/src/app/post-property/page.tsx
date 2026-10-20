@@ -8,7 +8,8 @@ import { Icon } from '../../components/Icons';
 import { InterfacePreferences } from '../../components/InterfacePreferences';
 import { Logo } from '../../components/Logo';
 import { getDistrictNames, getSectorNames, provinceNames } from '../../data/rwandaLocations';
-import { apiToken, uploadListingImage, umutungoApi } from '../../lib/umutungoApi';
+import { apiToken, publicUmutungoApi, uploadListingImage, umutungoApi } from '../../lib/umutungoApi';
+import type { ApiListing } from '../../lib/listings';
 
 type PropertyType = 'House' | 'Apartment' | 'Land' | 'Commercial' | 'Office' | 'Hospitality' | 'Vehicle' | 'Furniture' | 'Appliance' | 'Equipment' | 'Other';
 type PostingRole = 'Komisiyoneri' | 'Landlord' | 'Property Owner';
@@ -55,17 +56,6 @@ const curatedImages: Record<PropertyType, string[]> = {
   Vehicle: ['/properties/commercial-02.jpg'], Furniture: ['/properties/tour-living.jpg'], Appliance: ['/properties/tour-kitchen.jpg'], Other: ['/properties/story-detail.jpg'],
 };
 
-const defaultTitles: Record<PropertyType, string> = {
-  House: 'Bright family home with room to breathe',
-  Apartment: 'Light-filled apartment in Kigali',
-  Land: 'A ready-to-build plot with a clear future',
-  Commercial: 'Flexible commercial space for your next move',
-  Office: 'A polished office ready for productive work',
-  Equipment: 'Reliable equipment ready for its next operator',
-  Hospitality: 'A welcoming stay with room to remember',
-  Vehicle: 'A reliable vehicle ready for its next journey', Furniture: 'Furniture to make your space feel complete', Appliance: 'A useful appliance in good working condition', Other: 'A useful asset ready for its next purpose',
-};
-
 const amenityOptions = ['Parking', 'Garden', 'Furnished', 'Security', 'Water tank', 'Internet ready'];
 const assetHighlightOptions = ['Delivery available', 'Assembly available', 'Warranty', 'Negotiable'];
 const vehicleHighlightOptions = ['Air conditioning', 'Automatic transmission', 'Four wheel drive', 'Insurance included'];
@@ -108,7 +98,7 @@ function PostingSelection({ role, category, signedInRole, onRoleChange, onCatego
       ? [signedInRole]
       : ['Komisiyoneri', 'Landlord', 'Property Owner'];
   const isRoleLocked = signedInRole !== null;
-  return <main className="posting-selection-page"><header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><InterfacePreferences /><Link className="post-home-link" href="/"><Icon name="x" size={14} /> Exit</Link></header><section className="posting-selection-shell"><div className="posting-selection-intro"><div className="posting-selection-topline"><span>01</span><small>LISTING SETUP</small></div><span className="post-eyebrow">Umutungo Posting Platform</span><h1>{isRoleLocked ? <>Post as<br /><em>{roleOptions[0]}.</em></> : <>Start with the role<br /><em>you want to play.</em></>}</h1><p>{isRoleLocked ? 'Choose what you are listing and we will help you reach the right clients.' : 'Choose the role you want and what you want to offer. The Umutungo app helps you reach the right clients with a personalized, high-quality service.'}</p></div><div className="posting-selection-card"><div className="posting-selection-card-heading"><div><span>STEP 1 OF 2</span><h2>Set the direction</h2></div><span className="posting-selection-progress">01 <i /> 02</span></div><fieldset><legend>{isRoleLocked ? 'Your posting role' : 'Who are you posting as?'}</legend><div className={`posting-role-grid ${isRoleLocked ? 'posting-role-locked' : ''}`}>{roleOptions.map((item) => <button type="button" key={item} className={role === item ? 'is-selected' : ''} aria-pressed={role === item} onClick={() => isRoleLocked ? undefined : onRoleChange(role === item ? null : item)}><strong>{item}</strong><small>{item === 'Komisiyoneri' ? 'List for clients and manage enquiries.' : item === 'Landlord' ? 'Manage rental homes and tenants.' : 'List your hotels, vehicles, furniture, appliances, equipment, or other assets.'}</small></button>)}</div></fieldset><fieldset><legend>What are you listing?</legend><div className="posting-category-grid">{typeOptions.map((item) => <button type="button" key={item.key} className={category === item.key ? 'is-selected' : ''} onClick={() => onCategoryChange(item.key)}><Icon name={item.icon} size={18} /><span>{item.label}</span></button>)}</div></fieldset>{error && <p className="post-location-error" role="alert">{error}</p>}<button className="post-primary-button" type="button" onClick={onContinue}>Continue to listing form <Icon name="arrow" size={15} /></button></div></section></main>;
+  return <main className="posting-selection-page"><header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><InterfacePreferences /><Link className="post-home-link" href="/"><Icon name="x" size={14} /> Exit</Link></header><section className="posting-selection-shell"><div className="posting-selection-intro"><div className="posting-selection-topline"><span>01</span><small>LISTING SETUP</small></div><h1>{isRoleLocked ? <>Post as<br /><em>{roleOptions[0]}.</em></> : <>Choose a role<br /><em>to continue.</em></>}</h1><p>{isRoleLocked ? 'Choose a property type to list.' : 'Select the account role you will use to post.'}</p></div><div className="posting-selection-card"><div className="posting-selection-card-heading"><div><span>STEP 1 OF 2</span><h2>Set the direction</h2></div><span className="posting-selection-progress">01 <i /> 02</span></div><fieldset><legend>{isRoleLocked ? 'Your posting role' : 'Who are you posting as?'}</legend><div className={`posting-role-grid ${isRoleLocked ? 'posting-role-locked' : ''}`}>{roleOptions.map((item) => <button type="button" key={item} className={role === item ? 'is-selected' : ''} aria-pressed={role === item} onClick={() => isRoleLocked ? undefined : onRoleChange(role === item ? null : item)}><strong>{item}</strong><small>{item === 'Komisiyoneri' ? 'List properties for clients.' : item === 'Landlord' ? 'Manage rental listings and tenants.' : 'Manage your property listings.'}</small></button>)}</div></fieldset><fieldset><legend>What are you listing?</legend><div className="posting-category-grid">{typeOptions.map((item) => <button type="button" key={item.key} className={category === item.key ? 'is-selected' : ''} onClick={() => onCategoryChange(item.key)}><Icon name={item.icon} size={18} /><span>{item.label}</span></button>)}</div></fieldset>{error && <p className="post-location-error" role="alert">{error}</p>}<button className="post-primary-button" type="button" onClick={onContinue}>Continue to listing form <Icon name="arrow" size={15} /></button></div></section></main>;
 }
 
 export default function PostPropertyPage() {
@@ -116,6 +106,7 @@ export default function PostPropertyPage() {
   const [propertyType, setPropertyType] = useState<PropertyType>('House');
   const [intent, setIntent] = useState<Intent>('For rent');
   const [title, setTitle] = useState('');
+  const [existingTitles, setExistingTitles] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('City of Kigali');
   const [district, setDistrict] = useState('Gasabo');
@@ -161,7 +152,7 @@ export default function PostPropertyPage() {
 
   const gallery = uploadedImages.length ? uploadedImages : curatedImages[propertyType];
   const cover = selectedCover ?? gallery[0];
-  const listingTitle = title.trim() || defaultTitles[propertyType];
+  const listingTitle = title.trim();
   const isLand = propertyType === 'Land';
   const isAsset = ['Vehicle', 'Furniture', 'Appliance', 'Equipment', 'Other'].includes(propertyType);
   const isAccommodation = ['House', 'Apartment', 'Hospitality'].includes(propertyType);
@@ -169,6 +160,16 @@ export default function PostPropertyPage() {
   const intentOptions = getIntentOptions(propertyType);
   const selectedIntent = intentOptions.find((option) => option.label === intent) ?? intentOptions[0];
   const districtOptions = getDistrictNames(location);
+
+  useEffect(() => {
+    let cancelled = false;
+    void publicUmutungoApi<{ items: ApiListing[] }>('/api/v1/listings', { cache: 'no-store' })
+      .then((result) => {
+        if (!cancelled) setExistingTitles(Array.from(new Set((result?.items ?? []).map((item) => item.title.trim()).filter(Boolean))));
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const nextDistricts = getDistrictNames(location);
@@ -260,9 +261,14 @@ export default function PostPropertyPage() {
     setSaveError('');
     setSelectionComplete(true);
   };
-  const next = () => setStep((current) => Math.min(3, current + 1));
+  const next = () => {
+    if (step === 1 && !title.trim()) { setSaveError('Enter a listing title before continuing.'); return; }
+    setSaveError('');
+    setStep((current) => Math.min(3, current + 1));
+  };
   const previous = () => setStep((current) => Math.max(1, current - 1));
   const saveListing = async () => {
+    if (!title.trim()) { setSaveError('Enter a listing title before saving.'); setStep(1); return; }
     if (!district || !sector) { setLocationError('Choose a valid district and sector before saving the listing.'); setStep(2); return; }
     if (publicationMode === 'Scheduled' && (!scheduledFor || new Date(scheduledFor).getTime() <= Date.now())) { setSaveError('Choose a future date and time for scheduled publication.'); setStep(3); return; }
     if (!apiToken()) { setSelectionComplete(false); setAuthOpen(true); setSaveError('Your current session is local only. Sign in with a database-backed test account before publishing.'); return; }
@@ -342,13 +348,13 @@ export default function PostPropertyPage() {
   }
 
   return <main className="post-property-page">
-    <header className="post-property-header"><div className="post-header-brand"><Link href="/" aria-label="Umutungo home"><Logo /></Link><span>PROPERTY STUDIO</span></div><div className="post-header-center"><span className="post-live-dot" /> Draft autosaved</div><div className="post-header-actions"><InterfacePreferences /><nav className="post-header-links" aria-label="Listing builder navigation"><Link className="post-home-link" href="/"><Icon name="home" size={14} /><span>Home</span></Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /><span>Exit builder</span></Link></nav></div></header>
+    <header className="post-property-header"><div className="post-header-brand"><Link href="/" aria-label="Umutungo home"><Logo /></Link><span>NEW LISTING</span></div><div className="post-header-center"><span className="post-live-dot" /> Draft autosaved</div><div className="post-header-actions"><InterfacePreferences /><nav className="post-header-links" aria-label="Listing builder navigation"><Link className="post-home-link" href="/"><Icon name="home" size={14} /><span>Home</span></Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /><span>Exit builder</span></Link></nav></div></header>
     <div className="post-property-layout">
-      <aside className="post-property-sidebar"><div><p className="post-eyebrow">New listing</p><h1>List your<br /><em>property.</em></h1><p className="post-sidebar-copy">Share the details buyers, renters, and clients need.</p></div><nav className="post-progress" aria-label="Listing steps">{steps.map((item) => <button className={step === item.number ? 'is-active' : step > item.number ? 'is-complete' : ''} type="button" key={item.number} onClick={() => setStep(item.number)}><span className="post-step-number">{step > item.number ? <Icon name="check" size={13} /> : `0${item.number}`}</span><span><strong>{item.label}</strong><small>{item.note}</small></span></button>)}</nav><div className="post-sidebar-tip"><Icon name="sparkles" size={17} /><span><strong>Small detail, big difference</strong><small>Listings with 5+ photos get more attention.</small></span></div></aside>
+      <aside className="post-property-sidebar"><div><p className="post-eyebrow">New listing</p><h1>List your<br /><em>property.</em></h1><p className="post-sidebar-copy">Share the details buyers, renters, and clients need.</p></div><nav className="post-progress" aria-label="Listing steps">{steps.map((item) => <button className={step === item.number ? 'is-active' : step > item.number ? 'is-complete' : ''} type="button" key={item.number} onClick={() => setStep(item.number)}><span className="post-step-number">{step > item.number ? <Icon name="check" size={13} /> : `0${item.number}`}</span><span><strong>{item.label}</strong><small>{item.note}</small></span></button>)}</nav></aside>
       <section className="post-property-main">{saveError && <p className="post-save-error" role="alert">{saveError}</p>}
         <div className="post-main-heading"><div><p className="post-eyebrow">Step 0{step} of 03</p><h2>{steps[step - 1].label}</h2></div><span className="post-save-status"><Icon name="check" size={13} /> Saved locally</span></div>
         <div className="post-builder-grid"><div className="post-form-card">{step === 2 && <RwandaLocationFields province={location} onProvinceChange={(value) => { setLocation(value); setLocationError(''); }} district={district} districtOptions={districtOptions} onDistrictChange={(value) => { setDistrict(value); setSector(''); setCell(''); setVillage(''); }} sector={sector} sectorOptions={locationOptions} onSectorChange={(value) => { setSector(value); setCell(''); setVillage(''); }} cell={cell} cellOptions={cellOptions} onCellChange={(value) => { setCell(value); setVillage(''); }} village={village} villageOptions={villageOptions} onVillageChange={setVillage} loading={locationLoading} error={locationError} gpsPin={gpsPin} onCaptureGps={() => navigator.geolocation?.getCurrentPosition((position) => { setGpsPin(`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`); setLocationError(''); }, () => setLocationError('Location access was not available. You can continue with the administrative location.'))} />}
-          {step === 1 && <div className="post-form-section"><div className="post-section-intro"><h3>Start with the essentials</h3><p>Choose a format and give your property a title people will remember.</p></div><div className="post-category-field"><span className="post-field-label">Property category</span><div className="post-category-grid" role="group" aria-label="Property category">{typeOptions.map((item) => <button className={propertyType === item.key ? 'is-selected' : ''} type="button" key={item.key} onClick={() => { setPropertyType(item.key); if (!getIntentOptions(item.key).some((option) => option.label === intent)) setIntent(getIntentOptions(item.key)[0].label); setAmenities(['Vehicle', 'Furniture', 'Appliance', 'Equipment', 'Other'].includes(item.key) || item.key === 'Land' ? [] : ['Parking', 'Security']); }}><span className="post-category-icon"><Icon name={item.icon} size={17} /></span><strong>{item.label}</strong>{propertyType === item.key && <span className="post-category-check"><Icon name="check" size={12} /></span>}</button>)}</div><small className="post-category-help">Choose the category that best describes what you are listing.</small></div><div className="post-field-group"><span className="post-field-label">Listing intent</span><div className="post-segmented" role="group" aria-label="Listing intent">{intentOptions.map((option) => <button className={intent === option.label ? 'is-selected' : ''} type="button" key={option.label} onClick={() => setIntent(option.label)}>{option.label}</button>)}</div></div><label className="post-field"><span>Listing title</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={defaultTitles[propertyType]} /></label><label className="post-field"><span>Short description <small>Optional</small></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What makes this place special? Mention the light, the view, the street or the feeling." rows={4} /></label></div>}
+          {step === 1 && <div className="post-form-section"><div className="post-section-intro"><h3>Listing details</h3></div><label className="post-field"><span>Property</span><select value={propertyType} onChange={(event) => { const nextType = event.target.value as PropertyType; setPropertyType(nextType); if (!getIntentOptions(nextType).some((option) => option.label === intent)) setIntent(getIntentOptions(nextType)[0].label); setAmenities(['Vehicle', 'Furniture', 'Appliance', 'Equipment', 'Other'].includes(nextType) || nextType === 'Land' ? [] : ['Parking', 'Security']); }} aria-label="Property">{typeOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><div className="post-field-group"><span className="post-field-label">Listing intent</span><div className="post-segmented" role="group" aria-label="Listing intent">{intentOptions.map((option) => <button className={intent === option.label ? 'is-selected' : ''} type="button" key={option.label} onClick={() => setIntent(option.label)}>{option.label}</button>)}</div></div><label className="post-field"><span>Listing Title</span><select aria-label="Listing Title suggestions" value={existingTitles.includes(title) ? title : ''} onChange={(event) => { setTitle(event.target.value); setSaveError(''); }}><option value="">Choose an existing title or enter one below</option>{existingTitles.map((existingTitle) => <option key={existingTitle} value={existingTitle}>{existingTitle}</option>)}</select><input value={title} onChange={(event) => { setTitle(event.target.value); setSaveError(''); }} placeholder="Enter a new listing title" required /></label><label className="post-field"><span>Short description <small>Optional</small></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the property and its features." rows={4} /></label></div>}
           {step === 2 && <div className="post-form-section">
             <div className="post-section-intro"><h3>{isAsset ? 'Set the collection area and item details' : 'Give it a sense of place'}</h3><p>{isAsset ? 'Add a general area for pickup, then describe the item.' : 'A clear location and honest numbers make a listing feel trustworthy.'}</p></div>
             {isAsset ? <label className="post-field"><span>Pickup area <small>Optional</small></span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="e.g. Kimihurura, Kigali" /></label> : <label className="post-field"><span>{isLand ? 'Area or nearby landmark' : 'Neighbourhood'}</span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder={isLand ? 'e.g. near the main road' : 'e.g. Kacyiru, near the offices'} /></label>}

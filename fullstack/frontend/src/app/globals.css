@@ -3901,6 +3901,9 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   .app-realistic .landing-search-actions { position: relative; left: auto; width: min(100%, 520px); margin: 24px auto 0; transform: none; }
 }
 @media (max-width: 760px) {
+  .app-realistic .landing-search-heading { width: calc(100% - 1cm); margin-left: 1cm; }
+}
+@media (max-width: 760px) {
   .app-realistic .hero-copy > .landing-search-actions { width: min(100%, 460px); margin-top: 28px; transform: none; }
   .app-realistic .landing-search-actions .landing-directory-search { min-height: 44px; }
   .app-realistic .landing-search-actions .landing-directory-search input { font-size: 13px; }

@@ -1,9 +1,9 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AiChatbot } from '../components/AiChatbot';
 import { Footer } from '../components/Footer';
-import { Icon } from '../components/Icons';
+import { Icon, type IconName } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
 import { PropertyCard, PropertyPlaceholder } from '../components/PropertyCard';
 import { PropertyViewer } from '../components/PropertyViewer';
@@ -15,13 +15,15 @@ import { toProperty, type ApiListing } from '../lib/listings';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 
-const categories = [
-  { name: 'Residential houses', slug: 'houses', detail: 'Homes and houses for sale or rent.', image: '/properties/house-01.jpg' },
-  { name: 'Apartments', slug: 'apartments', detail: 'Easy city living in Kigali.', image: '/properties/apartment-01.jpg' },
-  { name: 'Land', slug: 'land', detail: 'Plots for your next project.', image: '/properties/land-01.jpg' },
-  { name: 'Commercial buildings', slug: 'commercial', detail: 'Shops and commercial spaces.', image: '/properties/commercial-01.jpg' },
-  { name: 'Offices', slug: 'offices', detail: 'Flexible workspaces for teams.', image: '/properties/commercial-02.jpg' },
-  { name: 'Hotels and lodges', slug: 'hospitality', detail: 'Stays, lodges, and bookable rooms.', image: '/properties/apartment-02.jpg' },
+const categories: { name: string; slug: string; detail: string; icon: IconName }[] = [
+  { name: 'Homes', slug: 'houses', detail: 'Houses and homes for sale or rent.', icon: 'home' },
+  { name: 'Apartments', slug: 'apartments', detail: 'Easy city living in Kigali.', icon: 'building' },
+  { name: 'Land', slug: 'land', detail: 'Plots for your next project.', icon: 'leaf' },
+  { name: 'Commercial spaces', slug: 'commercial', detail: 'Shops, offices and workspaces.', icon: 'building' },
+  { name: 'Offices', slug: 'offices', detail: 'Professional office properties for teams.', icon: 'building' },
+  { name: 'Cars', slug: 'vehicles', detail: 'Cars for sale or hire.', icon: 'car' },
+  { name: 'Car parts', slug: 'car-parts', detail: 'Parts and accessories for your car.', icon: 'wrench' },
+  { name: 'Home appliances', slug: 'appliances', detail: 'Useful appliances for your home.', icon: 'appliance' },
 ];
 export default function HomePage() {
   const { darkMode, toggleTheme } = usePersistentTheme();
@@ -32,7 +34,6 @@ export default function HomePage() {
   const [type, setType] = useState('Any type');
   const [intent, setIntent] = useState('Buy or rent');
   const [priceRange, setPriceRange] = useState('Any price');
-  const [shopQuery, setShopQuery] = useState('');
   const [properties, setProperties] = useState<PropertyPlaceholder[]>([]);
   const [listingLoadError, setListingLoadError] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -98,33 +99,12 @@ export default function HomePage() {
 
   const submitSearch = () => {
     const categorySlugs: Record<string, string> = { House: 'houses', Apartment: 'apartments', Land: 'land', Commercial: 'commercial', Office: 'offices', Hospitality: 'hospitality', Vehicle: 'vehicles', Equipment: 'equipment', Furniture: 'furniture', Appliance: 'appliances' };
-    const shopSlug = categorySlugs[type] ?? 'houses';
+    const shopSlug = categorySlugs[type] ?? 'properties';
     const params = new URLSearchParams({ location, intent, priceRange });
     if (district) params.set('district', district);
     if (sector) params.set('sector', sector);
     window.location.assign(`/categories/${shopSlug}?${params.toString()}`);
   };
-  const submitShopSearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const query = shopQuery.trim();
-    if (!query) return;
-    const categoryKeywords: Array<[string, string[]]> = [
-      ['houses', ['house', 'houses', 'home', 'homes']], ['apartments', ['apartment', 'apartments', 'flat', 'flats']],
-      ['land', ['land', 'plot', 'plots']], ['commercial', ['commercial', 'shop', 'shops']], ['offices', ['office', 'offices']],
-      ['hospitality', ['hotel', 'hotels', 'lodge', 'lodges', 'hospitality']], ['vehicles', ['vehicle', 'vehicles', 'car', 'cars']],
-      ['furniture', ['furniture']], ['appliances', ['appliance', 'appliances']], ['equipment', ['equipment']],
-    ];
-    const normalizedQuery = query.toLowerCase();
-    const target = categoryKeywords.find(([, words]) => words.some((word) => normalizedQuery.includes(word)))?.[0] ?? 'houses';
-    const params = new URLSearchParams({ q: query });
-    if (location && location !== 'Kigali') params.set('location', location);
-    if (district) params.set('district', district);
-    if (sector) params.set('sector', sector);
-    if (intent !== 'Buy or rent') params.set('intent', intent);
-    if (priceRange !== 'Any price') params.set('priceRange', priceRange);
-    window.location.assign(`/categories/${target}?${params.toString()}`);
-  };
-
   const toggleFavorite = (property: PropertyPlaceholder) => {
     const item: FavoriteItem = { property_id: property.id, title: property.title, type: property.type, location: property.location, price: `${property.price} ${property.priceNote}`, image: property.image };
     const wasSaved = favorites.includes(property.id);
@@ -160,7 +140,7 @@ export default function HomePage() {
   ];
   const propertyCategories = listingCategories.map((category) => {
     const liveListings = visibleProperties.filter((property) => category.types.includes(property.type.toLowerCase())).slice(0, 3);
-    const testListings = testingAccount ? testingListings.filter((property) => property.categorySlug === category.slug).slice(0, Math.max(0, 3 - liveListings.length)).map((property) => ({ ...property, poster: { name: testingFirstName, role: 'Property Owner' as const } })) : [];
+    const testListings = testingListings.filter((property) => property.categorySlug === category.slug).slice(0, Math.max(0, 3 - liveListings.length)).map((property) => testingAccount ? ({ ...property, poster: { name: testingFirstName, role: 'Property Owner' as const } }) : property);
     return { ...category, listings: [...liveListings, ...testListings] };
   });
 
@@ -171,19 +151,19 @@ export default function HomePage() {
       <section className="hero-section" id="home">
         <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <h1 className="landing-search-heading">You are on Umutungo, you can find different properties here.</h1>
-          <div className="landing-search-actions"><form className="landing-directory-search" onSubmit={submitShopSearch} role="search" aria-label={t(language, 'Search')}><Icon name="search" size={17} /><input aria-label={t(language, 'Search property listings')} value={shopQuery} onChange={(event) => setShopQuery(event.target.value)} placeholder={t(language, 'Search by property, category or location')} /><button type="submit" aria-label={t(language, 'Search')} disabled={!shopQuery.trim()}><Icon name="arrow" size={15} /></button></form></div>
           {!signedIn && <div className="hero-role-join" aria-label="Join Umutungo"><a className="button" href="/register?role=Komisiyoneri">{t(language, 'Join as Komisiyoneri')}</a><a className="button" href="/register?role=Property%20Owner">{t(language, 'Join as Property Owner')}</a><a className="button" href="/register?role=Landlord">{t(language, 'Join as Landlord')}</a></div>}
-        </div></div></div>
+        </div></div>
         <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} district={district} sector={sector} type={type} intent={intent} priceRange={priceRange} onLocationChange={(value) => { setLocation(value); setDistrict(''); setSector(''); }} onDistrictChange={(value) => { setDistrict(value); setSector(''); }} onSectorChange={setSector} onTypeChange={setType} onIntentChange={setIntent} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
+        </div>
       </section>
 
       <section className="section section-property container" id="properties">
-        <div className="section-heading split-heading"><div><p className="eyebrow">{t(language, 'Properties')}</p><h2>{t(language, 'Available listings')}</h2></div><a className="featured-shop-link" href="/categories/houses">{t(language, 'View All Properties')} <Icon name="arrow" size={15} /></a></div>{propertyCategories.filter((category) => category.listings.length > 0).map((category) => <div className="landing-category-listings" key={category.slug}><div className="section-heading split-heading"><h3>{t(language, category.name)}</h3><a className="featured-shop-link" href={`/categories/${category.slug}`}>{t(language, 'View all')} <Icon name="arrow" size={15} /></a></div><div className="property-grid">{category.listings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />)}</div></div>)}
+        <div className="section-heading split-heading"><div><p className="eyebrow">{t(language, 'Properties')}</p><h2>{t(language, 'Available listings')}</h2></div><a className="featured-shop-link" href="/categories/properties">{t(language, 'View All Properties')} <Icon name="arrow" size={15} /></a></div>{propertyCategories.filter((category) => category.listings.length > 0).map((category) => <div className="landing-category-listings" key={category.slug}><div className="section-heading split-heading"><h3>{t(language, category.name)}</h3><a className="featured-shop-link" href={`/categories/${category.slug}`}>{t(language, 'View all')} <Icon name="arrow" size={15} /></a></div><div className="property-grid">{category.listings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} onView={() => setSelectedProperty(property)} />)}</div></div>)}
       </section>
 
       <section className="category-section section container" id="categories">
         <div className="section-heading split-heading"><div><h2>{t(language, 'Homes, land and commercial property')}</h2></div><div className="category-heading-spacer" aria-hidden="true" /></div>
-        <div className="category-grid premium-category-grid">{categories.map((category) => <a className="premium-category-card" href={`/categories/${category.slug}`} key={category.slug}><span className="premium-category-image" style={{ backgroundImage: `url(${category.image})` }} /><span className="premium-category-copy"><strong>{t(language, category.name)}</strong><small>{t(language, category.detail)}</small><Icon name="arrow" size={15} /></span></a>)}</div>
+        <div className="category-grid premium-category-grid">{categories.map((category, index) => <a className="premium-category-card premium-category-card-icons" href={`/categories/${category.slug}`} key={category.slug}><span className="premium-category-index">{String(index + 1).padStart(2, '0')}</span><span className="premium-category-icon"><Icon name={category.icon} size={32} /></span><span className="premium-category-copy"><strong>{t(language, category.name)}</strong><small>{t(language, category.detail)}</small><Icon name="arrow" size={15} /></span></a>)}</div>
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">

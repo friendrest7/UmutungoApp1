@@ -1,6 +1,9 @@
 export type IconName =
   | 'arrow'
   | 'building'
+  | 'car'
+  | 'wrench'
+  | 'appliance'
   | 'check'
   | 'creditCard'
   | 'chevron'
@@ -37,6 +40,9 @@ export function Icon({ name, size = 18, strokeWidth = 1.8, filled = false }: Ico
   const paths: Record<IconName, React.ReactNode> = {
     arrow: <><path d="M5 12h13" {...common} /><path d="m13 6 6 6-6 6" {...common} /></>,
     building: <><path d="M4 21h16M6 21V5l6-3 6 3v16M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1" fill="none" {...common} /></>,
+    car: <><path d="m5 11 1.5-4.2A2 2 0 0 1 8.4 5.5h7.2a2 2 0 0 1 1.9 1.3L19 11l1.4 1.2a2 2 0 0 1 .6 1.5V18h-2v-2H5v2H3v-4.3a2 2 0 0 1 .6-1.5L5 11Z" fill="none" {...common} /><path d="M5 11h14M7 13.5h.01M17 13.5h.01" fill="none" {...common} /></>,
+    wrench: <><path d="M14.5 6.5a5 5 0 0 0-6.2 6.2L3 18l3 3 5.3-5.3a5 5 0 0 0 6.2-6.2l-3 3-3-3 3-3Z" fill="none" {...common} /></>,
+    appliance: <><rect x="5" y="2.5" width="14" height="19" rx="2" fill="none" {...common} /><path d="M5 8h14M8 5.5h.01M11 5.5h.01M9 11v7M15 11v7" fill="none" {...common} /></>,
     check: <path d="m5 12 4 4L19 6" fill="none" {...common} />,
     creditCard: <><rect x="3" y="5" width="18" height="14" rx="2" fill="none" {...common} /><path d="M3 10h18M7 15h3" fill="none" {...common} /></>,
     chevron: <path d="m6 9 6 6 6-6" fill="none" {...common} />,

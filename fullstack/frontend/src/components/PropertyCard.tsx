@@ -18,7 +18,7 @@ export function PropertyCard({ language, property, favorite, onFavorite, onView 
 
   useEffect(() => {
     if (!isHovered || images.length < 2) return;
-    const interval = window.setInterval(() => setActiveImage((current) => (current + 1) % images.length), 950);
+    const interval = window.setInterval(() => setActiveImage((current) => (current + 1) % images.length), 2200);
     return () => window.clearInterval(interval);
   }, [isHovered, images.length]);
 
@@ -37,7 +37,7 @@ export function PropertyCard({ language, property, favorite, onFavorite, onView 
           <div className="property-gallery-dots" aria-label={t(language, 'Property photos')}>{images.map((image, index) => <button key={`${image}-${index}`} className={index === activeImage ? 'is-active' : ''} type="button" onClick={() => setActiveImage(index)} aria-label={`${t(language, 'Show property image')} ${index + 1}`} />)}</div>
         </>}
         <button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} type="button" onClick={onFavorite} aria-label={favorite ? `${t(language, 'Remove property from favorites')}: ${t(language, property.title)}` : `${t(language, 'Save property')}: ${t(language, property.title)}`}><Icon name="heart" size={18} filled={favorite} /></button>
-        <span className="verified-badge">{property.testingOnly ? 'Testing listing' : property.poster?.verified ? <><Icon name="check" size={12} /> {t(language, 'Verified owner')}</> : t(language, 'Owner listing')}</span>
+        <span className="verified-badge">{property.testingOnly ? 'Demo listing' : property.poster?.verified ? <><Icon name="check" size={12} /> {t(language, 'Verified owner')}</> : t(language, 'Owner listing')}</span>
       </div>
       <div className="property-card-body">
         <div className="property-card-top"><div><h3>{t(language, property.title)}</h3><p><Icon name="pin" size={13} /> {t(language, property.location)}</p></div></div>

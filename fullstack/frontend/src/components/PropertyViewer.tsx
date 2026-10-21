@@ -41,8 +41,9 @@ function escapeReceiptValue(value: string | number) {
 
 export function PropertyViewer({ language, property, onClose, initialMode = 'photos', initialRequest = false }: PropertyViewerProps) {
   const images = property.images?.length ? property.images : [property.image];
+  const isProductListing = ['Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other assets'].includes(property.type);
   const [activeImage, setActiveImage] = useState(0);
-  const [mode, setMode] = useState<ViewerMode>(initialMode);
+  const [mode, setMode] = useState<ViewerMode>(isProductListing ? 'photos' : initialMode);
   const [tourStop, setTourStop] = useState(0);
   const [turn, setTurn] = useState(0);
   const [tilt, setTilt] = useState(0);
@@ -353,8 +354,10 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
 
       <div className="property-viewer-tabs" role="tablist" aria-label={t(language, 'Property media')}>
         <button className={mode === 'photos' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'photos'} onClick={() => setMode('photos')}><Icon name="building" size={15} /> {t(language, 'Photos')}</button>
-        <button className={mode === 'tour' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'tour'} onClick={() => setMode('tour')}><Icon name="sparkles" size={15} /> {t(language, '3D tour')}</button>
-        <button className={mode === 'plan' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'plan'} onClick={() => setMode('plan')}><Icon name="home" size={15} /> {t(language, 'Floor plan')}</button>
+        {!isProductListing && <>
+          <button className={mode === 'tour' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'tour'} onClick={() => setMode('tour')}><Icon name="sparkles" size={15} /> {t(language, '3D tour')}</button>
+          <button className={mode === 'plan' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'plan'} onClick={() => setMode('plan')}><Icon name="home" size={15} /> {t(language, 'Floor plan')}</button>
+        </>}
       </div>
 
       <div className="property-viewer-grid">

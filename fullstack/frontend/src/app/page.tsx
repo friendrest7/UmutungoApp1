@@ -7,7 +7,6 @@ import { Icon, type IconName } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
 import { PropertyCard, PropertyPlaceholder } from '../components/PropertyCard';
 import { PropertyViewer } from '../components/PropertyViewer';
-import { PropertySearch } from '../components/PropertySearch';
 import { Language, t } from '../data/translations';
 import { testingListings } from '../data/testingListings';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
@@ -28,12 +27,6 @@ const categories: { name: string; slug: string; detail: string; icon: IconName }
 export default function HomePage() {
   const { darkMode, toggleTheme } = usePersistentTheme();
   const { language, changeLanguage } = usePersistentLanguage();
-  const [location, setLocation] = useState('Kigali');
-  const [district, setDistrict] = useState('');
-  const [sector, setSector] = useState('');
-  const [type, setType] = useState('Any type');
-  const [intent, setIntent] = useState('Buy or rent');
-  const [priceRange, setPriceRange] = useState('Any price');
   const [properties, setProperties] = useState<PropertyPlaceholder[]>([]);
   const [listingLoadError, setListingLoadError] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -97,14 +90,6 @@ export default function HomePage() {
     return () => window.removeEventListener('umutungo:favorites-changed', onFavoritesChanged);
   }, []);
 
-  const submitSearch = () => {
-    const categorySlugs: Record<string, string> = { House: 'houses', Apartment: 'apartments', Land: 'land', Commercial: 'commercial', Office: 'offices', Hospitality: 'hospitality', Vehicle: 'vehicles', Equipment: 'equipment', Furniture: 'furniture', Appliance: 'appliances' };
-    const shopSlug = categorySlugs[type] ?? 'properties';
-    const params = new URLSearchParams({ location, intent, priceRange });
-    if (district) params.set('district', district);
-    if (sector) params.set('sector', sector);
-    window.location.assign(`/categories/${shopSlug}?${params.toString()}`);
-  };
   const toggleFavorite = (property: PropertyPlaceholder) => {
     const item: FavoriteItem = { property_id: property.id, title: property.title, type: property.type, location: property.location, price: `${property.price} ${property.priceNote}`, image: property.image };
     const wasSaved = favorites.includes(property.id);
@@ -115,21 +100,7 @@ export default function HomePage() {
     window.dispatchEvent(new Event('umutungo:favorites-changed'));
     void (wasSaved ? removeFavorite(property.id) : saveFavorite(item)).catch(() => undefined);
   };
-  const selectCategory = (category: typeof categories[number]) => {
-    window.location.assign(`/categories/${category.slug}`);
-  };
-  const visibleProperties = properties.filter((property) => {
-    const matchesType = type === 'Any type' || property.type === type;
-    const matchesLocation = location === 'Kigali' || property.location.toLowerCase().includes(location.toLowerCase());
-    const matchesDistrict = !district || property.location.toLowerCase().includes(district.toLowerCase());
-    const matchesSector = !sector || property.location.toLowerCase().includes(sector.toLowerCase());
-    const isRental = property.priceNote.includes('/ month');
-    const availableFor = property.availableFor ?? (isRental ? 'rent' : 'sale');
-    const matchesIntent = intent === 'Buy or rent' || (intent === 'Rent' && (availableFor === 'rent' || availableFor === 'both')) || (intent === 'Buy' && (availableFor === 'sale' || availableFor === 'both'));
-    const numericPrice = Number(property.price.replace(/[^0-9]/g, ''));
-    const matchesPrice = priceRange === 'Any price' || (priceRange === 'Under RWF 500,000' && numericPrice < 500000) || (priceRange === 'RWF 500,000 - 1,000,000' && numericPrice >= 500000 && numericPrice <= 1000000) || (priceRange === 'Over RWF 1,000,000' && numericPrice > 1000000);
-    return matchesType && matchesLocation && matchesDistrict && matchesSector && matchesIntent && matchesPrice;
-  });
+  const visibleProperties = properties;
   const listingCategories = [
     { name: 'Residential houses', slug: 'houses', types: ['house'] }, { name: 'Apartments', slug: 'apartments', types: ['apartment'] },
     { name: 'Land', slug: 'land', types: ['land'] }, { name: 'Commercial buildings', slug: 'commercial', types: ['commercial'] },
@@ -150,10 +121,9 @@ export default function HomePage() {
     <main>
       <section className="hero-section" id="home">
         <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
-          <h1 className="landing-search-heading">You are on Umutungo, you can find different properties here.</h1>
+          <h1 className="landing-search-heading">You are on Umutungo, you can find different properties <a className="button landing-properties-cta" href="/categories/properties">here</a>.</h1>
           {!signedIn && <div className="hero-role-join" aria-label="Join Umutungo"><a className="button" href="/register?role=Komisiyoneri">{t(language, 'Join as Komisiyoneri')}</a><a className="button" href="/register?role=Property%20Owner">{t(language, 'Join as Property Owner')}</a><a className="button" href="/register?role=Landlord">{t(language, 'Join as Landlord')}</a></div>}
         </div></div>
-        <div className="landing-search-board"><div className="container hero-search-wrap"><PropertySearch language={language} location={location} district={district} sector={sector} type={type} intent={intent} priceRange={priceRange} onLocationChange={(value) => { setLocation(value); setDistrict(''); setSector(''); }} onDistrictChange={(value) => { setDistrict(value); setSector(''); }} onSectorChange={setSector} onTypeChange={setType} onIntentChange={setIntent} onPriceRangeChange={setPriceRange} onSubmit={submitSearch} /></div></div>
         </div>
       </section>
 

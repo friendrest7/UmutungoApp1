@@ -1,5 +1,5 @@
-import { InfoPageShell } from '../../components/InfoPageShell';
+import { redirect } from 'next/navigation';
 
 export default function CategoriesPage() {
-  return <InfoPageShell page="categories" />;
+  redirect('/categories/properties');
 }

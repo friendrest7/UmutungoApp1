@@ -1,15 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AiChatbot } from './AiChatbot';
 import { Icon } from './Icons';
 import { InterfacePreferences } from './InterfacePreferences';
 import { Navbar } from './Navbar';
+import { PropertySearch } from './PropertySearch';
+import { ConversationalPropertySearch } from './ConversationalPropertySearch';
 import { Language, t } from '../data/translations';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 import { testingListings } from '../data/testingListings';
+import { getDistrictNames } from '../data/rwandaLocations';
 import type { PropertyPlaceholder } from './PropertyCard';
 import { PropertyViewer } from './PropertyViewer';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
@@ -113,6 +116,14 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   const category = { ...rawCategory, name: t(language, rawCategory.name), eyebrow: t(language, rawCategory.eyebrow), description: t(language, rawCategory.description) };
   const [query, setQuery] = useState(initialQuery);
   const [filter, setFilter] = useState(category.filters[0]);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const categoryPickerRef = useRef<HTMLDivElement>(null);
+  const [searchLocation, setSearchLocation] = useState(initialLocation || 'Kigali');
+  const [searchDistrict, setSearchDistrict] = useState(initialDistrict);
+  const [searchSector, setSearchSector] = useState(initialSector);
+  const [searchType, setSearchType] = useState(slug === 'houses' ? 'House' : 'Any type');
+  const [searchIntent, setSearchIntent] = useState(initialIntent || 'Buy or rent');
+  const [searchPriceRange, setSearchPriceRange] = useState(initialPriceRange || 'Any price');
   const [saved, setSaved] = useState<string[]>([]);
   const [activeListing, setActiveListing] = useState<Listing | null>(null);
   const [databaseListings, setDatabaseListings] = useState<Listing[]>([]);
@@ -146,6 +157,30 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   }), [slug, testingAccount, testingFirstName]);
   const changeLanguage = (nextLanguage: Language) => {
     setLanguage(nextLanguage);
+  };
+  useEffect(() => {
+    if (!categoryPickerOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!categoryPickerRef.current?.contains(event.target as Node)) setCategoryPickerOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCategoryPickerOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [categoryPickerOpen]);
+  const submitHouseSearch = () => {
+    const categorySlugs: Record<string, string> = { 'Any type': 'properties', House: 'houses', Apartment: 'apartments', Land: 'land', Commercial: 'commercial' };
+    const searchSlug = categorySlugs[searchType] ?? 'houses';
+    const params = new URLSearchParams({ location: searchLocation, intent: searchIntent, priceRange: searchPriceRange });
+    if (searchDistrict) params.set('district', searchDistrict);
+    if (searchSector) params.set('sector', searchSector);
+    if (query.trim()) params.set('q', query.trim());
+    window.location.assign(`/categories/${searchSlug}?${params.toString()}`);
   };
   useEffect(() => {
     let cancelled = false;
@@ -188,9 +223,10 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     const otherDemos = demoListings.filter((item) => !item.id.endsWith('-1'));
     const categoryDemo = demoListings.filter((item) => item.categorySlug === slug && item.id.endsWith('-1'));
     const sourceListings = slug === 'properties'
-      ? [...firstDemos, ...databaseListings, ...otherDemos]
+      ? [...firstDemos, ...otherDemos, ...databaseListings]
       : [...categoryDemo, ...databaseListings, ...demoListings.filter((item) => item.categorySlug === slug && !item.id.endsWith('-1'))];
-    return sourceListings.filter((item) => {
+    const provinceDistricts = initialLocation ? getDistrictNames(initialLocation) : [];
+    const filteredListings = sourceListings.filter((item) => {
     const ignoredQueryWords = ['in', 'near', 'for', 'a', 'the', 'to', 'with', 'buy', 'sell', 'sale', 'rent', 'lease', 'property', 'properties', ...(slug === 'properties' ? [] : (categoryAliases[slug] ?? []).flatMap((alias) => alias.split(' ')))];
     const queryWords = query.toLowerCase().split(/\s+/).filter((word) => word && !ignoredQueryWords.includes(word));
     const normalizedItemCategory = normalizedCategory(item.categoryName ?? '');
@@ -198,7 +234,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     const itemCategoryWords = itemCategorySlug ? categoryAliases[itemCategorySlug] ?? [] : [];
     const searchableText = `${item.title} ${item.location} ${item.detail} ${category.name} ${item.categoryName ?? ''} ${itemCategoryWords.join(' ')}`.toLowerCase();
     const matchesQuery = queryWords.every((word) => searchableText.includes(word));
-    const matchesLocation = !initialLocation || initialLocation === 'Kigali' || item.location.toLowerCase().includes(initialLocation.toLowerCase());
+    const matchesLocation = !initialLocation || initialLocation === 'Kigali' || item.location.toLowerCase().includes(initialLocation.toLowerCase()) || provinceDistricts.some((districtName) => item.location.toLowerCase().includes(districtName.toLowerCase()));
     const matchesDistrict = !initialDistrict || item.location.toLowerCase().includes(initialDistrict.toLowerCase());
     const matchesSector = !initialSector || item.location.toLowerCase().includes(initialSector.toLowerCase());
     const matchesIntent = !initialIntent || initialIntent === 'Buy or rent' || (initialIntent === 'Rent' && (item.intent === 'For rent' || item.intent === 'For sale or rent' || item.intent === 'For lease' || item.intent === 'For sale or lease')) || (initialIntent === 'Buy' && (item.intent === 'For sale' || item.intent === 'For sale or rent' || item.intent === 'For sale or lease'));
@@ -211,7 +247,8 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
       ? matchesCategory
       : filter.startsWith('All') || (filter === 'For rent' && ['For rent', 'For sale or rent', 'For lease', 'For sale or lease'].includes(item.intent)) || (filter === 'For sale' && ['For sale', 'For sale or rent', 'For sale or lease'].includes(item.intent)) || (filter === 'Book now' && item.intent === 'Book') || ['Residential', 'Commercial', 'Private office', 'Open workspace'].includes(filter);
       return matchesQuery && matchesLocation && matchesDistrict && matchesSector && matchesIntent && matchesPrice && matchesFilter;
-    }).map(normalizeListing).slice(0, slug === 'properties' ? 110 : 10);
+    }).map(normalizeListing);
+    return slug === 'properties' ? filteredListings : filteredListings.slice(0, 10);
   }, [category, databaseListings, demoListings, filter, initialDistrict, initialIntent, initialLocation, initialPriceRange, initialSector, query, slug]);
   useEffect(() => {
     const item = listings.find((listingItem) => listingItem.id === hoveredGalleryId);
@@ -237,9 +274,13 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic category-shell`}><Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} /><main className="category-experience" style={{ '--category-accent': category.accent } as React.CSSProperties}>
     <header className="category-experience-header"><Link href="/" className="category-back"><Icon name="home" size={15} /> {t(language, 'Home')}</Link><nav className="category-shop-nav" aria-label={t(language, 'Property shop categories')}>{shopCategories.map((item) => <Link className={item.slug === slug ? 'is-active' : ''} href={`/categories/${item.slug}`} key={item.slug}><Icon name={item.icon} size={14} />{t(language, item.label)}</Link>)}</nav><div><span>{translatedCategoryName}</span><Link href="/">Umutungo <Icon name="arrow" size={14} /></Link></div><InterfacePreferences /></header>
     <section className={`category-experience-hero ${slug === 'apartments' ? 'no-hero-copy' : ''} ${slug === 'houses' ? 'houses-category-hero' : ''}`} style={{ backgroundImage: `linear-gradient(90deg, rgba(8, 18, 10, .78), rgba(8, 18, 10, .2)), url(${category.cover})` }}>{slug !== 'apartments' && <div>{slug === 'properties' ? <h1 className="properties-hero-heading">Umutungo<br /><em>property search hub</em></h1> : <h1>{t(language, category.eyebrow)}</h1>}{category.description && <p>{t(language, category.description)}</p>}</div>}<div className="category-search-box"><Icon name="search" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`${t(language, 'Search')} ${translatedCategoryName.toLowerCase()} ${t(language, 'by location or feature')}`} /><button type="button" aria-label={t(language, 'Search category')} onClick={() => setQuery(query.trim())}><Icon name="arrow" size={15} /></button></div></section>
+    {slug === 'properties' && <div className="container conversational-property-search-wrap"><ConversationalPropertySearch language={language} /></div>}
+    {slug === 'houses' && <section className="houses-property-search"><div className="container"><PropertySearch language={language} location={searchLocation} district={searchDistrict} sector={searchSector} type={searchType} intent={searchIntent} priceRange={searchPriceRange} onLocationChange={(value) => { setSearchLocation(value); setSearchDistrict(''); setSearchSector(''); }} onDistrictChange={(value) => { setSearchDistrict(value); setSearchSector(''); }} onSectorChange={setSearchSector} onTypeChange={setSearchType} onIntentChange={setSearchIntent} onPriceRangeChange={setSearchPriceRange} onSubmit={submitHouseSearch} /></div></section>}
     <section className="category-experience-body">
-      <div className="category-results-heading"><div><span className="category-experience-eyebrow">{listings.length} property listings</span><h2>Find the properties you need. Browse listings for free.</h2></div></div>
-      <div className={`category-filter-row ${slug === 'properties' || slug === 'houses' ? 'category-filter-row-select' : ''}`}>{slug === 'properties' ? <label className="category-filter-select-label"><span>Category</span><select aria-label="Filter listings by category" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="All properties">All categories</option>{Object.entries(categoryConfigs).filter(([categorySlug]) => categorySlug !== 'properties').map(([, config]) => <option key={config.name} value={config.name}>{config.name}</option>)}</select></label> : slug === 'houses' ? <label className="category-filter-select-label"><span>Listing type</span><select aria-label="Filter homes by listing type" value={filter} onChange={(event) => setFilter(event.target.value)}>{category.filters.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : category.filters.map((item) => <button className={filter === item ? 'active' : ''} key={item} type="button" onClick={() => setFilter(item)}>{item}</button>)}</div>
+      <div className={`category-catalog-toolbar ${slug === 'properties' ? 'properties-catalog-toolbar' : ''}`}>
+        <div className="category-results-heading"><div><span className="category-experience-eyebrow">{listings.length} property listings</span><h2>Find the properties you need.</h2><p>Browse listings for free.</p></div></div>
+        <div className={`category-filter-row ${slug === 'properties' || slug === 'houses' ? 'category-filter-row-select' : ''}`}>{slug === 'properties' ? <div className="category-picker" ref={categoryPickerRef}><span className="category-picker-label">Browse categories</span><button className="category-picker-trigger" type="button" aria-label="Filter listings by category" aria-expanded={categoryPickerOpen} aria-controls="property-category-options" onClick={() => setCategoryPickerOpen((open) => !open)}><span className="category-picker-trigger-icon"><Icon name={shopCategories.find((item) => categoryConfigs[item.slug]?.name === filter)?.icon ?? 'building'} size={16} /></span><strong>{filter === 'All properties' ? 'All categories' : filter}</strong><Icon name="chevron" size={15} /></button>{categoryPickerOpen && <div className="category-picker-menu" id="property-category-options" role="listbox" aria-label="Property categories"><button className={`category-picker-option ${filter === 'All properties' ? 'is-active' : ''}`} type="button" role="option" aria-selected={filter === 'All properties'} onClick={() => { setFilter('All properties'); setCategoryPickerOpen(false); }}><span><Icon name="building" size={17} /></span><strong>All categories</strong><small>See every listing</small></button>{shopCategories.filter((item) => item.slug !== 'properties').map((item) => <button className={`category-picker-option ${filter === categoryConfigs[item.slug]?.name ? 'is-active' : ''}`} type="button" role="option" aria-selected={filter === categoryConfigs[item.slug]?.name} key={item.slug} onClick={() => { setFilter(categoryConfigs[item.slug]?.name ?? 'All properties'); setCategoryPickerOpen(false); }}><span><Icon name={item.icon} size={17} /></span><strong>{categoryConfigs[item.slug]?.name}</strong><small>Browse {categoryConfigs[item.slug]?.name.toLowerCase()}</small></button>)}</div>}</div> : slug === 'houses' ? <label className="category-filter-select-label"><span>Listing type</span><select aria-label="Filter homes by listing type" value={filter} onChange={(event) => setFilter(event.target.value)}>{category.filters.map((item) => <option key={item} value={item}>{item}</option>)}</select></label> : category.filters.map((item) => <button className={filter === item ? 'active' : ''} key={item} type="button" onClick={() => setFilter(item)}>{item}</button>)}</div>
+      </div>
       {listings.length ? <>
         <div className="owner-listing-heading"><h2>Property listings</h2><p>{listings.some((item) => item.testingOnly) ? 'Demo listings are examples; availability and prices may not be current.' : 'Listings posted directly to Umutungo.'}</p></div>
         <div className="category-listing-grid">{listings.map((item) => <article className="category-listing-card" key={item.id}>

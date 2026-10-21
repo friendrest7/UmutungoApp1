@@ -2,7 +2,7 @@ import { ReactElement, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Language, t } from '../data/translations';
-import { Icon } from './Icons';
+import { Icon, type IconName } from './Icons';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { AuthModal, AuthRole } from './AuthModal';
@@ -25,6 +25,20 @@ const languages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
 const languageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
 const dashboardPaths: Record<AuthRole, string> = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner', Admin: '/admin' };
 const dashboardPathForRole = (role?: string) => role && role in dashboardPaths ? dashboardPaths[role as AuthRole] : undefined;
+const navCategories: { name: string; description: string; slug: string; icon: IconName }[] = [
+  { name: 'Homes', description: 'Houses to buy or rent', slug: 'houses', icon: 'home' },
+  { name: 'Apartments', description: 'City homes and flats', slug: 'apartments', icon: 'building' },
+  { name: 'Land', description: 'Plots across Rwanda', slug: 'land', icon: 'leaf' },
+  { name: 'Commercial spaces', description: 'Shops and business properties', slug: 'commercial', icon: 'building' },
+  { name: 'Offices', description: 'Workspaces for teams', slug: 'offices', icon: 'building' },
+  { name: 'Cars', description: 'Cars for sale or hire', slug: 'vehicles', icon: 'car' },
+  { name: 'Car parts', description: 'Parts and car accessories', slug: 'car-parts', icon: 'wrench' },
+  { name: 'Home appliances', description: 'Appliances for your home', slug: 'appliances', icon: 'appliance' },
+  { name: 'Furniture', description: 'Furniture for every space', slug: 'furniture', icon: 'building' },
+  { name: 'Equipment', description: 'Tools and equipment', slug: 'equipment', icon: 'wrench' },
+  { name: 'Hospitality', description: 'Stays and accommodation', slug: 'hospitality', icon: 'home' },
+  { name: 'Other assets', description: 'More useful listings', slug: 'other', icon: 'sparkles' },
+];
 
 function HoverHint({ text, placement, children }: { text: string; placement: 'right' | 'bottom'; children: ReactElement }) {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -95,6 +109,9 @@ function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChang
 export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, isSignedIn = false, onSignIn, onSignOut, onAccount, onLandingVisibilityChange }: NavbarProps) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const categoryMenuRootRef = useRef<HTMLElement>(null);
+  const categoryMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const [scrolled, setScrolled] = useState(false);
   const [landingVisible, setLandingVisible] = useState(true);
   const [roleKey, setRoleKey] = useState('');
@@ -108,6 +125,23 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [notificationCount, setNotificationCount] = useState(0);
   const [notifications, setNotifications] = useState<NavNotification[]>([]);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  useEffect(() => {
+    if (!categoryMenuOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!categoryMenuRootRef.current?.contains(event.target as Node)) setCategoryMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setCategoryMenuOpen(false);
+      categoryMenuTriggerRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [categoryMenuOpen]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
   const favoritesRef = useRef<HTMLDivElement>(null);
@@ -353,15 +387,14 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
        </nav>{signedIn && <div className="sidebar-account"><HoverHint text={t(language, 'Access your Umutungo account.')} placement="right"><button className="sidebar-nav-link sidebar-account-link" type="button" title={t(language, 'Log out')} aria-label={t(language, 'Log out')} onClick={signOut}><Icon name="user" size={17} /><span>{t(language, 'Log out')}</span></button></HoverHint></div>}</div>
     </aside>
 
-    <header className={`topbar ${scrolled ? 'is-scrolled' : ''}`}>
+    <header className={`topbar ${scrolled ? 'is-scrolled' : ''}`} ref={categoryMenuRootRef}>
       <div className="topbar-inner">
         <div className="topbar-brand-group">
           <a className="topbar-brand" href="/" aria-label="Umutungo home"><Logo darkMode={darkMode} /></a>
           <a className="topbar-home-link" href="/">{t(language, 'Home')}</a>
         </div>
         <nav className="desktop-nav" aria-label="Primary navigation">
-          <a className="nav-link" href="/categories"><span>{t(language, 'Categories')}</span></a>
-          <a className="nav-link" href="/how-it-works"><span>{t(language, 'How it works')}</span></a>
+          <button className={`nav-link nav-category-trigger ${categoryMenuOpen ? 'is-open' : ''}`} type="button" ref={categoryMenuTriggerRef} aria-haspopup="true" aria-expanded={categoryMenuOpen} aria-controls="nav-category-panel" onClick={() => setCategoryMenuOpen((open) => !open)}><span>{t(language, 'Categories')}</span><Icon name="chevron" size={13} /></button>
           <a className="nav-link" href="/about"><span>{t(language, 'About us')}</span></a>
           <a className="nav-contact-link" href="/#contact">{t(language, 'Contact us')}</a>
         </nav>
@@ -380,9 +413,13 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         </div>
       </div>
 
+      {categoryMenuOpen && <nav className="nav-category-panel" id="nav-category-panel" aria-label={t(language, 'Property categories')}>
+        <div className="nav-category-panel-heading"><div><span>UMUTUNGO CATEGORIES</span><strong>What are you looking for?</strong></div><button type="button" aria-label={t(language, 'Close categories')} onClick={() => setCategoryMenuOpen(false)}><Icon name="x" size={17} /></button></div>
+        <div className="nav-category-grid">{navCategories.map((category) => <a className="nav-category-item" href={`/categories/${category.slug}`} key={category.slug} onClick={() => { setCategoryMenuOpen(false); setMobileOpen(false); }}><span className="nav-category-icon"><Icon name={category.icon} size={20} /></span><span className="nav-category-copy"><strong>{t(language, category.name)}</strong><small>{category.description}</small></span><Icon name="arrow" size={14} /></a>)}</div>
+      </nav>}
+
       {mobileOpen && <div className="mobile-menu" id="mobile-menu">
-        <a className="mobile-menu-link" href="/categories" onClick={() => setMobileOpen(false)}>{t(language, 'Categories')}</a>
-        <a className="mobile-menu-link" href="/how-it-works" onClick={() => setMobileOpen(false)}>{t(language, 'How it works')}</a>
+        <button className="mobile-menu-link" type="button" aria-expanded={categoryMenuOpen} aria-controls="nav-category-panel" onClick={() => { setMobileOpen(false); setCategoryMenuOpen((open) => !open); }}>{t(language, 'Categories')}<Icon name={categoryMenuOpen ? 'chevron' : 'arrow'} size={14} /></button>
         <a className="mobile-menu-link" href="/about" onClick={() => setMobileOpen(false)}>{t(language, 'About us')}</a>
         <a className="mobile-menu-link mobile-contact-link" href="/#contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-oss-120b';
-const categories = ['houses', 'apartments', 'land', 'commercial', 'offices', 'hospitality', 'vehicles', 'furniture', 'appliances', 'equipment', 'other'];
+const categories = ['houses', 'apartments', 'land', 'commercial', 'offices', 'hospitality', 'vehicles', 'car-parts', 'furniture', 'appliances', 'equipment', 'other'];
 
 type SearchMessage = { role: 'user' | 'assistant'; content: string };
 type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; query: string; location: string; intent: string; priceRange: string };

@@ -56,7 +56,6 @@ function HowItWorksStory({ copy }: { copy: (key: string) => string }) {
   return <section ref={sectionRef} className="scroll-story" id="story" style={{ '--story-progress': progress } as CSSProperties}>
     <div className="scroll-story-inner container">
       <div className="scroll-story-intro">
-        <p className="eyebrow">{copy('A better way to look')}</p>
         <h2>{copy('The search')}<br /><em>{copy('comes alive.')}</em></h2>
         <p>{copy('Choose a step to see how Umutungo helps you find, compare, or list property.')}</p>
         <div className="scroll-story-progress" aria-label="Story progress">{scenes.map((scene, index) => <span key={scene.eyebrow} className={index <= activeIndex ? 'is-active' : ''} />)}</div>
@@ -110,9 +109,8 @@ export function InfoPageShell({ page }: { page: InfoPage }) {
 
 function HowItWorksPage({ copy }: { copy: (key: string) => string }) {
   return <main className="standalone-page how-page">
-    <section className="standalone-hero how-page-hero"><div className="container standalone-hero-grid"><div><p className="eyebrow">{copy('How Umutungo works')}</p><h1>{copy('Buy, rent or list property')}</h1><p>{copy('Search property listings across Rwanda, compare the details, and contact owners or representatives about the next step.')}</p><a className="button button-primary" href="/categories/houses">{copy('Browse property listings')} <Icon name="arrow" size={15} /></a></div><div className="journey-orbit how-hero-house" role="img" aria-label={copy('Property listings')}><span>{copy('Homes, land and commercial property')}</span></div></div></section>
     <HowItWorksStory copy={copy} />
-    <section className="journey-banner"><div className="container journey-banner-inner"><div><p className="eyebrow">{copy('Made for Rwanda')}</p><h2>{copy('Rooted in how we live')}</h2></div><Link className="text-arrow-link" href="/categories">{copy('Browse by category')} <Icon name="arrow" size={15} /></Link></div></section>
+    <section className="journey-banner"><div className="container journey-banner-inner"><div><p className="eyebrow">{copy('Made for Rwanda')}</p><h2>{copy('Rooted in how we live')}</h2></div><Link className="text-arrow-link" href="/categories/properties">{copy('Browse by category')} <Icon name="arrow" size={15} /></Link></div></section>
   </main>;
 }
 

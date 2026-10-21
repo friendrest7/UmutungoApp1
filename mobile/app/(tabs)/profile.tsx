@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useRouter } from 'expo-router';
 import { updateProfile } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';

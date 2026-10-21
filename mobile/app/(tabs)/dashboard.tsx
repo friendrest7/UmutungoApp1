@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useRouter } from 'expo-router';
 import { decideApplication, listApplications, listOwnerListings } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';

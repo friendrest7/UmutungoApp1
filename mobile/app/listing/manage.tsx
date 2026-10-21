@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { deleteListing, listOwnerListings, updateListing } from '@/api/client';
 import type { ApiListing } from '@/api/types';

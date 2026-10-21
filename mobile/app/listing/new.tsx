@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useRouter } from 'expo-router';
 import { createListing, uploadListingMedia } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';

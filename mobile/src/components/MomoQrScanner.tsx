@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useTheme } from '@/theme/ThemeContext';
 
 type Props = {

@@ -1,5 +1,6 @@
-﻿import { useEffect, useState } from 'react';
-import { Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
@@ -24,6 +25,13 @@ const categories: Array<{ key: string; label: string; icon: keyof typeof Ionicon
   { key: 'equipment', label: 'Equipment', icon: 'construct-outline', color: '#f1eee4' },
   { key: 'other', label: 'Other assets', icon: 'apps-outline', color: '#eeebf2' },
 ];
+const priceRanges = [
+  { label: '0–300,000', min: 0, max: 300_000 },
+  { label: '300,000–500,000', min: 300_000, max: 500_000 },
+  { label: '500,000–1,000,000', min: 500_000, max: 1_000_000 },
+  { label: '1,000,000–10,000,000', min: 1_000_000, max: 10_000_000 },
+  { label: '10,000,000+', min: 10_000_000, max: Infinity },
+];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -35,6 +43,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedPriceRange, setSelectedPriceRange] = useState('');
   const load = async () => {
     setError('');
     if (!listings.length) {
@@ -47,6 +57,14 @@ export default function HomeScreen() {
   };
   useEffect(() => { void Promise.resolve().then(load); }, []);
   const goToSearch = (params: { search?: string; category?: string; transaction_type?: string } = {}) => router.push({ pathname: '/search', params });
+  const goToAiSearch = () => { const prompt = query.trim(); router.push({ pathname: '/search', params: prompt ? { ai_query: prompt } : {} }); };
+  const visibleListings = listings.filter((item) => {
+    const listingCategory = item.category.toLowerCase().replace(/[^a-z]/g, '');
+    const selected = selectedCategory.replace(/[^a-z]/g, '');
+    if (selected && !listingCategory.includes(selected) && !selected.includes(listingCategory)) return false;
+    const range = priceRanges.find((item) => item.label === selectedPriceRange);
+    return !range || (item.price >= range.min && item.price < range.max);
+  });
 
   return <ScrollView style={styles.screen} contentContainerStyle={{ width: '100%', maxWidth: 760, alignSelf: 'center', padding: 20, paddingBottom: 28, gap: 22 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={colors.green} />}>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 5 }}>
@@ -66,9 +84,9 @@ export default function HomeScreen() {
         <Text style={{ color: '#ffffff', fontSize: 31, fontWeight: '800', letterSpacing: -0.8, lineHeight: 36 }}>{t('Find a place that feels right.')}</Text>
         <Text style={{ color: 'rgba(255,255,255,0.84)', fontSize: 13, lineHeight: 19 }}>{t('Browse homes, land and spaces from local owners.')}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 50, paddingLeft: 13, paddingRight: 5, borderRadius: 14, backgroundColor: '#ffffff' }}>
-          <Ionicons name="search-outline" size={19} color={colors.greenDark} />
-          <TextInput value={query} onChangeText={setQuery} onSubmitEditing={() => goToSearch({ search: query.trim() })} placeholder={t('Neighbourhood, district, or property')} placeholderTextColor="#68766c" returnKeyType="search" style={{ minWidth: 0, flex: 1, color: '#17251c', fontSize: 13 }} />
-          <Pressable onPress={() => goToSearch({ search: query.trim() })} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.green }} accessibilityLabel={t('Search')}>
+          <Ionicons name="sparkles-outline" size={19} color={colors.greenDark} />
+          <TextInput value={query} onChangeText={setQuery} onSubmitEditing={goToAiSearch} placeholder={t('Describe the properties you want and we get them for you')} placeholderTextColor="#68766c" returnKeyType="search" style={{ minWidth: 0, flex: 1, color: '#17251c', fontSize: 13 }} />
+          <Pressable onPress={goToAiSearch} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.green }} accessibilityLabel={t('Search')}>
             <Ionicons name="arrow-forward" size={18} color="#ffffff" />
           </Pressable>
         </View>
@@ -82,6 +100,23 @@ export default function HomeScreen() {
         </View>
       </View>
     </ImageBackground>
+
+    <View style={{ gap: 9, padding: 15, borderRadius: 18, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line }}>
+      <Text style={[styles.heading, { fontSize: 18 }]}>{t('Explore Umutungo and find a property that fits your plans.')}</Text>
+      <Text style={[styles.muted, { lineHeight: 19 }]}>{t('Browse homes, land, vehicles, furniture and more across Rwanda. Choose a category and price range to explore the available listings.')}</Text>
+    </View>
+
+    <View style={{ gap: 9 }}>
+      <Text style={[styles.muted, { fontSize: 11, fontWeight: '800' }]}>{t('Categories')}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 9, paddingRight: 20 }}>
+        <Pressable onPress={() => setSelectedCategory('')} style={{ width: 62, alignItems: 'center', gap: 5 }}><View style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: selectedCategory ? colors.paper : colors.greenSoft, borderWidth: 1, borderColor: colors.line }}><Ionicons name="apps-outline" size={19} color={colors.green} /></View><Text style={{ color: colors.ink, fontSize: 9, fontWeight: '700', textAlign: 'center' }}>{t('All')}</Text></Pressable>
+        {categories.map((item) => <Pressable key={item.key} onPress={() => setSelectedCategory((current) => current === item.key ? '' : item.key)} style={{ width: 66, alignItems: 'center', gap: 5 }}><View style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: selectedCategory === item.key ? colors.greenSoft : colors.paper, borderWidth: 1, borderColor: selectedCategory === item.key ? colors.green : colors.line }}><Ionicons name={item.icon} size={19} color={colors.greenDark} /></View><Text style={{ color: colors.ink, fontSize: 9, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>{t(item.label)}</Text></Pressable>)}
+      </ScrollView>
+      <Text style={[styles.muted, { fontSize: 11, fontWeight: '800', marginTop: 2 }]}>{t('Price range')}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 20 }}>
+        {priceRanges.map((range) => <Pressable key={range.label} onPress={() => setSelectedPriceRange((current) => current === range.label ? '' : range.label)} style={[styles.filterButton, selectedPriceRange === range.label ? styles.button : styles.secondaryButton, { paddingHorizontal: 12, minHeight: 34 }]}><Text style={selectedPriceRange === range.label ? styles.buttonText : styles.secondaryText}>{range.label}</Text></Pressable>)}
+      </ScrollView>
+    </View>
 
     {!user && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
       {([['komisiyoneri', 'Join as Komisiyoneri'], ['landlord', 'Join as Landlord'], ['property_owner', 'Join as Property Owner']] as const).map(([role, label]) => <Pressable key={role} onPress={() => router.push({ pathname: '/auth/register', params: { role: role === 'landlord' ? 'property_owner' : role } })} style={[styles.secondaryButton, { flexGrow: 1, flexBasis: '30%', paddingHorizontal: 8 }]}><Text style={[styles.secondaryText, { textAlign: 'center' }]}>{t(label)}</Text></Pressable>)}
@@ -100,24 +135,7 @@ export default function HomeScreen() {
     </View>
 
     <View style={{ gap: 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <View style={{ gap: 3 }}><Text style={[styles.muted, { color: colors.green, fontSize: 10, fontWeight: '900', letterSpacing: 1.1 }]}>{t('EXPLORE')}</Text><Text style={styles.heading}>{t('Browse categories')}</Text></View>
-        <Pressable onPress={() => goToSearch()}><Text style={{ color: colors.green, fontSize: 12, fontWeight: '800' }}>{t('View all')}</Text></Pressable>
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 20 }}>
-        {categories.map((item) => <Pressable key={item.key} onPress={() => goToSearch({ category: item.key })} style={{ width: 94, minHeight: 100, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 9, borderRadius: 16, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper }}>
-          <View style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: item.color }}><Ionicons name={item.icon} size={21} color={colors.greenDark} /></View>
-          <Text style={{ color: colors.ink, fontSize: 10, fontWeight: '800', textAlign: 'center' }} numberOfLines={2}>{t(item.label)}</Text>
-        </Pressable>)}
-      </ScrollView>
-    </View>
-
-    <View style={{ gap: 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <View style={{ gap: 3 }}><Text style={[styles.muted, { color: colors.green, fontSize: 10, fontWeight: '900', letterSpacing: 1.1 }]}>{t('FRESH FROM OWNERS')}</Text><Text style={styles.heading}>{t('Latest listings')}</Text></View>
-        <Pressable onPress={() => goToSearch()} style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}><Text style={{ color: colors.green, fontSize: 12, fontWeight: '800' }}>{t('View all')}</Text><Ionicons name="arrow-forward" size={14} color={colors.green} /></Pressable>
-      </View>
-      {loading ? <LoadingState label={t('Loading live properties...')} /> : error ? <ErrorState message={error} onRetry={() => { setLoading(true); void load(); }} /> : listings.length === 0 ? <EmptyState title={t('No listings found')} message={t('Published properties will appear here when they are available from the Umutungo API.')} /> : listings.slice(0, 4).map((listing) => <PropertyCard key={listing.id} listing={listing} onPress={() => router.push({ pathname: '/property/[id]', params: { id: listing.id } })} />)}
+      {loading ? <LoadingState label={t('Loading live properties...')} /> : error ? <ErrorState message={error} onRetry={() => { setLoading(true); void load(); }} /> : visibleListings.length === 0 ? <EmptyState title={t('No listings found')} message={t('Published properties will appear here when they are available from the Umutungo API.')} /> : visibleListings.slice(0, 4).map((listing) => <PropertyCard key={listing.id} listing={listing} onPress={() => router.push({ pathname: '/property/[id]', params: { id: listing.id } })} />)}
     </View>
 
     <Pressable onPress={() => router.push('/(tabs)/profile')} style={{ flexDirection: 'row', alignItems: 'center', gap: 13, padding: 17, borderRadius: 18, backgroundColor: colors.greenSoft }}>

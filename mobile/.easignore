@@ -21,6 +21,12 @@ coverage/
 /mobile/android/
 /mobile/.gradle/
 /mobile/coverage/
+# The native app builds entirely from mobile/, so unrelated server and website
+# sources and their media do not need to be sent to EAS.
+/backend/
+/fullstack/
+/public/
+/results/
 /fullstack/frontend/node_modules/
 /fullstack/frontend/.next/
 /fullstack/frontend/dist/

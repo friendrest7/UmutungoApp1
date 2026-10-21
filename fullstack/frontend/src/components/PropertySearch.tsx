@@ -34,24 +34,19 @@ function SearchControl({ language, label, value, options, onChange, icon, compac
   );
 }
 
-type PropertySearchProps = { language: Language; location: string; district: string; sector: string; type: string; intent: string; priceRange: string; onLocationChange: (value: string) => void; onDistrictChange: (value: string) => void; onSectorChange: (value: string) => void; onTypeChange: (value: string) => void; onIntentChange: (value: string) => void; onPriceRangeChange: (value: string) => void; onSubmit: () => void };
+type PropertySearchProps = { language: Language; categories: SearchOption[]; location: string; district: string; sector: string; type: string; intent: string; priceRange: string; onLocationChange: (value: string) => void; onDistrictChange: (value: string) => void; onSectorChange: (value: string) => void; onTypeChange: (value: string) => void; onIntentChange: (value: string) => void; onPriceRangeChange: (value: string) => void; onSubmit: () => void };
 
-export function PropertySearch({ language, location, district, sector, type, intent, priceRange, onLocationChange, onDistrictChange, onSectorChange, onTypeChange, onIntentChange, onPriceRangeChange, onSubmit }: PropertySearchProps) {
+export function PropertySearch({ language, categories, location, district, sector, type, intent, priceRange, onLocationChange, onDistrictChange, onSectorChange, onTypeChange, onIntentChange, onPriceRangeChange, onSubmit }: PropertySearchProps) {
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); onSubmit(); };
   const provinceName = location === 'Kigali' ? 'City of Kigali' : location;
   const districtOptions = getDistrictNames(provinceName);
   const sectorOptions = district ? getSectorNames(provinceName, district) : [];
+  const isHouse = type === 'houses';
   const hasSearchSelection = location !== 'Kigali' || district !== '' || sector !== '' || type !== 'Any type' || intent !== 'Buy or rent' || priceRange !== 'Any price';
 
   return (
-    <form className="property-search" onSubmit={submit} aria-label={t(language, 'Search')}>
-      <SearchControl language={language} label="Type" value={type} onChange={onTypeChange} icon="home" options={[
-        { value: 'Any type', label: t(language, 'Any type') },
-        { value: 'House', label: t(language, 'House') },
-        { value: 'Apartment', label: t(language, 'Apartments') },
-        { value: 'Land', label: t(language, 'Land') },
-        { value: 'Commercial', label: t(language, 'Commercial') },
-      ]} />
+    <form className={`property-search${isHouse ? '' : ' is-category-compact'}`} onSubmit={submit} aria-label={t(language, 'Search')}>
+      <SearchControl language={language} label="Type" value={type} onChange={onTypeChange} icon="home" options={categories} />
       <SearchControl language={language} label="For sale / rent" value={intent} onChange={onIntentChange} compact options={[
         { value: 'Buy or rent', label: t(language, 'Buy or rent') },
         { value: 'Buy', label: t(language, 'Buy') },
@@ -70,14 +65,14 @@ export function PropertySearch({ language, location, district, sector, type, int
         { value: 'Southern Province', label: t(language, 'Southern Province') },
         { value: 'Western Province', label: t(language, 'Western Province') },
       ]} />
-      <SearchControl language={language} label="District" value={district} onChange={onDistrictChange} icon="pin" compact options={[
+      {isHouse && <SearchControl key="district" language={language} label="District" value={district} onChange={onDistrictChange} icon="pin" compact options={[
         { value: '', label: t(language, 'Any district') },
         ...districtOptions.map((item) => ({ value: item, label: item })),
-      ]} />
-      <SearchControl language={language} label="Sector" value={sector} onChange={onSectorChange} icon="pin" compact disabled={!district} options={[
+      ]} />}
+      {isHouse && <SearchControl key="sector" language={language} label="Sector" value={sector} onChange={onSectorChange} icon="pin" compact disabled={!district} options={[
         { value: '', label: district ? (sectorOptions.length ? t(language, 'Any sector') : t(language, 'No sectors available')) : t(language, 'Select district') },
         ...sectorOptions.map((item) => ({ value: item, label: item })),
-      ]} />
+      ]} />}
       <button className="button button-primary search-submit" type="submit" disabled={!hasSearchSelection} aria-disabled={!hasSearchSelection}>{t(language, 'Search')} <Icon name="arrow" size={16} /></button>
     </form>
   );

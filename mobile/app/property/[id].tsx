@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Linking, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { applyToListing, createBooking, createListingReview, getListing, getPayment, listFavorites, listListingReviews, removeFavorite, saveFavorite, sendMessage, startMomoPayment } from '@/api/client';
 import type { ApiListing, ApiReview } from '@/api/types';

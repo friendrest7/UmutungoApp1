@@ -1,5 +1,6 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { listListings } from '@/api/client';
 import type { ApiListing, ListingQuery } from '@/api/types';
@@ -15,6 +16,13 @@ const categories = [
   ['office', 'Offices'], ['hospitality', 'Hotels & lodges'], ['vehicle', 'Vehicles'], ['car_parts', 'Car parts'], ['furniture', 'Furniture'],
   ['appliance', 'Appliances'], ['equipment', 'Equipment'], ['other', 'Other assets'],
 ] as const;
+const priceRanges = [
+  { label: '0–300,000', min: 0, max: 300_000 },
+  { label: '300,000–500,000', min: 300_000, max: 500_000 },
+  { label: '500,000–1,000,000', min: 500_000, max: 1_000_000 },
+  { label: '1,000,000–10,000,000', min: 1_000_000, max: 10_000_000 },
+  { label: '10,000,000+', min: 10_000_000, max: Infinity },
+];
 
 type SearchMessage = { role: 'user' | 'assistant'; content: string };
 type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; query: string; location: string; intent: string; priceRange: string };
@@ -22,7 +30,7 @@ const PROPERTY_SEARCH_URL = process.env.EXPO_PUBLIC_PROPERTY_SEARCH_API_URL || (
 const searchCategoryMap: Record<string, string> = { houses: 'house', apartments: 'apartment', land: 'land', commercial: 'commercial', offices: 'office', hospitality: 'hospitality', vehicles: 'vehicle', 'car-parts': 'car_parts', furniture: 'furniture', appliances: 'appliance', equipment: 'equipment', other: 'other' };
 
 export default function SearchScreen() {
-  const params = useLocalSearchParams<{ search?: string; transaction_type?: string; category?: string; province?: string; district?: string; sector?: string }>();
+  const params = useLocalSearchParams<{ search?: string; ai_query?: string; transaction_type?: string; category?: string; province?: string; district?: string; sector?: string }>();
   const router = useRouter();
   const { colors, styles } = useTheme();
   const { t } = useI18n();
@@ -34,15 +42,19 @@ export default function SearchScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [visible, setVisible] = useState(12);
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantPrompt, setAssistantPrompt] = useState('');
+  const [assistantOpen, setAssistantOpen] = useState(Boolean(params.ai_query));
+  const [assistantPrompt, setAssistantPrompt] = useState(params.ai_query ?? '');
+  const [selectedPriceRange, setSelectedPriceRange] = useState('');
   const [assistantMessages, setAssistantMessages] = useState<SearchMessage[]>([]);
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [assistantError, setAssistantError] = useState('');
   const skipFilterReload = useRef(false);
   const load = async (filters: ListingQuery = { search, transaction_type: transactionType, category }) => { setError(''); setVisible(12); try { const result = await listListings(filters); setListings(result.items); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Search could not be completed.'); } finally { setLoading(false); setRefreshing(false); } };
   useEffect(() => { if (skipFilterReload.current) { skipFilterReload.current = false; return; } void Promise.resolve().then(() => load()); }, [transactionType, category]);
-  const shown = useMemo(() => listings.slice(0, visible), [listings, visible]);
+  const shown = useMemo(() => {
+    const range = priceRanges.find((item) => item.label === selectedPriceRange);
+    return listings.filter((item) => !range || (item.price >= range.min && item.price < range.max)).slice(0, visible);
+  }, [listings, selectedPriceRange, visible]);
   const askForProperty = async () => {
     const content = assistantPrompt.trim();
     if (!content || assistantBusy) return;
@@ -81,12 +93,12 @@ export default function SearchScreen() {
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: assistantOpen }} onPress={() => setAssistantOpen((open) => !open)} style={{ flexDirection: 'row', alignItems: 'center', gap: 11, padding: 14, backgroundColor: colors.greenSoft }}><Ionicons name="sparkles-outline" size={21} color={colors.green} /><View style={{ flex: 1, gap: 3 }}><Text style={{ color: colors.ink, fontWeight: '800' }}>Find a property by chatting</Text><Text style={styles.muted}>Describe what you need in your own words.</Text></View><Ionicons name={assistantOpen ? 'chevron-up' : 'chevron-down'} size={17} color={colors.green} /></Pressable>
       {assistantOpen && <View style={{ gap: 10, padding: 13 }}>
         <ScrollView style={{ maxHeight: 210 }} contentContainerStyle={{ gap: 8 }} keyboardShouldPersistTaps="handled">
-          {!assistantMessages.length && <Text style={styles.muted}>Try: “I need a two-bedroom home to rent in Kigali.”</Text>}
+          {!assistantMessages.length && <Text style={styles.muted}>{t('Describe the properties you want and we get them for you')}</Text>}
           {assistantMessages.map((message, index) => <View key={`${message.role}-${index}`} style={[styles.card, { alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%', padding: 10, backgroundColor: message.role === 'user' ? colors.greenSoft : colors.paper }]}><Text style={styles.body}>{message.content}</Text></View>)}
           {assistantBusy && <Text style={styles.muted}>Finding the right next step…</Text>}
           {assistantError ? <Text style={styles.error}>{assistantError}</Text> : null}
         </ScrollView>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><TextInput style={[styles.input, { minWidth: 0, flex: 1, minHeight: 44 }]} value={assistantPrompt} onChangeText={setAssistantPrompt} onSubmitEditing={() => void askForProperty()} placeholder="Describe the property you need" placeholderTextColor={colors.muted} returnKeyType="send" editable={!assistantBusy} /><Pressable accessibilityRole="button" style={[styles.button, { minHeight: 44, justifyContent: 'center', paddingHorizontal: 15 }]} disabled={assistantBusy || !assistantPrompt.trim()} onPress={() => void askForProperty()}><Text style={styles.buttonText}>{assistantBusy ? '…' : 'Search'}</Text></Pressable></View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><TextInput style={[styles.input, { minWidth: 0, flex: 1, minHeight: 44 }]} value={assistantPrompt} onChangeText={setAssistantPrompt} onSubmitEditing={() => void askForProperty()} placeholder={t('Describe the property you need')} placeholderTextColor={colors.muted} returnKeyType="send" editable={!assistantBusy} /><Pressable accessibilityRole="button" style={[styles.button, { minHeight: 44, justifyContent: 'center', paddingHorizontal: 15 }]} disabled={assistantBusy || !assistantPrompt.trim()} onPress={() => void askForProperty()}><Text style={styles.buttonText}>{assistantBusy ? '…' : t('Search')}</Text></Pressable></View>
       </View>}
     </View>
     <TextInput style={styles.input} value={search} onChangeText={setSearch} onSubmitEditing={() => { setLoading(true); void load(); }} placeholder={t('Neighbourhood, district, or property')} placeholderTextColor={colors.muted} returnKeyType="search" />
@@ -94,6 +106,8 @@ export default function SearchScreen() {
     <View style={styles.filterRow}>{filter('all', !transactionType, 'All', () => setTransactionType(''))}{filter('rent', transactionType === 'rent_out', t('Rent'), () => setTransactionType('rent_out'))}{filter('sale', transactionType === 'sell', t('Buy'), () => setTransactionType('sell'))}</View>
     <Text style={[styles.body, { fontWeight: '700', marginTop: 8 }]}>{t('Browse categories')}</Text>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10 }}>{filter('all-categories', !category, 'Every type', () => setCategory(''))}{categories.map(([key, label]) => filter(key, category === key, t(label), () => setCategory(key)))}</ScrollView>
+    <Text style={[styles.body, { fontWeight: '700', marginTop: 2 }]}>{t('Price range')}</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>{priceRanges.map((range) => filter(`price-${range.label}`, selectedPriceRange === range.label, range.label, () => setSelectedPriceRange((current) => current === range.label ? '' : range.label)))}</ScrollView>
     {loading ? <LoadingState label={t('Loading live properties...')} /> : error ? <ErrorState message={error} onRetry={() => { setLoading(true); void load(); }} /> : shown.length === 0 ? <EmptyState title={t('No listings found')} message={t('Try another location, category, or transaction type.')} /> : <View style={{ gap: 12 }}>{shown.map((listing) => <PropertyCard key={listing.id} listing={listing} onPress={() => router.push({ pathname: '/property/[id]', params: { id: listing.id } })} />)}{visible < listings.length && <Pressable style={styles.secondaryButton} onPress={() => setVisible((value) => value + 12)}><Text style={styles.secondaryText}>{t('Load more results')}</Text></Pressable>}</View>}
   </ScrollView>;
 }

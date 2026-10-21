@@ -1,5 +1,6 @@
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { Keyboard, Pressable, Text } from 'react-native';
+import { Keyboard, Pressable } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

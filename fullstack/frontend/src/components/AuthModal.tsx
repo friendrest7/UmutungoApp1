@@ -31,6 +31,26 @@ const demoAccounts: Array<{ role: AuthRole; email: string; password: string }> =
 
 function roleLabel(role?: AuthRole) { return role === 'Tenant' || role === 'Client' ? 'Client' : role ?? 'your Umutungo account'; }
 
+async function developmentListingFixtures() {
+  const { testingListings } = await import('../data/testingListings');
+  const categoryNames: Record<string, string> = { houses: 'house', apartments: 'apartment', land: 'land', commercial: 'commercial', offices: 'office', hospitality: 'hospitality', vehicles: 'vehicle', 'car-parts': 'car-parts', furniture: 'furniture', appliances: 'appliance', equipment: 'equipment', other: 'other' };
+  return testingListings.map((property) => ({
+    fixture_id: property.id,
+    category: categoryNames[property.categorySlug] ?? 'other',
+    title: property.title,
+    description: (property.description ?? '').replace(/^Demo\s+/i, ''),
+    price: Number(property.price.replace(/[^0-9.]/g, '')) || 0,
+    province: 'Rwanda',
+    district: property.location.split(',')[0].trim(),
+    sector: '',
+    transaction_type: property.type === 'Hospitality' ? 'book' : property.availableFor === 'rent' ? 'rent_out' : 'sell',
+    images: (property.images?.length ? property.images : [property.image]).map((imagePath) => new URL(imagePath, window.location.origin).toString()),
+    bedrooms: property.bedrooms,
+    bathrooms: property.bathrooms,
+    area: property.area,
+  }));
+}
+
 function accountRoleFromApi(role?: string, requestedRole?: AuthRole): AuthRole {
   if (role === 'komisiyoneri') return 'Commissioner / Komisiyoneri';
   if (role === 'property_owner') return requestedRole === 'Landlord' ? 'Landlord' : 'Property Owner';
@@ -79,12 +99,14 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
     if (!account) { setError('That email or password is not recognized.'); setBusy(false); return; }
     setError('');
     try {
-      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: account.email, password: account.password }) });
+      const loginPayload = { email: account.email, password: account.password, ...(['Landlord', 'Property Owner'].includes(account.role) ? { listings: await developmentListingFixtures() } : {}) };
+      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginPayload) });
       const result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; name?: string } };
       if (response.status === 404) throw new Error('These testing credentials are only enabled on a development backend. On the live site, sign in with your registered account using Google or phone verification.');
       if (!response.ok || !result.access_token) throw new Error(result.error ?? 'A database session could not be created. Use a verified Umutungo account.');
       const sessionRole = accountRoleFromApi(result.user?.role, account.role);
       window.localStorage.setItem('umutungo-api-token', result.access_token);
+      window.dispatchEvent(new Event('umutungo:listings-changed'));
       complete(sessionRole, true, result.user?.name);
     } catch (caught) {
       setError(caught instanceof TypeError ? 'The Umutungo backend is unreachable. Check your connection and try again.' : caught instanceof Error ? caught.message : 'A database session could not be created.');

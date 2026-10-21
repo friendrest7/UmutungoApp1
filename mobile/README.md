@@ -98,7 +98,7 @@ The iOS simulator can reach a local backend using `http://127.0.0.1:8080`; a phy
 
 ## Android preview build
 
-The EAS project is configured and the preview profile increments Android's remote version code. The current update APK is in `results/mobile-builds/Umutungo-android-preview.apk` (version 1.3.0, version code 9). The repository's local Android release configuration uses the local debug keystore; the EAS cloud signing key is different. Re-sign EAS preview APKs with the local key before distributing them as updates to existing local preview installs. Do not use the debug key for a Play Store release.
+The EAS project is configured and the preview profile increments Android's remote version code. The current update APK is in `results/mobile-builds/Umutungo-android-preview.apk` (version 1.4.0, version code 28). It is signed with the EAS Android keystore, matching the previous preview APK so it installs as an update. The separate local Gradle build uses a debug keystore and cannot update an EAS-signed install. Do not use the debug key for a Play Store release.
 
 Start a replacement build from `mobile`:
 
@@ -106,10 +106,10 @@ Start a replacement build from `mobile`:
 npx eas-cli build --platform android --profile preview --wait
 ```
 
-Download the completed APK from EAS, then re-sign it with `android/app/debug.keystore` (alias `androiddebugkey`, default Android debug-key password `android`) before replacing the file in `results/mobile-builds/`. EAS's `build:download` command prints the downloaded APK path. From the Android SDK build-tools directory, run:
+Download the completed APK from EAS with its build ID:
 
 ```cmd
-apksigner sign --ks mobile\android\app\debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out mobile\results\mobile-builds\Umutungo-android-preview.apk <downloaded-eas-apk>
+npx eas-cli build:download --build-id <build-id>
 ```
 
 Other configured builds:
@@ -146,7 +146,7 @@ npx expo export --platform android
 npx expo export --platform ios
 ```
 
-TypeScript and the focused mobile Jest suite pass. EAS built the Android preview APK; it was re-signed with the local key and verified as package `rw.umutungo.mobile`, version code 9. The configured key matches the repository's local Android release signing setup. This Windows environment has no connected Android device or configured emulator, so a device install and end-to-end live API check still need to be completed. iOS production distribution requires Apple signing and App Store Connect setup.
+The Android preview APK was built by EAS and verified as package `rw.umutungo.mobile`, version 1.4.0, version code 28. Its signing certificate matches the previous preview APK. This Windows environment has no connected Android device or configured emulator, so a device install and end-to-end live API check still need to be completed. iOS production distribution requires Apple signing and App Store Connect setup.
 
 ## Android manual test checklist
 

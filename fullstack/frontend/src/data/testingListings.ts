@@ -70,4 +70,9 @@ const downloadedImageDemos: TestingListing[] = [
   { id: 'test-other-bicycle-downloaded-1', categorySlug: 'other', testingOnly: true, title: 'City bicycle', type: 'Other', location: 'Kigali, Rwanda', price: 'RWF 55,000', priceNote: '', bedrooms: 0, bathrooms: 0, area: 0, accent: '#39734b', image: '/properties/other-demo-06.jpg', images: ['/properties/other-demo-06.jpg'], listed: 'Demo listing', availableFor: 'sale', description: 'Demo bicycle listing. Ask about the frame size, gears, brakes, condition, and pickup arrangements.' },
 ];
 
-export const testingListings: TestingListing[] = [...downloadedImageDemos, ...generatedListings];
+const demoOwnerNames = ['Aline Mukamana', 'Eric Niyonzima', 'Diane Uwimana', 'Jean Claude Habimana', 'Grace Ingabire', 'Patrick Nkurunziza'];
+
+export const testingListings: TestingListing[] = [...downloadedImageDemos, ...generatedListings].map((property, index) => ({
+  ...property,
+  poster: { name: demoOwnerNames[index % demoOwnerNames.length], role: 'Property Owner' },
+}));

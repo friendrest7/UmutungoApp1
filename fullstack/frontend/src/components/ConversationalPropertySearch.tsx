@@ -8,7 +8,7 @@ import { Language, t } from '../data/translations';
 type SearchMessage = { role: 'user' | 'assistant'; content: string };
 type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; query: string; location: string; intent: string; priceRange: string };
 
-export function ConversationalPropertySearch({ language }: { language: Language }) {
+export function ConversationalPropertySearch({ language, compact = false }: { language: Language; compact?: boolean }) {
   const [messages, setMessages] = useState<SearchMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -45,21 +45,21 @@ export function ConversationalPropertySearch({ language }: { language: Language 
     }
   };
 
-  return <section className={`conversational-property-search ${isOpen ? 'is-open' : ''}`} aria-label={t(language, 'AI property search')}>
-    <button className="conversational-search-trigger" type="button" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)}>
+  return <section className={`conversational-property-search ${compact ? 'is-compact' : ''} ${isOpen ? 'is-open' : ''}`} aria-label={t(language, 'AI property search')}>
+    {!compact && <button className="conversational-search-trigger" type="button" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)}>
       <span className="conversational-search-sparkle"><Icon name="sparkles" size={17} /></span>
       <span><strong>Find a property by chatting</strong><small>Tell us what you need in your own words.</small></span>
       <Icon name="arrow" size={16} />
-    </button>
-    {isOpen && <div className="conversational-search-body">
-      <div className="conversational-search-messages" aria-live="polite">
-        {!messages.length && <p>For example: “I’m looking for a two-bedroom home to rent in Kigali.”</p>}
+    </button>}
+    {(compact || isOpen) && <div className="conversational-search-body">
+      {(!compact || messages.length > 0 || isSending || Boolean(error)) && <div className="conversational-search-messages" aria-live="polite">
+        {!compact && !messages.length && <p>For example: “I’m looking for a two-bedroom home to rent in Kigali.”</p>}
         {messages.map((message, index) => <p className={`conversational-search-message ${message.role}`} key={`${message.role}-${index}`}>{message.content}</p>)}
         {isSending && <p className="conversational-search-status">Finding the right next step…</p>}
         {error && <p className="conversational-search-error" role="alert">{error}</p>}
-      </div>
+      </div>}
       <form className="conversational-search-form" onSubmit={submitSearch}>
-        <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the property you need" aria-label="Describe the property you need" disabled={isSending} />
+        <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={compact ? 'Describe the properties you want and we’ll get them for you…' : 'Describe the property you need'} aria-label={compact ? 'Describe the properties you want and we’ll get them for you' : 'Describe the property you need'} disabled={isSending} />
         <button type="submit" aria-label={t(language, 'Send message')} disabled={isSending || !prompt.trim()}><Icon name="arrow" size={16} /></button>
       </form>
     </div>}

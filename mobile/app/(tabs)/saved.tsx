@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, View } from 'react-native';
+import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { listFavorites, removeFavorite } from '@/api/client';
 import type { FavoriteItem } from '@/api/types';

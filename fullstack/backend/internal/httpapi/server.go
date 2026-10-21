@@ -272,8 +272,9 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email    string                   `json:"email"`
+		Password string                   `json:"password"`
+		Listings []developmentListingSeed `json:"listings"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -309,12 +310,93 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusUnauthorized, "development account is unavailable")
 		return
 	}
+	if user.Role == "property_owner" && len(input.Listings) > 0 {
+		_, seedErr := s.seedDevelopmentListings(r, user.ID, input.Listings)
+		if seedErr != nil {
+			log.Printf("development test listing seed failed: %v", seedErr)
+			errorJSON(w, http.StatusInternalServerError, "could not prepare the development test listings")
+			return
+		}
+	}
 	token, err := s.createSession(r, user.ID)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create development session")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": user, "access_token": token})
+}
+
+type developmentListingSeed struct {
+	FixtureID   string   `json:"fixture_id"`
+	Category    string   `json:"category"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Price       float64  `json:"price"`
+	Province    string   `json:"province"`
+	District    string   `json:"district"`
+	Sector      string   `json:"sector"`
+	Transaction string   `json:"transaction_type"`
+	Images      []string `json:"images"`
+	Bedrooms    int      `json:"bedrooms"`
+	Bathrooms   int      `json:"bathrooms"`
+	Area        float64  `json:"area"`
+}
+
+func (s *Server) seedDevelopmentListings(r *http.Request, ownerID string, fixtures []developmentListingSeed) (int, error) {
+	if len(fixtures) > 200 {
+		return 0, errors.New("too many development listing fixtures")
+	}
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(r.Context())
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, ownerID); err != nil {
+		return 0, err
+	}
+	seeded := 0
+	for _, fixture := range fixtures {
+		fixture.FixtureID = strings.TrimSpace(fixture.FixtureID)
+		fixture.Category = strings.ToLower(strings.TrimSpace(fixture.Category))
+		fixture.Title = strings.TrimSpace(fixture.Title)
+		if !strings.HasPrefix(fixture.FixtureID, "test-") || fixture.Title == "" || fixture.Price < 0 || len(fixture.Images) == 0 || len(fixture.Images) > 20 {
+			return 0, errors.New("invalid development listing fixture")
+		}
+		fixtureTag, _ := json.Marshal([]string{"umutungo-fixture:" + fixture.FixtureID})
+		var existingID string
+		err := tx.QueryRow(r.Context(), `SELECT id FROM listings WHERE owner_id=$1 AND tags @> $2::jsonb AND deleted_at IS NULL LIMIT 1`, ownerID, string(fixtureTag)).Scan(&existingID)
+		if err == nil {
+			continue
+		}
+		if err != pgx.ErrNoRows {
+			return 0, err
+		}
+		tags, _ := json.Marshal([]string{"umutungo-fixture:" + fixture.FixtureID})
+		var listingID string
+		err = tx.QueryRow(r.Context(), `INSERT INTO listings(owner_id,category,transaction_type,title,description,price,currency,province,district,sector,status,tags,contact_method) VALUES($1,$2,$3,$4,$5,$6,'RWF',$7,$8,$9,'published',$10,'message') RETURNING id`, ownerID, fixture.Category, fixture.Transaction, fixture.Title, fixture.Description, fixture.Price, fixture.Province, fixture.District, fixture.Sector, string(tags)).Scan(&listingID)
+		if err != nil {
+			return 0, err
+		}
+		for index, imageURL := range fixture.Images {
+			imageURL = strings.TrimSpace(imageURL)
+			if !validMediaURL(imageURL) {
+				return 0, errors.New("invalid development listing image URL")
+			}
+			if _, err := tx.Exec(r.Context(), `INSERT INTO listing_media(listing_id,media_type,url,sort_order) VALUES($1,'photo',$2,$3)`, listingID, imageURL, index); err != nil {
+				return 0, err
+			}
+		}
+		if fixture.Bedrooms > 0 || fixture.Bathrooms > 0 || fixture.Area > 0 {
+			if _, err := tx.Exec(r.Context(), `INSERT INTO measurements(listing_id,building_size,land_size,bedrooms,bathrooms) VALUES($1,$2,$3,$4,$5)`, listingID, fixture.Area, fixture.Area, fixture.Bedrooms, fixture.Bathrooms); err != nil {
+				return 0, err
+			}
+		}
+		seeded++
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		return 0, err
+	}
+	return seeded, nil
 }
 
 func (s *Server) requestOTP(w http.ResponseWriter, r *http.Request) {
@@ -858,7 +940,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		AND ($2='' OR l.province=$2) AND ($3='' OR l.district=$3)
 		AND ($4='' OR l.sector=$4) AND ($5='' OR l.category=$5)
 		AND ($6='' OR l.transaction_type=$6 OR (l.transaction_type='both' AND $6 IN ('buy','sell','rent','rent_out')))
-		ORDER BY l.created_at DESC LIMIT 100`, args...)
+		ORDER BY l.created_at DESC LIMIT 250`, args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load listings")
 		return

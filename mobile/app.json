@@ -35,6 +35,13 @@
       "expo-router",
       "expo-secure-store",
       "expo-image-picker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Umutungo to scan a MoMo phone number QR code.",
+          "recordAudioAndroid": false
+        }
+      ],
       "./plugins/withAndroidNativeRuntime"
     ],
     "experiments": {

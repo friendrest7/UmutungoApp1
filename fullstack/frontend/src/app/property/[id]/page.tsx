@@ -79,12 +79,16 @@ export default function PropertyDetailPage() {
   const [viewerMode, setViewerMode] = useState<'tour' | 'plan' | null>(null);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('view') === '3d') setViewerMode('tour');
+    const open3d = new URLSearchParams(window.location.search).get('view') === '3d';
     const id = decodeURIComponent(params.id ?? '');
     setProperty(null);
     void publicUmutungoApi<ApiListing>(`/api/v1/listings/${encodeURIComponent(id)}`)
       .then((result) => {
-        if (result) setProperty(toProperty(result as SharedApiListing));
+        if (result) {
+          const mappedProperty = toProperty(result as SharedApiListing);
+          setProperty(mappedProperty);
+          if (open3d && mappedProperty.type === 'House') setViewerMode('tour');
+        }
       })
       .catch(() => undefined)
       .finally(() => setLoading(false));
@@ -115,7 +119,7 @@ export default function PropertyDetailPage() {
         <section className="property-detail-layout">
           <div className="property-detail-media">
             <img className="property-detail-cover" src={property.image} alt={property.title} />
-            <div className="property-detail-view-actions" aria-label="Property media">
+            {property.type === 'House' && <div className="property-detail-view-actions" aria-label="Property media">
               <button type="button" onClick={() => setViewerMode('tour')}>
                 <Icon name="sparkles" size={15} />
                 Explore in 3D
@@ -124,7 +128,7 @@ export default function PropertyDetailPage() {
                 <Icon name="home" size={15} />
                 Floor plan
               </button>
-            </div>
+            </div>}
             <div className="property-detail-gallery">
               {(property.images ?? [property.image]).map((image) => <img src={image} alt="" key={image} />)}
             </div>
@@ -134,8 +138,7 @@ export default function PropertyDetailPage() {
             <p className="property-detail-location">{property.location}</p>
             <strong className="property-detail-price">{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{property.priceNote}</small></>}</strong>
             <div className="property-detail-stats">
-              <span><b>{property.bedrooms}</b> beds</span>
-              <span><b>{property.bathrooms}</b> baths</span>
+              {property.type === 'House' && <><span><b>{property.bedrooms}</b> beds</span><span><b>{property.bathrooms}</b> baths</span></>}
               <span><b>{property.area}</b> m²</span>
             </div>
             <p>{property.description ?? 'Clear property information to help you take the next step with confidence.'}</p>

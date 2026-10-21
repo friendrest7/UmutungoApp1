@@ -39,7 +39,7 @@ Set `EXPO_PUBLIC_API_URL` in `.env` before starting. For Google sign-in, also se
 - Rental applications through `POST /api/v1/listings/{id}/applications`, application history, and owner accept/decline/request-information actions.
 - Tenant/client dashboards show current rental agreements, application decisions, and payment history; owner/Komisiyoneri dashboards show owner listings, key counts, and incoming applications; admin dashboards show live activity and permit moderation report status changes.
 - Owner/property posting, image uploads, management and MTN MoMo owner-plan checkout are reachable from the home and dashboard flows.
-- Conversational property assistant calls the website's `/api/chat` route, which uses the site's Groq configuration and live public listing/directory context. Set `EXPO_PUBLIC_CHAT_API_URL` in the EAS profile to the actual deployed website URL.
+- Conversational property search calls the website's `/api/property-search` route and opens matching results in the native Search tab. The general property assistant continues to use `/api/chat`. Set `EXPO_PUBLIC_PROPERTY_SEARCH_API_URL` and `EXPO_PUBLIC_CHAT_API_URL` to the deployed website routes in the EAS profile.
 - Owner contact messaging, inbox conversations, and notifications through the existing API.
 - Hospitality booking requests and server-validated reviews for users who have viewed or rented a property.
 - Opens a real 3D tour link when a listing supplies one; it does not fabricate a tour or floor plan for listings without those assets.

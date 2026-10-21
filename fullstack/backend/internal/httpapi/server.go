@@ -987,7 +987,7 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		input.Currency = "RWF"
 	}
 	requiresDetailedLocation := map[string]bool{"house": true, "houses": true, "apartment": true, "apartments": true, "land": true, "commercial": true, "office": true, "offices": true, "hospitality": true, "hotel": true}
-	validCategories := map[string]bool{"house": true, "houses": true, "apartment": true, "apartments": true, "land": true, "commercial": true, "office": true, "offices": true, "hospitality": true, "hotel": true, "vehicle": true, "vehicles": true, "equipment": true, "furniture": true, "appliance": true, "appliances": true, "other": true}
+	validCategories := map[string]bool{"house": true, "houses": true, "apartment": true, "apartments": true, "land": true, "commercial": true, "office": true, "offices": true, "hospitality": true, "hotel": true, "vehicle": true, "vehicles": true, "car_part": true, "car_parts": true, "car parts": true, "car-parts": true, "equipment": true, "furniture": true, "appliance": true, "appliances": true, "other": true}
 	if !validCategories[input.Category] || input.Title == "" || !validTransaction(input.TransactionType) {
 		errorJSON(w, http.StatusBadRequest, "category, title, and transaction_type are required")
 		return

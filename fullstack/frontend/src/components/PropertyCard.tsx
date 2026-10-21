@@ -12,6 +12,7 @@ type PropertyCardProps = { language: Language; property: PropertyPlaceholder; fa
 
 export function PropertyCard({ language, property, favorite, onFavorite, onView }: PropertyCardProps) {
   const images = property.images?.length ? property.images : [property.image];
+  const isHouse = property.type.trim().toLowerCase() === 'house';
   const [activeImage, setActiveImage] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const changeImage = (direction: number) => setActiveImage((current) => (current + direction + images.length) % images.length);
@@ -42,8 +43,8 @@ export function PropertyCard({ language, property, favorite, onFavorite, onView 
       <div className="property-card-body">
         <div className="property-card-top"><div><h3>{t(language, property.title)}</h3><p><Icon name="pin" size={13} /> {t(language, property.location)}</p></div></div>
         {property.testingOnly && property.poster?.name && <div className="property-owner-line"><span>{property.poster.name.slice(0, 1).toUpperCase()}</span><small>Listed by <strong>{property.poster.name}</strong></small></div>}
-        <div className="property-details">{property.bedrooms > 0 && <span><strong>{property.bedrooms}</strong> {t(language, 'beds')}</span>}{property.bathrooms > 0 && <span><strong>{property.bathrooms}</strong> {t(language, 'baths')}</span>}{property.area > 0 && <span><strong>{property.area}</strong> m²</span>}{!property.bedrooms && !property.bathrooms && !property.area && <span>{t(language, 'Property details available from owner')}</span>}</div>
-        <div className="property-card-footer"><div><strong>{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{t(language, property.priceNote)}</small></>}</strong><small className="property-listed">{t(language, property.listed)}</small></div>{property.testingOnly ? <button className="view-property-button" type="button" onClick={onView}>{t(language, 'View property')} <Icon name="arrow" size={14} /></button> : <Link className="view-property-button" href={`/property/${encodeURIComponent(property.id)}?view=3d`}>{t(language, 'View property')} <Icon name="arrow" size={14} /></Link>}</div>
+        <div className="property-details">{isHouse && property.bedrooms > 0 && <span><strong>{property.bedrooms}</strong> {t(language, 'beds')}</span>}{isHouse && property.bathrooms > 0 && <span><strong>{property.bathrooms}</strong> {t(language, 'baths')}</span>}{property.area > 0 && <span><strong>{property.area}</strong> m²</span>}{(!isHouse || (!property.bedrooms && !property.bathrooms)) && !property.area && <span>{t(language, 'Property details available from owner')}</span>}</div>
+        <div className="property-card-footer"><div><strong>{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{t(language, property.priceNote)}</small></>}</strong><small className="property-listed">{t(language, property.listed)}</small></div>{property.testingOnly ? <button className="view-property-button" type="button" onClick={onView}>{t(language, 'View property')} <Icon name="arrow" size={14} /></button> : <Link className="view-property-button" href={`/property/${encodeURIComponent(property.id)}${property.type.trim().toLowerCase() === 'house' ? '?view=3d' : ''}`}>{t(language, 'View property')} <Icon name="arrow" size={14} /></Link>}</div>
       </div>
     </article>
   );

@@ -41,9 +41,10 @@ function escapeReceiptValue(value: string | number) {
 
 export function PropertyViewer({ language, property, onClose, initialMode = 'photos', initialRequest = false }: PropertyViewerProps) {
   const images = property.images?.length ? property.images : [property.image];
+  const isHouse = property.type.trim().toLowerCase() === 'house';
   const isProductListing = ['Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other assets'].includes(property.type);
   const [activeImage, setActiveImage] = useState(0);
-  const [mode, setMode] = useState<ViewerMode>(isProductListing ? 'photos' : initialMode);
+  const [mode, setMode] = useState<ViewerMode>(isHouse && !isProductListing ? initialMode : 'photos');
   const [tourStop, setTourStop] = useState(0);
   const [turn, setTurn] = useState(0);
   const [tilt, setTilt] = useState(0);
@@ -354,7 +355,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
 
       <div className="property-viewer-tabs" role="tablist" aria-label={t(language, 'Property media')}>
         <button className={mode === 'photos' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'photos'} onClick={() => setMode('photos')}><Icon name="building" size={15} /> {t(language, 'Photos')}</button>
-        {!isProductListing && <>
+        {isHouse && !isProductListing && <>
           <button className={mode === 'tour' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'tour'} onClick={() => setMode('tour')}><Icon name="sparkles" size={15} /> {t(language, '3D tour')}</button>
           <button className={mode === 'plan' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'plan'} onClick={() => setMode('plan')}><Icon name="home" size={15} /> {t(language, 'Floor plan')}</button>
         </>}
@@ -380,7 +381,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
           <div className="viewer-thumbnails">{images.map((image, index) => <button className={mode === 'photos' && activeImage === index ? 'is-active' : ''} type="button" key={`${image}-thumb-${index}`} onClick={() => { setMode('photos'); setActiveImage(index); }}><Image src={image} alt="" fill sizes="90px" /></button>)}</div>
         </div>
 
-        <aside className="property-viewer-details"><div className="viewer-price-row"><div><strong>{property.price}</strong>{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <small>{t(language, property.priceNote)}</small>}</div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats"><span><strong>{property.bedrooms}</strong>{t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong>{t(language, 'baths')}</span><span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span></div><p className="viewer-description">{property.description?.trim() || 'Contact the owner for more information about this property.'}</p><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button><small className="viewer-listed">{t(language, property.listed)}</small></aside>
+        <aside className="property-viewer-details"><div className="viewer-price-row"><div><strong>{property.price}</strong>{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <small>{t(language, property.priceNote)}</small>}</div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats">{isHouse && <><span><strong>{property.bedrooms}</strong>{t(language, 'beds')}</span><span><strong>{property.bathrooms}</strong>{t(language, 'baths')}</span></>}<span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span></div><p className="viewer-description">{property.description?.trim() || 'Contact the owner for more information about this property.'}</p><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button><small className="viewer-listed">{t(language, property.listed)}</small></aside>
       </div>
     </section>
     {transactionOpen && (

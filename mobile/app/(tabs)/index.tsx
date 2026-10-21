@@ -18,6 +18,7 @@ const categories: Array<{ key: string; label: string; icon: keyof typeof Ionicon
   { key: 'office', label: 'Offices', icon: 'briefcase-outline', color: '#e8eff0' },
   { key: 'hospitality', label: 'Hotels and lodges', icon: 'bed-outline', color: '#f4e9e7' },
   { key: 'vehicle', label: 'Vehicles', icon: 'car-outline', color: '#e9eef3' },
+  { key: 'car_parts', label: 'Car parts', icon: 'construct-outline', color: '#f1eee4' },
   { key: 'furniture', label: 'Furniture', icon: 'bed-outline', color: '#f2ece4' },
   { key: 'appliance', label: 'Appliances', icon: 'grid-outline', color: '#e9f0ef' },
   { key: 'equipment', label: 'Equipment', icon: 'construct-outline', color: '#f1eee4' },

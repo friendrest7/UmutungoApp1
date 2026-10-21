@@ -6,6 +6,7 @@ import { getOwnerUpgrades, startOwnerUpgrade, type OwnerPlan, type OwnerPurchase
 import { useAuth } from '@/auth/AuthContext';
 import { ErrorState, LoadingState } from '@/components/StateView';
 import { useTheme } from '@/theme/ThemeContext';
+import MomoQrScanner from '@/components/MomoQrScanner';
 
 const plans: OwnerPlan[] = ['silver', 'gold', 'platinum'];
 
@@ -19,6 +20,7 @@ export default function OwnerUpgradeScreen() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showMomoScanner, setShowMomoScanner] = useState(false);
   const idempotencyKeys = useRef<Partial<Record<OwnerPlan, string>>>({});
 
   const load = useCallback(async () => {
@@ -75,8 +77,9 @@ export default function OwnerUpgradeScreen() {
       <Text style={styles.body}>{plan === 'silver' ? '90 days' : plan === 'gold' ? '180 days' : '365 days'} · RWF {(prices?.[plan] ?? 0).toLocaleString()}</Text>
       <Pressable style={styles.button} disabled={busy || (prices?.[plan] ?? 0) <= 0 || (purchase?.status === 'pending' && purchase.plan === plan)} onPress={() => void start(plan)}><Text style={styles.buttonText}>{busy ? 'Starting…' : `Pay RWF ${(prices?.[plan] ?? 0).toLocaleString()} with MTN MoMo`}</Text></Pressable>
     </View>)}
-    <View style={[styles.card, { gap: 8 }]}><Text style={styles.heading}>MTN Rwanda phone number</Text><TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="+250 7XX XXX XXX" placeholderTextColor={colors.muted} keyboardType="phone-pad" autoComplete="tel" /></View>
+    <View style={[styles.card, { gap: 8 }]}><Text style={styles.heading}>MTN Rwanda phone number</Text><View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><TextInput style={[styles.input, { flex: 1 }]} value={phone} onChangeText={setPhone} placeholder="+250 7XX XXX XXX" placeholderTextColor={colors.muted} keyboardType="phone-pad" autoComplete="tel" /><Pressable style={[styles.secondaryButton, { paddingHorizontal: 12 }]} onPress={() => setShowMomoScanner(true)}><Text style={styles.secondaryText}>Scan QR</Text></Pressable></View></View>
     {notice ? <Text style={{ color: colors.greenDark, fontWeight: '700' }}>{notice}</Text> : null}
     {purchase ? <View style={[styles.card, { gap: 6 }]}><Text style={styles.heading}>Latest payment: {purchase.payment_status}</Text><Text style={styles.body}>{purchase.plan} · {purchase.currency} {purchase.amount.toLocaleString()}</Text><Text style={styles.muted}>Reference: {purchase.transaction_reference}</Text>{purchase.expires_at ? <Text style={styles.muted}>Expires: {new Date(purchase.expires_at).toLocaleDateString()}</Text> : null}</View> : null}
+    <MomoQrScanner visible={showMomoScanner} onClose={() => setShowMomoScanner(false)} onPhoneScanned={setPhone} />
   </ScrollView>;
 }

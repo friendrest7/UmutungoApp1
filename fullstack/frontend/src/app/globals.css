@@ -4269,7 +4269,7 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
     width: min(560px, calc(100vw - 2cm));
     max-width: none;
     box-sizing: border-box;
-    margin: 0 auto 8px !important;
+    margin: 0 0 8px .5cm !important;
     text-align: center;
     overflow-wrap: anywhere;
   }

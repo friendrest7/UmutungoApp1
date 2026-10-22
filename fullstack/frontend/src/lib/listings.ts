@@ -38,7 +38,7 @@ export function propertySlug(title: string) {
 }
 
 export function listingImages(item: ApiListing) {
-  const ordered = item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((media) => media.url) ?? [];
+  const ordered = item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).filter((media) => media.url && !media.type?.toLowerCase().includes('video') && !media.type?.toLowerCase().includes('tour')).map((media) => media.url) ?? [];
   return (item.images?.length ? item.images : ordered).filter((url) => typeof url === 'string' && url.trim().length > 0);
 }
 
@@ -73,6 +73,11 @@ function fallbackListingImage(item: ApiListing) {
   return options[variant];
 }
 
+export function fallbackListingImages(item: ApiListing) {
+  const category = item.category.trim().toLowerCase();
+  return listingImageFallbacks[category] ?? listingImageFallbacks.other;
+}
+
 export function toProperty(item: ApiListing): PropertyPlaceholder {
   const images = listingImages(item);
   const category = item.category.toLowerCase();
@@ -95,7 +100,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     area: Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0),
     accent: '#00a84f',
     image: images[0] ?? fallbackListingImage(item),
-    images,
+    images: images.length ? images : [fallbackListingImage(item)],
     listed: listingDate,
     availableFor: both ? 'both' : rent ? 'rent' : 'sale',
     description: item.description,

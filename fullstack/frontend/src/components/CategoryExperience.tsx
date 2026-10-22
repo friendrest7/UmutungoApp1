@@ -12,7 +12,7 @@ import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 import { getDistrictNames } from '../data/rwandaLocations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
-import { propertySlug } from '../lib/listings';
+import { fallbackListingImages, propertySlug, type ApiListing } from '../lib/listings';
 
 type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[] };
@@ -80,7 +80,7 @@ const categoryAliases: Record<string, string[]> = {
 
 const normalizedCategory = (value: string) => value.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
 
-type DatabaseListing = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; tags?: string[]; amenities?: string[]; measurements?: Record<string, unknown>; bedrooms?: number; bathrooms?: number; area?: number; images?: string[]; media?: { url: string; type?: string; sort_order?: number }[]; created_at?: string; owner?: { id?: string; name?: string; role?: string; verified?: boolean } };
+type DatabaseListing = ApiListing & { tags?: string[]; amenities?: string[]; owner?: ApiListing['owner'] & { verified?: boolean } };
 
 const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Listing => {
   const intent: Listing['intent'] = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'both' ? category.name === 'Land' ? 'For sale or lease' : 'For sale or rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
@@ -91,9 +91,10 @@ const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Lis
   const areaSize = Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0);
   const detail = [...[item.description, ...(item.tags ?? []), ...(item.amenities ?? []), bedroomCount ? `${bedroomCount} bedrooms` : '', bathroomCount ? `${bathroomCount} bathrooms` : '', areaSize ? `${areaSize} m²` : '', dateLabel].filter(Boolean)].join(' Â· ') || 'Details available from the owner';
   const imageList = item.images?.filter(Boolean) ?? [];
-  const images = imageList.length ? imageList : item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((media) => media.url).filter(Boolean) ?? [];
-  const image = images[0] ?? '/properties/listing-placeholder.svg';
-  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, item.owner?.verified ?? false), images, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
+  const images = imageList.length ? imageList : item.media?.filter((media) => media.url && !media.type?.toLowerCase().includes('video') && !media.type?.toLowerCase().includes('tour')).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((media) => media.url) ?? [];
+  const cardImages = images.length ? images : fallbackListingImages(item);
+  const image = cardImages[0] ?? '/properties/listing-placeholder.svg';
+  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, item.owner?.verified ?? false), images: cardImages, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
 };
 
 export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialDistrict = '', initialSector = '', initialIntent = '', initialPriceRange = '' }: { slug: string; initialQuery?: string; initialLocation?: string; initialDistrict?: string; initialSector?: string; initialIntent?: string; initialPriceRange?: string }) {
@@ -251,7 +252,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
         <div className="owner-listing-heading"><h2>Property listings</h2><p>Listings posted directly to Umutungo.</p></div>
         <div className="category-listing-grid">{listings.map((item) => <article className="category-listing-card" key={item.id}>
           <div className="category-listing-image" onMouseEnter={() => { setHoveredGalleryId(item.id); setGalleryIndexes((current) => ({ ...current, [item.id]: 1 })); }} onMouseLeave={() => { setHoveredGalleryId(null); setGalleryIndexes((current) => ({ ...current, [item.id]: 0 })); }} onFocus={() => { setHoveredGalleryId(item.id); setGalleryIndexes((current) => ({ ...current, [item.id]: 1 })); }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setHoveredGalleryId(null); setGalleryIndexes((current) => ({ ...current, [item.id]: 0 })); } }}>
-            <div className="category-listing-image-track" style={{ transform: `translateX(-${(galleryIndexes[item.id] ?? 0) * 100}%)` }}>{(item.images?.length ? item.images : [item.image]).map((image, imageIndex) => <span className="category-listing-image-slide" key={`${image}-${imageIndex}`} style={{ backgroundImage: `linear-gradient(180deg, transparent 45%, rgba(5, 15, 8, .64)), url(${image})` }} />)}</div>
+            <div className="category-listing-image-track" style={{ transform: `translateX(-${(galleryIndexes[item.id] ?? 0) * 100}%)` }}>{(item.images?.length ? item.images : [item.image]).map((image, imageIndex) => <span className="category-listing-image-slide" key={`${image}-${imageIndex}`} style={{ backgroundImage: `linear-gradient(180deg, transparent 45%, rgba(5, 15, 8, .64)), url("${image.replace(/["\\]/g, '')}")` }} />)}</div>
             <button className={`category-save ${saved.includes(item.id) ? 'saved' : ''}`} type="button" aria-label={`Save ${item.title}`} onClick={() => toggleListingFavorite(item)}><Icon name="heart" size={16} filled={saved.includes(item.id)} /></button>
             {item.verified && <span className="category-verified"><Icon name="check" size={12} /> Verified</span>}
           </div>

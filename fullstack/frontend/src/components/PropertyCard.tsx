@@ -12,7 +12,7 @@ export type PropertyPlaceholder = { id: string; title: string; type: string; loc
 type PropertyCardProps = { language: Language; property: PropertyPlaceholder; favorite: boolean; onFavorite: () => void };
 
 export function PropertyCard({ language, property, favorite, onFavorite }: PropertyCardProps) {
-  const images = property.images?.length ? property.images : [property.image];
+  const images = Array.from(new Set([...(property.images ?? []), property.image].filter(Boolean)));
   const isHouse = property.type.trim().toLowerCase() === 'house';
   const [activeImage, setActiveImage] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
@@ -40,7 +40,7 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
       <div className="property-image">
         <div className="property-image-track" style={{ transform: `translateX(-${activeImage * 100}%)` }} aria-live="polite">{images.map((image, index) => {
           const displayedImage = imageFallbacks[index] ?? image;
-          return <div className="property-image-slide" key={`${image}-${index}`}><Image src={displayedImage} alt={`${t(language, property.title)} ${t(language, 'property image')} ${index + 1}`} fill sizes="(max-width: 760px) 100vw, 33vw" unoptimized={displayedImage.startsWith('http')} className="property-image-art" onError={() => setImageFallbacks((current) => ({ ...current, [index]: displayedImage === property.image ? '/properties/listing-placeholder.svg' : property.image }))} /></div>;
+          return <div className="property-image-slide" key={`${image}-${index}`}><Image src={displayedImage} alt={`${t(language, property.title)} ${t(language, 'property image')} ${index + 1}`} fill sizes="(max-width: 760px) 100vw, 33vw" unoptimized={displayedImage.startsWith('http')} className="property-image-art" onError={() => setImageFallbacks((current) => ({ ...current, [index]: '/properties/listing-placeholder.svg' }))} /></div>;
         })}</div>
         {images.length > 1 && <>
           <button className="property-gallery-arrow property-gallery-prev" type="button" onClick={() => changeImage(-1)} aria-label={t(language, 'Previous property image')}><Icon name="chevron" size={16} /></button>

@@ -30,7 +30,7 @@ export default function HomePage() {
       void publicUmutungoApi<{ items: ApiListing[] }>('/api/v1/listings', { cache: 'no-store' })
         .then((result) => {
           if (cancelled) return;
-          const liveListings = (result?.items ?? []).filter((item) => item.images?.some(Boolean) || item.media?.some((media) => Boolean(media.url))).map(toProperty);
+          const liveListings = (result?.items ?? []).map(toProperty);
           if (liveListings.length > 0) {
             setListingLoadError(false);
             setProperties(liveListings);

@@ -2592,6 +2592,7 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .dashboard-utility-dock.is-dark .dashboard-header-tool:hover { background: rgba(123,176,150,.16); color: #fff; }
 .dashboard-utility-dock.is-dark .dashboard-language-select { border-left-color: rgba(123,176,150,.24); color: rgba(245,247,250,.72); }
 .dashboard-utility-dock.is-dark .dashboard-language-select select { color: #f5f7fa; }
+.dashboard-utility-dock.is-dark .dashboard-language-select select option { background: #fff; color: #000; }
 .dashboard-utility-dock.is-dark .dashboard-notification-popover { border-color: rgba(123,176,150,.24); background: #153b2d; color: rgba(245,247,250,.72); }
 .role-dashboard.dashboard-dark { --dashboard-paper: #0b1712; --dashboard-surface: #12271e; --dashboard-ink: #f5f7fa; --dashboard-muted: rgba(245,247,250,.68); --dashboard-line: rgba(123,176,150,.18); background: var(--dashboard-paper); color: var(--dashboard-ink); }
 .role-dashboard.dashboard-dark .role-dashboard-sidebar,
@@ -4854,7 +4855,7 @@ img, video, iframe { max-width: 100%; }
 }
 
 /* Admin dark mode keeps every workspace panel dark and its copy readable. */
-.app.theme-dark .admin-dashboard {
+.admin-dashboard.dashboard-dark {
   --admin-paper: #000;
   --admin-ink: #fff;
   --dashboard-paper: #000;
@@ -4865,35 +4866,85 @@ img, video, iframe { max-width: 100%; }
   background: #000 !important;
   color: #fff !important;
 }
-.app.theme-dark .admin-dashboard .role-dashboard-main,
-.app.theme-dark .admin-dashboard .role-dashboard-topbar {
+.admin-dashboard.dashboard-dark .role-dashboard-main,
+.admin-dashboard.dashboard-dark .role-dashboard-topbar {
   border-color: #353535 !important;
   background: #000 !important;
   color: #fff !important;
 }
-.app.theme-dark .admin-dashboard :is(.role-dashboard-metrics article, .role-dashboard-panel, .role-dashboard-welcome, .tenant-workspace-section, .admin-about-video-editor, .admin-about-video-preview, .admin-report-download-popover, .dashboard-notification-popover, .dashboard-notification-list, .admin-location-workspace, .listing-editor-form) {
+.admin-dashboard.dashboard-dark :is(.role-dashboard-metrics article, .role-dashboard-panel, .role-dashboard-welcome, .tenant-workspace-section, .admin-about-video-editor, .admin-about-video-preview, .admin-report-download-popover, .dashboard-notification-popover, .dashboard-notification-list, .admin-location-workspace, .listing-editor-form) {
   border-color: #353535 !important;
   background: #111 !important;
   color: #fff !important;
 }
-.app.theme-dark .admin-dashboard .admin-overview-welcome { border-color: #292929 !important; background: #000 !important; color: #fff !important; }
-.app.theme-dark .admin-dashboard :is(h1, h2, h3, h4, p, span, small, strong, em, label, time, a, button, td, th, li, legend) {
+.admin-dashboard.dashboard-dark .admin-overview-welcome { border-color: #292929 !important; background: #000 !important; color: #fff !important; }
+.admin-dashboard.dashboard-dark :is(h1, h2, h3, h4, p, span, small, strong, em, label, time, a, button, td, th, li, legend) {
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
 }
-.app.theme-dark .admin-dashboard :is(input, select, textarea) {
+.admin-dashboard.dashboard-dark :is(input, select, textarea) {
   border-color: #444 !important;
   background: #080808 !important;
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
   color-scheme: dark;
 }
-.app.theme-dark .admin-dashboard :is(input, textarea)::placeholder { color: #bbb !important; -webkit-text-fill-color: #bbb !important; }
-.app.theme-dark .admin-dashboard button:not(.role-dashboard-primary) { border-color: #444 !important; background: #222 !important; }
-.app.theme-dark .admin-dashboard .role-dashboard-primary,
-.app.theme-dark .admin-dashboard .role-dashboard-primary:hover { border-color: #08743d !important; background: #08743d !important; }
-.app.theme-dark .admin-dashboard :is(.admin-about-video-status, .role-dashboard-status, .role-dashboard-contact-avatar, .admin-overview-empty > span) { border-color: #444 !important; background: #222 !important; }
-.app.theme-dark .admin-dashboard .admin-about-video-drop { border-color: #666 !important; background: #080808 !important; }
-.app.theme-dark .admin-dashboard .admin-about-video-hero { border-color: #353535 !important; background: #080808 !important; color: #fff !important; }
-.app.theme-dark .admin-dashboard .role-dashboard-activity article,
-.app.theme-dark .admin-dashboard .admin-overview-empty { border-color: #353535 !important; }
+.admin-dashboard.dashboard-dark :is(input, textarea)::placeholder { color: #bbb !important; -webkit-text-fill-color: #bbb !important; }
+.admin-dashboard.dashboard-dark button:not(.role-dashboard-primary) { border-color: #444 !important; background: #222 !important; }
+.admin-dashboard.dashboard-dark .role-dashboard-primary,
+.admin-dashboard.dashboard-dark .role-dashboard-primary:hover { border-color: #08743d !important; background: #08743d !important; }
+.admin-dashboard.dashboard-dark :is(.admin-about-video-status, .role-dashboard-status, .role-dashboard-contact-avatar, .admin-overview-empty > span) { border-color: #444 !important; background: #222 !important; }
+.admin-dashboard.dashboard-dark .admin-about-video-drop { border-color: #666 !important; background: #080808 !important; }
+.admin-dashboard.dashboard-dark .admin-about-video-hero { border-color: #353535 !important; background: #080808 !important; color: #fff !important; }
+.admin-dashboard.dashboard-dark .role-dashboard-activity article,
+.admin-dashboard.dashboard-dark .admin-overview-empty { border-color: #353535 !important; }
+.admin-overview-metrics .role-dashboard-metric-icon,
+.admin-dashboard.dashboard-dark .admin-overview-metrics .role-dashboard-metric-icon { color: #000 !important; -webkit-text-fill-color: #000 !important; }
+.admin-dashboard.dashboard-dark .admin-about-video-note strong,
+.admin-dashboard.dashboard-dark .admin-about-video-note small { color: #000 !important; -webkit-text-fill-color: #000 !important; }
+.admin-dashboard.dashboard-dark .admin-location-workspace .role-dashboard-primary,
+.admin-dashboard.dashboard-dark .admin-location-workspace .role-dashboard-primary:hover { border-color: #000 !important; background: #000 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; }
+.admin-location-workspace .listing-editor-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 20px 16px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--dashboard-line);
+}
+.admin-location-workspace .listing-editor-form > label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  color: var(--dashboard-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.admin-location-workspace .listing-editor-form > label > span { color: var(--dashboard-muted); font-size: 10px; font-weight: 500; }
+.admin-location-workspace .listing-editor-form :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  box-sizing: border-box;
+  padding: 0 13px;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 9px;
+  background: var(--dashboard-paper);
+  color: var(--dashboard-ink);
+  font: inherit;
+  font-size: 12px;
+}
+.admin-location-workspace .listing-editor-form :is(input, select):focus { border-color: #00a84f; outline: 3px solid rgba(0,168,79,.15); }
+.admin-location-workspace .listing-editor-form .role-dashboard-primary { min-height: 46px; justify-self: start; border-radius: 9px; }
+.admin-dashboard.dashboard-dark .admin-location-workspace .tenant-workspace-icon { color: #000; }
+@media (max-width: 900px) {
+  .admin-location-workspace .listing-editor-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .admin-location-workspace .listing-editor-form { grid-template-columns: minmax(0, 1fr); gap: 15px; }
+  .admin-location-workspace .listing-editor-form .role-dashboard-primary { width: 100%; justify-content: center; }
+}
+.admin-dashboard.dashboard-dark .admin-location-workspace .listing-editor-form > .role-dashboard-primary,
+.admin-dashboard.dashboard-dark .admin-location-workspace .listing-editor-form > .role-dashboard-primary:hover,
+.admin-dashboard.dashboard-dark .admin-location-workspace .listing-editor-form > .role-dashboard-primary:disabled { border-color: #000 !important; background: #000 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; opacity: 1; }

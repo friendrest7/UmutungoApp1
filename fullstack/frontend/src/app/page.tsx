@@ -13,16 +13,6 @@ import { toProperty, type ApiListing } from '../lib/listings';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 
-const categories: { name: string; slug: string; detail: string; icon: IconName }[] = [
-  { name: 'Homes', slug: 'houses', detail: 'Houses and homes for sale or rent.', icon: 'home' },
-  { name: 'Apartments', slug: 'apartments', detail: 'Easy city living in Kigali.', icon: 'building' },
-  { name: 'Land', slug: 'land', detail: 'Plots for your next project.', icon: 'leaf' },
-  { name: 'Commercial spaces', slug: 'commercial', detail: 'Shops, offices and workspaces.', icon: 'building' },
-  { name: 'Offices', slug: 'offices', detail: 'Professional office properties for teams.', icon: 'building' },
-  { name: 'Cars', slug: 'vehicles', detail: 'Cars for sale or hire.', icon: 'car' },
-  { name: 'Car parts', slug: 'car-parts', detail: 'Parts and accessories for your car.', icon: 'wrench' },
-  { name: 'Home appliances', slug: 'appliances', detail: 'Useful appliances for your home.', icon: 'appliance' },
-];
 const landingPriceRanges = [
   { label: '0–300,000', min: 0, max: 300_000 },
   { label: '300,000–500,000', min: 300_000, max: 500_000 },
@@ -142,27 +132,22 @@ export default function HomePage() {
 
       <section className="section section-property container" id="properties">
         <div className="landing-discovery-panel">
-          <div className="landing-discovery-intro"><h2>Explore Umutungo and find a property that fits your plans.</h2><p>Browse homes, land, vehicles, furniture and more across Rwanda. Choose a category and price range to explore the available listings.</p></div>
-        <div className="landing-category-filter" aria-label="Filter properties by category">
-          <button type="button" className={selectedListingCategory === null ? 'is-selected' : ''} aria-pressed={selectedListingCategory === null} onClick={() => setSelectedListingCategory(null)}><Icon name="building" size={18} /><span>All</span></button>
+          <div className="landing-discovery-intro"><h2>{t(language, 'Explore Umutungo and find a property that fits your plans.')}</h2><p>{t(language, 'Browse homes, land, vehicles, furniture and more across Rwanda. Choose a category and price range to explore the available listings.')}</p></div>
+        <div className="landing-category-filter" aria-label={t(language, 'Filter properties by category')}>
+          <button type="button" className={selectedListingCategory === null ? 'is-selected' : ''} aria-pressed={selectedListingCategory === null} onClick={() => setSelectedListingCategory(null)}><Icon name="building" size={18} /><span>{t(language, 'All')}</span></button>
           {listingCategories.map((category) => {
             const icon: IconName = category.slug === 'houses' || category.slug === 'hospitality' ? 'home' : category.slug === 'land' ? 'leaf' : category.slug === 'vehicles' ? 'car' : category.slug === 'appliances' ? 'appliance' : category.slug === 'equipment' ? 'wrench' : 'building';
             return <button key={category.slug} type="button" className={selectedListingCategory === category.slug ? 'is-selected' : ''} aria-pressed={selectedListingCategory === category.slug} onClick={() => setSelectedListingCategory((current) => current === category.slug ? null : category.slug)}><Icon name={icon} size={18} /><span>{t(language, category.name)}</span></button>;
           })}
         </div>
-        <div className="landing-price-filter" aria-label="Filter properties by price range">
-          <span>Price range</span>
+        <div className="landing-price-filter" aria-label={t(language, 'Filter properties by price range')}>
+          <span>{t(language, 'Price range')}</span>
           <div className="landing-price-options">
             {landingPriceRanges.map((range) => <button key={range.label} type="button" className={selectedPriceRange === range.label ? 'is-selected' : ''} aria-pressed={selectedPriceRange === range.label} onClick={() => setSelectedPriceRange((current) => current === range.label ? null : range.label)}>{range.label}</button>)}
           </div>
         </div>
         </div>
         {propertyCategories.filter((category) => category.listings.length > 0).map((category) => <div className="landing-category-listings" key={category.slug}>{category.slug !== 'houses' && <div className="section-heading split-heading"><h3>{t(language, category.name)}</h3></div>}<div className="property-grid">{category.listings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div></div>)}
-      </section>
-
-      <section className="category-section section container" id="categories">
-        <div className="section-heading split-heading"><div><h2>{t(language, 'Homes, land and commercial property')}</h2></div><div className="category-heading-spacer" aria-hidden="true" /></div>
-        <div className="category-grid premium-category-grid">{categories.map((category, index) => <a className="premium-category-card premium-category-card-icons" href={`/categories/${category.slug}`} key={category.slug}><span className="premium-category-index">{String(index + 1).padStart(2, '0')}</span><span className="premium-category-icon"><Icon name={category.icon} size={32} /></span><span className="premium-category-copy"><strong>{t(language, category.name)}</strong><small>{t(language, category.detail)}</small><Icon name="arrow" size={15} /></span></a>)}</div>
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">

@@ -168,11 +168,12 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
           if (cancelled) return;
           setListingLoadError(false);
           const matchingItems = (result?.items ?? []).filter((item) => (slug === 'properties' || slug === 'houses' || aliases.includes(normalizedCategory(item.category))) && (item.images?.some(Boolean) || item.media?.some((media) => Boolean(media.url))));
-          setDatabaseListings(matchingItems.map((item) => {
+          const liveListings = matchingItems.map((item) => {
             const itemCategory = Object.entries(categoryAliases).find(([categorySlug, itemAliases]) => categorySlug !== 'properties' && itemAliases.includes(normalizedCategory(item.category)))?.[0];
             const itemConfig = itemCategory ? categoryConfigs[itemCategory] : rawCategory;
             return { ...toDatabaseListing(item, itemConfig), categoryName: itemConfig.name, categorySlug: itemCategory, ownerName: item.owner?.name };
-          }));
+          });
+          setDatabaseListings(liveListings);
         })
         .catch(() => { if (!cancelled) { setDatabaseListings([]); setListingLoadError(true); } });
     };

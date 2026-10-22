@@ -4876,6 +4876,7 @@ img, video, iframe { max-width: 100%; }
   background: #111 !important;
   color: #fff !important;
 }
+.app.theme-dark .admin-dashboard .admin-overview-welcome { border-color: #292929 !important; background: #000 !important; color: #fff !important; }
 .app.theme-dark .admin-dashboard :is(h1, h2, h3, h4, p, span, small, strong, em, label, time, a, button, td, th, li, legend) {
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;

@@ -122,11 +122,12 @@ export async function POST(request: Request) {
     const raw = data.choices?.[0]?.message?.content;
     if (!raw) return NextResponse.json(fallback);
     const parsed = JSON.parse(raw) as Partial<SearchPlan>;
+    const explicitVehicleSearch = fallback.category === 'vehicles' || fallback.category === 'car-parts';
     const plan: SearchPlan = {
-      status: parsed.status === 'clarify' ? 'clarify' : 'search',
+      status: explicitVehicleSearch ? 'search' : parsed.status === 'clarify' ? 'clarify' : 'search',
       reply: typeof parsed.reply === 'string' ? parsed.reply.slice(0, 400) : 'I’ve understood your search. Let me find matching properties.',
-      category: categories.includes(parsed.category ?? '') ? parsed.category! : fallback.category,
-      query: typeof parsed.query === 'string' ? parsed.query.slice(0, 160) : fallback.query,
+      category: explicitVehicleSearch ? fallback.category : categories.includes(parsed.category ?? '') ? parsed.category! : fallback.category,
+      query: explicitVehicleSearch ? fallback.query : typeof parsed.query === 'string' ? parsed.query.slice(0, 160) : fallback.query,
       location: typeof parsed.location === 'string' ? parsed.location.slice(0, 100) : fallback.location,
       intent: ['Buy', 'Rent', 'Buy or rent'].includes(parsed.intent ?? '') ? parsed.intent! : fallback.intent,
       priceRange: priceRanges.includes(parsed.priceRange ?? '') ? parsed.priceRange! : fallback.priceRange,

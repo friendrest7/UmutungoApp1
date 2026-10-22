@@ -146,8 +146,9 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
   const favoritesRef = useRef<HTMLDivElement>(null);
   const signedIn = isSignedIn || demoSignedIn;
-  const postActionLabel = 'Post a Property';
-  const postActionHint = 'Share a property with people looking.';
+  const isTenant = roleKey === 'Tenant' || roleKey === 'Client';
+  const postActionLabel = isTenant ? 'Upgrade to Post' : 'Post a Property';
+  const postActionHint = isTenant ? 'Choose an account type that can publish property listings.' : 'Share a property with people looking.';
   const goTo = (id: string) => { setMobileOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); };
   const openFavorites = () => { setFavoritesPanelOpen((open) => !open); setAccountMenuOpen(false); setMobileOpen(false); };
   useEffect(() => {
@@ -374,7 +375,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     if (destination) router.push(destination);
   };
 
-  const postAction = <a className="nav-link nav-post" href="/post-property" onClick={() => setMobileOpen(false)} aria-label={t(language, postActionHint)}><span className="nav-post-label">{t(language, postActionLabel)}</span></a>;
+  const postAction = <a className={`nav-link nav-post ${isTenant ? 'nav-post-upgrade' : ''}`} href={isTenant ? '/upgrade/post' : '/post-property'} onClick={() => setMobileOpen(false)} aria-label={t(language, postActionHint)}><span className="nav-post-label">{t(language, postActionLabel)}</span></a>;
 
   return <>
     <aside className={`site-header ${scrolled ? 'is-scrolled' : ''} ${landingVisible ? '' : 'is-hidden'}`}>

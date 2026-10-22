@@ -6,7 +6,6 @@ import { Footer } from '../components/Footer';
 import { Icon, type IconName } from '../components/Icons';
 import { Navbar } from '../components/Navbar';
 import { PropertyCard, PropertyPlaceholder } from '../components/PropertyCard';
-import { ConversationalPropertySearch } from '../components/ConversationalPropertySearch';
 import { Language, t } from '../data/translations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 import { toProperty, type ApiListing } from '../lib/listings';
@@ -127,7 +126,6 @@ export default function HomePage() {
       <section className="hero-section" id="home">
         <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
           <h1 className="landing-search-heading">{t(language, 'You are on Umutungo, you can find different properties')} <a className="button landing-properties-cta" href="/categories/properties">{t(language, 'here')}</a>.</h1>
-          <div className="landing-conversational-search"><ConversationalPropertySearch language={language} compact /></div>
           {!signedIn && <div className="hero-role-join" aria-label="Join Umutungo"><a className="button" href="/register?role=Komisiyoneri">{t(language, 'Join as Komisiyoneri')}</a><a className="button" href="/register?role=Property%20Owner">{t(language, 'Join as Property Owner')}</a><a className="button hero-landlord-join" href="/register?role=Landlord">{t(language, 'Join as Landlord')}</a></div>}
         </div></div>
         </div>

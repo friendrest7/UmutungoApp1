@@ -280,6 +280,7 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	demoAccounts := map[string]struct{ password, name, role string }{
+		"tenant@umutungo.test":       {"Tenant123!", "Umutungo Development Tenant", "tenant"},
 		"client@umutungo.test":       {"Client123!", "Umutungo Development Client", "client"},
 		"commissioner@umutungo.test": {"Commissioner123!", "Umutungo Development Komisiyoneri", "komisiyoneri"},
 		"landlord@umutungo.test":     {"Landlord123!", "Umutungo Development Landlord", "property_owner"},

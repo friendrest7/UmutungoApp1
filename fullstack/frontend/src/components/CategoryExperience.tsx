@@ -12,6 +12,7 @@ import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 import { getDistrictNames } from '../data/rwandaLocations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
+import { propertySlug } from '../lib/listings';
 
 type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[] };
@@ -256,7 +257,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
           </div>
           <div className="category-listing-copy"><div className="category-listing-meta"><span className={`listing-intent ${item.intent === 'For sale' ? 'for-sale' : item.intent === 'For rent' ? 'for-rent' : ''}`}>{item.intent}</span></div>
             <h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p>{item.ownerName && <small className="listing-owner-name"><span>{item.ownerName.slice(0, 1).toUpperCase()}</span> Listed by {item.ownerName}</small>}
-            <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><Link className="category-view-button" href={`/property/${encodeURIComponent(item.id)}`}>View property <Icon name="arrow" size={13} /></Link></div>
+            <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><Link className="category-view-button" href={`/property/${propertySlug(item.title)}`}>View property <Icon name="arrow" size={13} /></Link></div>
           </div>
         </article>)}</div>
       </> : <div className="category-empty"><h3>{t(language, listingLoadError ? 'Listings could not load right now' : 'No listings match that search')}</h3><p>{t(language, listingLoadError ? 'Please try again in a moment.' : 'Try another neighbourhood, property type, or clear the filter.')}</p>{listingLoadError ? <button type="button" onClick={() => window.location.reload()}>{t(language, 'Try again')}</button> : (query || initialLocation || initialDistrict || initialSector || initialIntent || initialPriceRange) && <button type="button" onClick={() => window.location.assign(`/categories/${slug}`)}>{t(language, 'Clear search')}</button>}</div>}

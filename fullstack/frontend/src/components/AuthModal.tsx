@@ -22,6 +22,7 @@ function googleWebClientId() {
 }
 
 const demoAccounts: Array<{ role: AuthRole; email: string; password: string }> = [
+  { role: 'Tenant', email: 'tenant@umutungo.test', password: 'Tenant123!' },
   { role: 'Client', email: 'client@umutungo.test', password: 'Client123!' },
   { role: 'Commissioner / Komisiyoneri', email: 'commissioner@umutungo.test', password: 'Commissioner123!' },
   { role: 'Landlord', email: 'landlord@umutungo.test', password: 'Landlord123!' },
@@ -100,11 +101,15 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
     setError('');
     try {
       const loginPayload = { email: account.email, password: account.password, ...(['Landlord', 'Property Owner'].includes(account.role) ? { listings: await developmentListingFixtures() } : {}) };
-      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginPayload) });
-      const result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; name?: string } };
+      let response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginPayload) });
+      let result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; name?: string } };
+      if (account.role === 'Tenant' && response.status === 401) {
+        response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'client@umutungo.test', password: 'Client123!' }) });
+        result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; name?: string } };
+      }
       if (response.status === 404) throw new Error('These testing credentials are only enabled on a development backend. On the live site, sign in with your registered account using Google or phone verification.');
       if (!response.ok || !result.access_token) throw new Error(result.error ?? 'A database session could not be created. Use a verified Umutungo account.');
-      const sessionRole = accountRoleFromApi(result.user?.role, account.role);
+      const sessionRole = account.role === 'Tenant' ? 'Tenant' : accountRoleFromApi(result.user?.role, account.role);
       window.localStorage.setItem('umutungo-api-token', result.access_token);
       window.dispatchEvent(new Event('umutungo:listings-changed'));
       complete(sessionRole, true, result.user?.name);

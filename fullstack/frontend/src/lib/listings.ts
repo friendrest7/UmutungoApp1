@@ -33,6 +33,10 @@ export function listedOn(value?: string | null) {
   return `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(date)}`;
 }
 
+export function propertySlug(title: string) {
+  return title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 export function listingImages(item: ApiListing) {
   const ordered = item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((media) => media.url) ?? [];
   return item.images?.length ? item.images : ordered;

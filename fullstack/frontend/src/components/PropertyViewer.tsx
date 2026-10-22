@@ -12,7 +12,7 @@ import { dashboardPathForAccountRole } from '../lib/accountRouting';
 type ViewerMode = 'photos' | 'tour' | 'plan';
 type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; initialRequest?: boolean };
 type TransactionType = 'rent' | 'buy';
-type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'success';
+type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'pending' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
 type PaymentReceipt = { receiptNumber: string; propertyTitle: string; location: string; amount: number; currency: string; paymentMethod: string; status: 'successful' | 'pending'; transactionType: TransactionType; createdAt: string };
 
@@ -224,11 +224,16 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         if (!check) throw new Error('Sign in again to check your MTN payment.');
         status = check.status;
       }
-      if (status === 'failed') throw new Error('MTN did not confirm this payment. Check your MoMo phone and try again.');
-      paymentStatus = status === 'successful' ? 'paid' : 'pending';
+      if (status === 'failed' || (status !== 'successful' && status !== 'pending') || status === 'pending') {
+        setTransactionStep('pending');
+        return;
+      }
+      paymentStatus = 'paid';
       window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...result, status, propertyId: property.id, createdAt: new Date().toISOString() }));
     } catch (cause) {
-      setPaymentError(cause instanceof Error ? cause.message : 'MTN payment could not be started.');
+      console.warn('MoMo payment is unavailable; keeping the request pending.', cause);
+      setPaymentError('');
+      setTransactionStep('pending');
       return;
     }
     const localPayment: { id: string; related_type: string; related_id: string; amount: number; currency: string; provider: string; provider_reference: string; status: 'successful' | 'pending'; created_at: string } = { id: `payment-${property.id}-${Date.now()}`, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: 'mtn_momo', provider_reference: providerReference, status: paymentStatus === 'paid' ? 'successful' : 'pending', created_at: new Date().toISOString() };
@@ -347,7 +352,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   };
 
   return <div className="property-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby="property-viewer-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="property-viewer">
+    <section className={`property-viewer ${isAppliance ? 'is-appliance-viewer' : ''}`}>
       <header className="property-viewer-header">
         <div><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button></div>
         <button className="property-viewer-close" type="button" onClick={onClose} aria-label={t(language, 'Close property viewer')}><Icon name="x" size={20} /></button>
@@ -458,6 +463,13 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
               <button className="property-action-continue" type="submit">Pay {property.price} securely <Icon name="arrow" size={16} /></button>
             </form>
             <button className="property-flow-back" type="button" onClick={() => setTransactionStep('choose')}><Icon name="arrow" size={13} /> Back to request options</button>
+          </>}
+
+          {transactionStep === 'pending' && <>
+            <span className="eyebrow">Payment pending</span>
+            <h2 id="property-action-title">Your request is still pending</h2>
+            <p className="property-action-intro">We have not received payment confirmation yet. No payment has been marked as complete. You can close this window and return later.</p>
+            <button className="property-action-continue" type="button" onClick={onClose}>Close</button>
           </>}
 
           {transactionStep === 'success' && <>

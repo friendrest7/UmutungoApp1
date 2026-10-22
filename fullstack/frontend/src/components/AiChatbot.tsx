@@ -1,8 +1,23 @@
-﻿import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
+import { publicUmutungoApi } from '../lib/umutungoApi';
+import { propertySlug } from '../lib/listings';
 
-type Message = { id: number; sender: 'assistant' | 'user'; text: string };
+type ChatListing = { id: string; category: string; title: string; description?: string; price: number; currency?: string; province?: string; district?: string; sector?: string; tags?: string[]; images?: string[]; media?: { url: string; type?: string; sort_order?: number }[] };
+type Message = { id: number; sender: 'assistant' | 'user'; text: string; listings?: ChatListing[] };
+const listingAliases: Record<string, string[]> = {
+  vehicles: ['vehicle', 'vehicles', 'car', 'cars', 'truck', 'van', 'bus', 'motorcycle', 'motorbike', 'automobile', 'suv', 'pickup'],
+  'car-parts': ['car part', 'car parts', 'spare part', 'spare parts', 'auto part', 'auto parts', 'automotive part', 'automotive parts'],
+  apartments: ['apartment', 'apartments', 'flat', 'flats'], houses: ['house', 'houses', 'home', 'homes'],
+  land: ['land', 'plot', 'plots'], commercial: ['commercial', 'shop', 'shops'], offices: ['office', 'offices'],
+  hospitality: ['hospitality', 'hotel', 'hotels', 'lodge', 'lodges'],
+  furniture: ['furniture', 'sofa', 'couch', 'table', 'chair', 'bed', 'desk', 'wardrobe', 'cabinet', 'mattress'],
+  appliances: ['appliance', 'appliances', 'refrigerator', 'fridge', 'freezer', 'washing machine', 'oven', 'cooker', 'microwave', 'stove'],
+  equipment: ['equipment', 'tool', 'tools', 'excavator', 'drill', 'generator', 'machinery', 'laptop', 'computer'],
+  other: ['bicycle', 'bike', 'event venue', 'banquet'],
+};
 
 const searchableCategories: Array<[string, string[]]> = [
   ['car-parts', ['car parts', 'spare parts', 'auto parts', 'automotive parts', 'tire', 'tires', 'tyre', 'tyres', 'engine parts', 'ibice by imodoka']],
@@ -26,7 +41,7 @@ function findListingSearch(text: string) {
   if (!match) return null;
   const searchIntent = /\b(?:want|need|looking for|search(?:ing)? for|find|show|browse|buy|rent|hire|do you have|are there|je veux|je cherche|je voudrais|cherche|trouve|ndashaka|shaka|tafuta|natafuta|nataka|ninatafuta)\b/.test(normalized) || normalized.split(' ').length <= 2;
   if (!searchIntent) return null;
-  const stopWords = new Set('i im want need looking for searching search find show me browse get have do you are there please a an the to with buy rent hire sale selling property properties listing listings real estate place to live je veux cherche voudrais une un le la les de du des dans avec trouver moi nataka ninatafuta tafuta kununua gukodesha kukodisha shaka ndashaka natafuta'.split(' '));
+  const stopWords = new Set('i im want need looking for searching search find show me browse get have do you are there please a an the to with buy rent hire sale selling image images photo photos picture pictures listing listings real estate place to live je veux cherche voudrais une un le la les de du des dans avec trouver moi nataka ninatafuta tafuta kununua gukodesha kukodisha shaka ndashaka natafuta'.split(' '));
   const query = normalized.replace(match.term, ' ').split(/\s+/).filter((word) => word && !stopWords.has(word)).join(' ');
   const intent = /\b(?:rent|rental|lease|hire|gukodesha|kukodisha)\b/.test(normalized) ? 'Rent' : /\b(?:buy|purchase|sale|sell|kugura)\b/.test(normalized) ? 'Buy' : 'Buy or rent';
   return { category: match.category, query, intent };
@@ -114,10 +129,28 @@ export function AiChatbot({ language }: { language: Language }) {
         Kinyarwanda: `Ndakwereka amatangazo ajyanye na ${categoryLabel} ubu.`,
         Swahili: `Ninakuonyesha matangazo yanayolingana ya ${categoryLabel} sasa.`,
       };
-      setMessages([...nextMessages, { id: Date.now() + 1, sender: 'assistant', text: replies[language] }]);
-      const params = new URLSearchParams({ intent: listingSearch.intent });
-      if (listingSearch.query) params.set('q', listingSearch.query);
-      window.location.assign(`/categories/${listingSearch.category}?${params.toString()}`);
+      const responseId = Date.now() + 1;
+      setMessages([...nextMessages, { id: responseId, sender: 'assistant', text: replies[language] }]);
+      setIsSending(true);
+      try {
+        const result = await publicUmutungoApi<{ items: ChatListing[] }>('/api/v1/listings', { cache: 'no-store' });
+        const aliases = listingAliases[listingSearch.category] ?? [];
+        const words = listingSearch.query.toLowerCase().split(/\s+/).filter(Boolean);
+        const matches = (result?.items ?? []).filter((item) => {
+          const normalizedCategory = item.category.toLowerCase().replace(/[_-]+/g, ' ').trim();
+          const searchable = `${item.title} ${item.description ?? ''} ${(item.tags ?? []).join(' ')}`.toLowerCase();
+          return aliases.includes(normalizedCategory) && words.every((word) => searchable.includes(word));
+        }).slice(0, 4);
+        setMessages((current) => current.map((message) => message.id === responseId
+          ? { ...message, text: matches.length ? replies[language] : 'I could not find matching listings right now. Try another search.', listings: matches }
+          : message));
+      } catch {
+        setMessages((current) => current.map((message) => message.id === responseId
+          ? { ...message, text: 'I could not load listings right now. Please try again.' }
+          : message));
+      } finally {
+        setIsSending(false);
+      }
       return;
     }
     setIsSending(true);
@@ -156,7 +189,7 @@ export function AiChatbot({ language }: { language: Language }) {
   };
 
   return <aside ref={chatbotRef} className={`ai-chatbot ${open ? 'is-open' : ''} ${isDragging ? 'is-dragging' : ''}`} style={{ transform: `translate3d(${dragPosition.x}px, ${dragPosition.y}px, 0)` }} aria-label={t(language, 'Umutungo help')}>
-    {open && <div className="ai-chat-panel"><div className="ai-chat-header" onPointerDown={startDragging}><div><strong>{t(language, 'Umutungo Assistant')}</strong><small>Drag to move</small></div><button type="button" aria-label={t(language, 'Close chat')} onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)}><Icon name="x" size={17} /></button></div><div className="ai-chat-messages" aria-live="polite">{messages.map((message) => <div className={`ai-chat-message ${message.sender}`} key={message.id}>{message.text}</div>)}{isSending && <div className="ai-chat-status" role="status">{t(language, 'Thinking...')}</div>}</div><form className="ai-chat-form" onSubmit={sendMessage}><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t(language, 'Ask Umutungo...')} aria-label={t(language, 'Ask Umutungo')} disabled={isSending} /><button type="submit" aria-label={t(language, 'Send message')} disabled={isSending || !value.trim()}><Icon name="arrow" size={15} /></button></form></div>}
+    {open && <div className="ai-chat-panel"><div className="ai-chat-header" onPointerDown={startDragging}><div><strong>{t(language, 'Umutungo Assistant')}</strong><small>Drag to move</small></div><button type="button" aria-label={t(language, 'Close chat')} onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)}><Icon name="x" size={17} /></button></div><div className="ai-chat-messages" aria-live="polite">{messages.map((message) => <div className={`ai-chat-message ${message.sender}`} key={message.id}><span>{message.text}</span>{message.listings?.map((item) => { const image = item.images?.[0] ?? item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0]?.url ?? '/properties/listing-placeholder.svg'; const location = [item.sector, item.district, item.province].filter(Boolean).join(', '); return <Link className="ai-chat-listing" href={`/property/${propertySlug(item.title)}`} key={item.id}><img src={image} alt={item.title} /><span><strong>{item.title}</strong><small>{location}</small><b>{item.currency ?? 'RWF'} {item.price.toLocaleString()}</b></span></Link>; })}</div>)}{isSending && <div className="ai-chat-status" role="status">{t(language, 'Thinking...')}</div>}</div><form className="ai-chat-form" onSubmit={sendMessage}><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t(language, 'Ask Umutungo...')} aria-label={t(language, 'Ask Umutungo')} disabled={isSending} /><button type="submit" aria-label={t(language, 'Send message')} disabled={isSending || !value.trim()}><Icon name="arrow" size={15} /></button></form></div>}
     {!open && <button className="ai-chat-toggle" type="button" onPointerDown={startDragging} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { if (dragMovedRef.current) { event.preventDefault(); dragMovedRef.current = false; return; } setOpen(true); }} aria-expanded={false} aria-label={t(language, 'Open chat')}><Icon name="sparkles" size={17} /><span>{t(language, 'Need help?')}</span></button>}
   </aside>;
 }

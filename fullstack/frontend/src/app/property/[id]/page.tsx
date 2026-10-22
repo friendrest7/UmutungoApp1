@@ -8,6 +8,7 @@ import { InterfacePreferences } from '../../../components/InterfacePreferences';
 import { PropertyViewer } from '../../../components/PropertyViewer';
 import { publicUmutungoApi } from '../../../lib/umutungoApi';
 import { listedOn, toProperty, type ApiListing as SharedApiListing } from '../../../lib/listings';
+import { propertySlug } from '../../../lib/listings';
 import { isLocalDevelopmentHost, readLocalPropertyListings } from '../../../lib/localListings';
 
 type ApiListing = {
@@ -78,12 +79,17 @@ export default function PropertyDetailPage() {
   const [property, setProperty] = useState<PropertyPlaceholder | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewerMode, setViewerMode] = useState<'tour' | 'plan' | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
 
   useEffect(() => {
     const open3d = new URLSearchParams(window.location.search).get('view') === '3d';
     const id = decodeURIComponent(params.id ?? '');
+    const isListingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     setProperty(null);
-    void publicUmutungoApi<ApiListing>(`/api/v1/listings/${encodeURIComponent(id)}`)
+    const listingRequest = isListingId
+      ? publicUmutungoApi<ApiListing>(`/api/v1/listings/${encodeURIComponent(id)}`)
+      : publicUmutungoApi<{ items: ApiListing[] }>('/api/v1/listings', { cache: 'no-store' }).then((result) => result?.items.find((item) => propertySlug(item.title) === id) ?? null);
+    void listingRequest
       .then((result) => {
         if (result) {
           const mappedProperty = toProperty(result as SharedApiListing);
@@ -91,14 +97,14 @@ export default function PropertyDetailPage() {
           if (open3d && mappedProperty.type === 'House') setViewerMode('tour');
           return;
         }
-        const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id) : undefined;
+        const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id) : undefined;
         if (localProperty) {
           setProperty(localProperty);
           if (open3d && localProperty.type === 'House') setViewerMode('tour');
         }
       })
       .catch(() => {
-        const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id) : undefined;
+        const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id) : undefined;
         if (localProperty) {
           setProperty(localProperty);
           if (open3d && localProperty.type === 'House') setViewerMode('tour');
@@ -131,7 +137,6 @@ export default function PropertyDetailPage() {
         </header>
         <section className="property-detail-layout">
           <div className="property-detail-media">
-            <img className="property-detail-cover" src={property.image} alt={property.title} />
             {property.type === 'House' && <div className="property-detail-view-actions" aria-label="Property media">
               <button type="button" onClick={() => setViewerMode('tour')}>
                 <Icon name="sparkles" size={15} />
@@ -142,19 +147,23 @@ export default function PropertyDetailPage() {
                 Floor plan
               </button>
             </div>}
+            <img className="property-detail-cover" src={property.image} alt={property.title} />
             <div className="property-detail-gallery">
               {(property.images ?? [property.image]).map((image) => <img src={image} alt="" key={image} />)}
             </div>
           </div>
           <article className="property-detail-copy">
+            <span className="property-detail-type">{property.type}</span>
             <h1>{property.title}</h1>
             <p className="property-detail-location">{property.location}</p>
             <strong className="property-detail-price">{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{property.priceNote}</small></>}</strong>
+            <button className="property-detail-rent-button" type="button" onClick={() => setRequestOpen(true)}>{property.availableFor === 'rent' ? 'Rent this property' : property.availableFor === 'both' ? 'Get or rent this property' : 'Get this property'} <Icon name="arrow" size={15} /></button>
             <div className="property-detail-stats">
               {property.type === 'House' && <><span><b>{property.bedrooms}</b> beds</span><span><b>{property.bathrooms}</b> baths</span></>}
-              <span><b>{property.area}</b> m²</span>
+              {property.area > 0 && <span><b>{property.area}</b> m²</span>}
             </div>
-            <p>{property.description ?? 'Clear property information to help you take the next step with confidence.'}</p>
+            <span className="property-detail-listed">{property.listed}</span>
+            <span className="property-detail-availability">{property.availableFor === 'rent' ? 'Available to rent' : property.availableFor === 'both' ? 'Available to buy or rent' : 'Available to buy'}</span>
             <div className="property-detail-poster">
               <span className="property-poster-avatar">{property.poster?.name.slice(0, 1) ?? 'U'}</span>
               <div>
@@ -165,13 +174,18 @@ export default function PropertyDetailPage() {
             </div>
           </article>
         </section>
+        <section className="property-detail-content" aria-label="Property information">
+          <article className="property-detail-about"><span className="property-detail-section-label">Property details</span><h2>About this listing</h2><p>{property.description?.trim() || 'Contact the property owner for more information about this listing.'}</p></article>
+          <aside className="property-detail-next-step"><span className="property-detail-section-label">Interested?</span><h2>Take a closer look</h2><p>Review the photos and listing details, then contact the poster to ask about availability and next steps.</p>{property.poster?.phone && <a href={`tel:${property.poster.phone}`}>Contact listing owner <Icon name="arrow" size={15} /></a>}</aside>
+        </section>
       </main>
-      {viewerMode && (
+      {(viewerMode || requestOpen) && (
         <PropertyViewer
           language="English"
           property={property}
-          initialMode={viewerMode ?? undefined}
-          onClose={() => setViewerMode(null)}
+          initialMode={viewerMode ?? 'photos'}
+          initialRequest={requestOpen}
+          onClose={() => { setViewerMode(null); setRequestOpen(false); }}
         />
       )}
     </>

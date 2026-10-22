@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useRouter } from 'expo-router';
 import { createListing, uploadListingMedia } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/theme/ThemeContext';
-
-function assetName(asset: ImagePicker.ImagePickerAsset, index: number) {
+function assetName(asset: DocumentPicker.DocumentPickerAsset, index: number) {
+  if (asset.name && /\.(jpe?g|png|webp)$/i.test(asset.name)) return asset.name;
   const extension = asset.mimeType?.split('/')[1] ?? 'jpg';
   return `property-${index + 1}.${extension === 'jpeg' ? 'jpg' : extension}`;
 }
+
+type ListingImage = DocumentPicker.DocumentPickerAsset & { assetId?: string };
 
 export default function NewListingScreen() {
   const { colors, styles } = useTheme();
@@ -25,18 +27,14 @@ export default function NewListingScreen() {
   const [district, setDistrict] = useState('');
   const [sector, setSector] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
-  const [selectedImages, setSelectedImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [selectedImages, setSelectedImages] = useState<ListingImage[]>([]);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const pickImages = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError('Photo library permission is required to select listing images.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.8 });
+    setError('');
+    const result = await DocumentPicker.getDocumentAsync({ type: ['image/jpeg', 'image/png', 'image/webp'], multiple: true, copyToCacheDirectory: true });
     if (!result.canceled) setSelectedImages(result.assets);
   };
 
@@ -54,7 +52,7 @@ export default function NewListingScreen() {
       let uploaded = 0;
       for (const [index, image] of selectedImages.entries()) {
         setNotice(`Listing created. Uploading photo ${index + 1} of ${selectedImages.length}...`);
-        await uploadListingMedia(result.id, { uri: image.uri, name: assetName(image, index), type: image.mimeType ?? 'image/jpeg' });
+        await uploadListingMedia(result.id, { uri: image.uri, name: assetName(image, index), type: image.mimeType ?? (image.name.toLowerCase().endsWith('.png') ? 'image/png' : image.name.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg') });
         uploaded += 1;
       }
       setNotice(uploaded ? `Listing created and ${uploaded} photo${uploaded === 1 ? '' : 's'} uploaded.` : `Listing created with status ${result.status}.`);

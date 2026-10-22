@@ -29,6 +29,20 @@ type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: strin
 const PROPERTY_SEARCH_URL = process.env.EXPO_PUBLIC_PROPERTY_SEARCH_API_URL || (process.env.EXPO_PUBLIC_CHAT_API_URL || 'https://umutungo.rw/api/chat').replace(/\/api\/chat\/?$/, '/api/property-search');
 const searchCategoryMap: Record<string, string> = { houses: 'house', apartments: 'apartment', land: 'land', commercial: 'commercial', offices: 'office', hospitality: 'hospitality', vehicles: 'vehicle', 'car-parts': 'car_parts', furniture: 'furniture', appliances: 'appliance', equipment: 'equipment', other: 'other' };
 
+function matchesPriceRange(price: number, range: string) {
+  const normalized = range.replace(/[–—]/g, '-');
+  if (!range || normalized === 'Any price') return true;
+  if (normalized === '0-300,000') return price <= 300_000;
+  if (normalized === '300,000-500,000') return price > 300_000 && price <= 500_000;
+  if (normalized === '500,000-1,000,000') return price > 500_000 && price <= 1_000_000;
+  if (normalized === '1,000,000-10,000,000') return price > 1_000_000 && price <= 10_000_000;
+  if (normalized === '10,000,000+') return price > 10_000_000;
+  if (normalized === 'Under RWF 500,000') return price < 500_000;
+  if (normalized === 'RWF 500,000 - 1,000,000') return price >= 500_000 && price <= 1_000_000;
+  if (normalized === 'Over RWF 1,000,000') return price > 1_000_000;
+  return true;
+}
+
 export default function SearchScreen() {
   const params = useLocalSearchParams<{ search?: string; ai_query?: string; transaction_type?: string; category?: string; province?: string; district?: string; sector?: string }>();
   const router = useRouter();
@@ -73,14 +87,11 @@ export default function SearchScreen() {
         setSearch(filters.search ?? ''); setCategory(categoryFilter); setTransactionType(transactionFilter); setLoading(true);
         const result = await listListings(filters);
         let matches = result.items;
-        if (plan.query && plan.location) {
+        if (plan.location) {
           const location = plan.location.toLocaleLowerCase();
           matches = matches.filter((item) => `${item.province} ${item.district} ${item.sector} ${item.cell ?? ''} ${item.village ?? ''}`.toLocaleLowerCase().includes(location));
         }
-        const price = (value: number) => value;
-        if (plan.priceRange === 'Under RWF 500,000') matches = matches.filter((item) => price(item.price) < 500000);
-        if (plan.priceRange === 'RWF 500,000 - 1,000,000') matches = matches.filter((item) => price(item.price) >= 500000 && price(item.price) <= 1000000);
-        if (plan.priceRange === 'Over RWF 1,000,000') matches = matches.filter((item) => price(item.price) > 1000000);
+        matches = matches.filter((item) => matchesPriceRange(item.price, plan.priceRange));
         setListings(matches); setVisible(12); setLoading(false);
       }
     } catch (cause) { setAssistantError(cause instanceof Error ? cause.message : 'The property search assistant could not be reached.'); setLoading(false); }

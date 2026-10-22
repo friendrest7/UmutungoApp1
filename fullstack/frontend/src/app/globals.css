@@ -1379,7 +1379,7 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 .category-listing-footer { margin-top: auto; }
 .category-listing-footer > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .category-listing-footer strong { font-size: 11px; }
-.category-listing-footer small { color: var(--category-muted); font-size: 8px; }
+.category-listing-footer small { display: -webkit-box; overflow: hidden; color: var(--category-muted); font-size: 8px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .category-view-button { display: inline-flex; min-height: 29px; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--category-accent); border-radius: 999px; background: transparent; color: var(--category-accent); cursor: pointer; font-size: 8px; font-weight: 800; white-space: nowrap; }
 .category-view-button:hover { background: color-mix(in srgb, var(--category-accent) 10%, var(--category-surface)); }
 .category-empty { display: grid; min-height: 280px; place-items: center; align-content: center; gap: 9px; border: 1px dashed var(--category-line); border-radius: 12px; color: var(--category-muted); text-align: center; }
@@ -2611,6 +2611,8 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .role-dashboard.dashboard-dark .role-dashboard-sidebar-bottom a:hover,
 .role-dashboard.dashboard-dark .role-dashboard-sidebar-bottom button:hover { background: rgba(123,176,150,.12); color: #f5f7fa; }
 .role-dashboard.dashboard-dark .role-dashboard-nav > svg { border-color: rgba(123,176,150,.28); background: rgba(123,176,150,.10); color: #6da88e; }
+.role-dashboard.dashboard-dark :is(.role-dashboard-label, .role-dashboard-eyebrow, .role-dashboard-nav, .role-dashboard-sidebar-bottom a, .role-dashboard-sidebar-bottom button, .role-dashboard-topbar h1) { color: #f5f7fa !important; }
+.role-dashboard.dashboard-dark .role-dashboard-nav > svg { color: #f5f7fa !important; }
 .role-dashboard.dashboard-dark .role-dashboard-profile small,
 .role-dashboard.dashboard-dark .role-dashboard-eyebrow,
 .role-dashboard.dashboard-dark .role-dashboard-panel small,

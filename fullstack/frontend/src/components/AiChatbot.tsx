@@ -120,6 +120,21 @@ export function AiChatbot({ language }: { language: Language }) {
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setValue('');
+    const asksForPhoto = /\b(image|images|photo|photos|picture|pictures|photograph)\b/i.test(trimmed);
+    if (asksForPhoto) {
+      const previousListings = [...messages].reverse().find((message) => message.sender === 'assistant' && message.listings?.length)?.listings ?? [];
+      const listingsWithPhotos = previousListings.filter((item) => (item.images?.length ?? 0) > 0 || (item.media ?? []).some((media) => !media.type?.toLowerCase().includes('video')));
+      if (listingsWithPhotos.length) {
+        const photoReplies: Record<Language, string> = {
+          English: 'Here are the photos from the matching property listings:',
+          French: 'Voici les photos des annonces correspondantes :',
+          Kinyarwanda: 'Dore amafoto ari ku matangazo y’imitungo ijyanye n’ibyo ushaka:',
+          Swahili: 'Haya hapa picha za matangazo ya nyumba yanayolingana:',
+        };
+        setMessages([...nextMessages, { id: Date.now() + 1, sender: 'assistant', text: photoReplies[language], listings: listingsWithPhotos }]);
+        return;
+      }
+    }
     const listingSearch = findListingSearch(trimmed);
     if (listingSearch) {
       const categoryLabel = listingSearch.category === 'vehicles' ? 'vehicle' : listingSearch.category === 'car-parts' ? 'car part' : listingSearch.category;
@@ -164,9 +179,9 @@ export function AiChatbot({ language }: { language: Language }) {
           messages: nextMessages.map((message) => ({ role: message.sender, content: message.text })),
         }),
       });
-      const data = await response.json() as { message?: string; error?: string };
+      const data = await response.json() as { message?: string; error?: string; listings?: ChatListing[] };
       if (!response.ok || !data.message) throw new Error(data.error || 'Chat unavailable');
-      setMessages((current) => [...current, { id: Date.now() + 1, sender: 'assistant', text: data.message as string }]);
+      setMessages((current) => [...current, { id: Date.now() + 1, sender: 'assistant', text: data.message as string, listings: data.listings?.length ? data.listings : undefined }]);
     } catch {
       const errors: Record<Language, string> = {
         English: 'I can’t connect to the property assistant right now. Please try again shortly.',

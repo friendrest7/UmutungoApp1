@@ -123,14 +123,17 @@ export async function POST(request: Request) {
     if (!raw) return NextResponse.json(fallback);
     const parsed = JSON.parse(raw) as Partial<SearchPlan>;
     const explicitVehicleSearch = fallback.category === 'vehicles' || fallback.category === 'car-parts';
+    const userText = messages.filter((message) => message.role === 'user').map((message) => message.content).join(' ');
+    const hasExplicitPropertyType = /\b(houses?|homes?|apartments?|flats?|land|plots?|commercial|shops?|offices?|hotels?|lodges?|vehicles?|cars?|car parts?|furniture|appliances?|equipment)\b/i.test(userText);
+    const hasSpecificPlaceSearch = Boolean(fallback.location && hasExplicitPropertyType);
     const plan: SearchPlan = {
-      status: explicitVehicleSearch ? 'search' : parsed.status === 'clarify' ? 'clarify' : 'search',
+      status: explicitVehicleSearch || hasSpecificPlaceSearch ? 'search' : parsed.status === 'clarify' ? 'clarify' : 'search',
       reply: typeof parsed.reply === 'string' ? parsed.reply.slice(0, 400) : 'I’ve understood your search. Let me find matching properties.',
-      category: explicitVehicleSearch ? fallback.category : categories.includes(parsed.category ?? '') ? parsed.category! : fallback.category,
-      query: explicitVehicleSearch ? fallback.query : typeof parsed.query === 'string' ? parsed.query.slice(0, 160) : fallback.query,
-      location: typeof parsed.location === 'string' ? parsed.location.slice(0, 100) : fallback.location,
-      intent: ['Buy', 'Rent', 'Buy or rent'].includes(parsed.intent ?? '') ? parsed.intent! : fallback.intent,
-      priceRange: priceRanges.includes(parsed.priceRange ?? '') ? parsed.priceRange! : fallback.priceRange,
+      category: explicitVehicleSearch || hasSpecificPlaceSearch ? fallback.category : categories.includes(parsed.category ?? '') ? parsed.category! : fallback.category,
+      query: explicitVehicleSearch || hasSpecificPlaceSearch ? fallback.query : typeof parsed.query === 'string' ? parsed.query.slice(0, 160) : fallback.query,
+      location: fallback.location || (typeof parsed.location === 'string' ? parsed.location.slice(0, 100) : ''),
+      intent: hasSpecificPlaceSearch ? fallback.intent : ['Buy', 'Rent', 'Buy or rent'].includes(parsed.intent ?? '') ? parsed.intent! : fallback.intent,
+      priceRange: hasSpecificPlaceSearch ? fallback.priceRange : priceRanges.includes(parsed.priceRange ?? '') ? parsed.priceRange! : fallback.priceRange,
     };
     return NextResponse.json(plan);
   } catch {

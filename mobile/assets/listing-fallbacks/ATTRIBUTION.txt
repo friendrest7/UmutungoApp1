@@ -1,0 +1,4 @@
+﻿Downloaded fallback photos for the two listings currently returned without images by the live API.
+
+- nice-house.jpg: "A large white building with a brown roof" by Ankit Pai N, photographed in Kigali, Rwanda. Unsplash License. https://unsplash.com/photos/a-large-white-building-with-a-brown-roof-NZ_wjehR79I
+- friend-rest-appliance.jpg: "A black refrigerator with its door open in a kitchen" by Alex Tyson. Unsplash License. https://unsplash.com/photos/a-black-refrigerator-with-its-door-open-in-a-kitchen-IjfDxaiM6bE

@@ -39,7 +39,38 @@ export function propertySlug(title: string) {
 
 export function listingImages(item: ApiListing) {
   const ordered = item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((media) => media.url) ?? [];
-  return item.images?.length ? item.images : ordered;
+  return (item.images?.length ? item.images : ordered).filter((url) => typeof url === 'string' && url.trim().length > 0);
+}
+
+const listingImageFallbacks: Record<string, string[]> = {
+  house: ['/properties/house-01.jpg', '/properties/rwanda-house-01.jpg'],
+  houses: ['/properties/house-01.jpg', '/properties/rwanda-house-01.jpg'],
+  apartment: ['/properties/apartment-01.jpg', '/properties/apartment-02.jpg'],
+  apartments: ['/properties/apartment-01.jpg', '/properties/apartment-02.jpg'],
+  land: ['/properties/land-01.jpg', '/properties/land-02.jpg'],
+  commercial: ['/properties/commercial-01.jpg', '/properties/commercial-02.jpg'],
+  office: ['/properties/office-03.jpg', '/properties/office-04.jpg'],
+  offices: ['/properties/office-03.jpg', '/properties/office-04.jpg'],
+  hospitality: ['/properties/hospitality-03.jpg', '/properties/hospitality-04.jpg'],
+  hotel: ['/properties/hospitality-03.jpg', '/properties/hospitality-04.jpg'],
+  vehicle: ['/properties/vehicle-02.jpg', '/properties/vehicle-03.jpg'],
+  vehicles: ['/properties/vehicle-02.jpg', '/properties/vehicle-03.jpg'],
+  car_part: ['/properties/vehicle-02.jpg', '/properties/vehicle-03.jpg'],
+  car_parts: ['/properties/vehicle-02.jpg', '/properties/vehicle-03.jpg'],
+  'car parts': ['/properties/vehicle-02.jpg', '/properties/vehicle-03.jpg'],
+  'car-parts': ['/properties/vehicle-02.jpg', '/properties/vehicle-03.jpg'],
+  furniture: ['/properties/furniture-02.jpg', '/properties/furniture-03.jpg'],
+  appliance: ['/properties/appliance-02.jpg', '/properties/appliance-03.jpg'],
+  appliances: ['/properties/appliance-02.jpg', '/properties/appliance-03.jpg'],
+  equipment: ['/properties/equipment-01.jpg', '/properties/equipment-02.jpg'],
+  other: ['/properties/other-02.jpg', '/properties/other-03.jpg'],
+};
+
+function fallbackListingImage(item: ApiListing) {
+  const category = item.category.trim().toLowerCase();
+  const options = listingImageFallbacks[category] ?? listingImageFallbacks.other;
+  const variant = Array.from(item.id).reduce((sum, character) => sum + character.charCodeAt(0), 0) % options.length;
+  return options[variant];
 }
 
 export function toProperty(item: ApiListing): PropertyPlaceholder {
@@ -63,7 +94,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     bathrooms: Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0),
     area: Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0),
     accent: '#00a84f',
-    image: images[0] ?? '/properties/listing-placeholder.svg',
+    image: images[0] ?? fallbackListingImage(item),
     images,
     listed: listingDate,
     availableFor: both ? 'both' : rent ? 'rent' : 'sale',

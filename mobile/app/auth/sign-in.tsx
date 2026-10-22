@@ -36,29 +36,32 @@ export default function SignInScreen() {
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-  const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || googleWebClientId;
-  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || googleWebClientId;
+  const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  const googleClientId = Platform.OS === 'android' ? googleAndroidClientId : Platform.OS === 'ios' ? googleIosClientId : googleWebClientId;
+  const googleConfigured = Boolean(googleClientId);
   const [googleRequest, googleResponse, promptGoogle] = Google.useAuthRequest({
-    androidClientId: googleAndroidClientId,
-    iosClientId: googleIosClientId,
-    webClientId: googleWebClientId,
+    androidClientId: googleAndroidClientId ?? '',
+    iosClientId: googleIosClientId ?? '',
+    webClientId: googleWebClientId ?? '',
     scopes: ['openid', 'profile', 'email'],
   });
 
   useEffect(() => {
     if (googleResponse?.type !== 'success') return;
+    const credential = googleResponse.authentication?.idToken ?? googleResponse.params?.id_token;
     const accessToken = googleResponse.authentication?.accessToken;
     void Promise.resolve().then(async () => {
-      if (!accessToken) {
-        setError('Google did not return an access token.');
+      if (!credential && !accessToken) {
+        setError('Google did not return a sign-in token.');
         return;
       }
       setGoogleBusy(true);
       setError('');
       try {
         const result = await signInWithGoogle({
-          access_token: accessToken,
-          client_id: Platform.OS === 'android' ? googleAndroidClientId : Platform.OS === 'ios' ? googleIosClientId : googleWebClientId,
+          ...(credential ? { credential } : { access_token: accessToken as string }),
+          client_id: googleClientId,
           role: 'client',
         });
         setUser(result.user);
@@ -71,7 +74,7 @@ export default function SignInScreen() {
         setGoogleBusy(false);
       }
     });
-  }, [googleResponse, router, setProfile, setUser]);
+  }, [googleClientId, googleResponse, router, setProfile, setUser]);
 
   const submitPhone = async () => {
     if (phone.replace(/\D/g, '').length < 9) {
@@ -127,9 +130,9 @@ export default function SignInScreen() {
       <Text style={styles.title}>{t('Sign in to continue.')}</Text>
       <Text style={styles.body}>{t('Use Google or the phone number connected to your Umutungo account.')}</Text>
       {error && <ErrorState message={error} />}
-      <Pressable style={[styles.secondaryButton, { flexDirection: 'row', gap: 8 }]} disabled={!googleRequest || googleBusy} onPress={() => void promptGoogle()}>
+      <Pressable style={[styles.secondaryButton, { flexDirection: 'row', gap: 8 }]} disabled={!googleConfigured || !googleRequest || googleBusy} onPress={() => void promptGoogle()}>
         <MaterialCommunityIcons name="google" size={19} color="#4285F4" />
-        <Text style={styles.secondaryText}>{googleBusy ? t('Connecting to Google...') : googleRequest ? t('Continue with Google') : t('Google sign-in is not configured')}</Text>
+        <Text style={styles.secondaryText}>{googleBusy ? t('Connecting to Google...') : googleConfigured && googleRequest ? t('Continue with Google') : t('Google sign-in is not configured')}</Text>
       </Pressable>
       <Text style={[styles.muted, { textAlign: 'center' }]}>{t('Google access is verified by the Umutungo API before a session is created.')}</Text>
       <Pressable style={styles.secondaryButton} onPress={() => { setEmailOpen((open) => !open); setError(''); }}><Text style={styles.secondaryText}>{emailOpen ? t('Use phone sign-in') : t('Sign in to an existing account')}</Text></Pressable>

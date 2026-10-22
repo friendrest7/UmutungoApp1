@@ -66,7 +66,7 @@ export async function updateProfile(input: { name?: string; email?: string; bio?
   await cacheSession(result.user, result.profile);
   return result;
 }
-export async function signInWithGoogle(input: { access_token: string; client_id?: string; role?: 'client' | 'tenant' }) {
+export async function signInWithGoogle(input: { access_token?: string; credential?: string; client_id?: string; role?: 'client' | 'tenant' }) {
   const result = await request<{ user: ApiUser; profile: ApiProfile; access_token: string }>('/api/v1/auth/google', { method: 'POST', body: JSON.stringify(input) });
   await SecureStore.setItemAsync(TOKEN_KEY, result.access_token);
   await cacheSession(result.user, result.profile);

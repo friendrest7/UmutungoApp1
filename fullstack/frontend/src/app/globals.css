@@ -4265,9 +4265,9 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
 }
 @media (max-width: 640px) {
   .app-realistic .landing-search-heading {
-    width: calc(100% - 1.2cm);
-    margin: 0 1.2cm 8px auto !important;
-    text-align: right;
+    width: calc(100% - 1cm);
+    margin: 0 0 8px 1cm !important;
+    text-align: left;
   }
   .hero-role-join { gap: 8px; }
   .landing-conversational-search { width: calc(100% - 1.2cm); margin: 0 0 10px 1.2cm; }

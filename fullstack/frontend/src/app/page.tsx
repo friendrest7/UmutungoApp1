@@ -148,7 +148,7 @@ export default function HomePage() {
           </div>
         </div>
         </div>
-        {landingListings.length > 0 && <div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div>}
+        {landingListings.length > 0 && <div className="landing-property-backdrop"><div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div></div>}
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">

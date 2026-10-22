@@ -10,7 +10,7 @@ export function AiChatbot({ language }: { language: Language }) {
   const [isSending, setIsSending] = useState(false);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([{ id: 1, sender: 'assistant', text: t(language, 'Hello! I can help you explore property in Rwanda. Never share a PIN or OTP, or send money based on a chat message. Use only the official Umutungo payment flow.') }]);
+  const [messages, setMessages] = useState<Message[]>([{ id: 1, sender: 'assistant', text: t(language, 'Hello! I can help you find a place in Rwanda. Ask me about renting, buying, locations, or property types.') }]);
   const chatbotRef = useRef<HTMLElement>(null);
   const dragStartRef = useRef({ x: 0, y: 0, originX: 0, originY: 0 });
   const dragPositionRef = useRef(dragPosition);

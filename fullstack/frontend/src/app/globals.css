@@ -4264,14 +4264,17 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   }
 }
 @media (max-width: 640px) {
-  .app-realistic .hero-copy { width: 100%; min-width: 0; }
-  .app-realistic .landing-search-heading {
-    width: min(560px, calc(100vw - 2cm));
-    max-width: none;
+  .app-realistic .hero-copy { width: 100%; max-width: none; min-width: 0; }
+  .app-realistic .hero-copy h1.landing-search-heading {
+    align-self: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
     box-sizing: border-box;
-    margin: 0 0 8px .5cm !important;
-    text-align: center;
+    margin: 0 0 8px !important;
+    padding-left: .5cm !important;
+    text-align: left !important;
     overflow-wrap: anywhere;
+    transform: none !important;
   }
   .hero-role-join { gap: 8px; }
   .landing-conversational-search { width: calc(100% - 1.2cm); margin: 0 0 10px 1.2cm; }
@@ -4781,4 +4784,27 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   .app-realistic.info-page-shell .how-page-hero .standalone-hero-grid > div:first-child { max-width: 760px; }
   .app-realistic.info-page-shell .scroll-story-inner { padding-top: 20px; }
   .app-realistic.info-page-shell .scroll-story-visual { top: 2vh; height: min(74vh, 720px); }
+}
+
+/* Shared responsive guardrails for narrow screens across every web page. */
+img, video, iframe { max-width: 100%; }
+@media (max-width: 760px) {
+  .container { width: calc(100% - 32px); }
+  .app-realistic :is([class*="grid"], [class*="layout"]) > * { min-width: 0; }
+  .app-realistic .hero-role-join { width: 100%; justify-content: center; }
+  .app-realistic .hero-role-join .hero-landlord-join {
+    width: auto;
+    min-width: 0;
+    min-height: 40px;
+    flex: 0 1 190px;
+    align-self: center;
+    margin-inline: auto;
+    padding: 9px 16px;
+    font-size: 11px;
+  }
+}
+@media (max-width: 380px) {
+  .container { width: calc(100% - 24px); }
+  .app-realistic .hero-role-join { gap: 7px; }
+  .app-realistic .hero-role-join .button { min-width: 0; flex-basis: 100%; }
 }

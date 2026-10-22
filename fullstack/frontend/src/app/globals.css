@@ -4724,7 +4724,7 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
 .app-realistic .section-property .landing-category-listings .section-heading h3 { font-weight: 400 !important; }
 .app-realistic .section-property { padding-top: 44px; }
 .app-realistic .landing-discovery-panel { margin: 0 0 38px; padding: 20px clamp(20px, 3vw, 34px) clamp(20px, 3vw, 34px); border: 1px solid #e3eae4; border-radius: 24px; background: linear-gradient(135deg, #f7fbf7 0%, #fff 60%, #f1f7f1 100%); box-shadow: 0 14px 38px rgba(23, 52, 32, .07); }
-.app-realistic .landing-discovery-intro { max-width: none; margin: 0 0 22px; }
+.app-realistic .landing-discovery-intro { max-width: none; margin: 0 0 22px; transform: translateX(4cm); }
 .app-realistic .landing-discovery-intro > span { color: #0b7140; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .app-realistic .landing-discovery-intro h2 { margin: 8px 0 7px; color: #183a27; font-size: clamp(21px, 2.5vw, 30px); font-weight: 650; letter-spacing: -.04em; line-height: 1.12; }
 .app-realistic .landing-discovery-intro p { margin: 0; color: #65736a; font-size: 13px; line-height: 1.6; }
@@ -4754,7 +4754,7 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
 @media (max-width: 600px) {
   .app-realistic .section-property { padding-top: 30px; }
   .app-realistic .landing-discovery-panel { margin-bottom: 29px; padding: 19px 15px; border-radius: 19px; }
-  .app-realistic .landing-discovery-intro { margin-bottom: 17px; }
+  .app-realistic .landing-discovery-intro { margin-bottom: 17px; transform: none; }
   .app-realistic .landing-price-filter { align-items: flex-start; flex-direction: column; gap: 9px; margin-bottom: 22px; }
   .app-realistic .landing-price-options { gap: 7px; }
   .app-realistic .landing-price-options button { min-height: 34px; padding: 0 11px; font-size: 10px; }

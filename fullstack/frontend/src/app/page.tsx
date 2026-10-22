@@ -113,9 +113,10 @@ export default function HomePage() {
       const amount = Number(property.price.replace(/[^\d]/g, ''));
       if (!range || !Number.isFinite(amount)) return false;
       return range.max === null ? amount > range.min : range.min === 0 ? amount <= range.max : amount > range.min && amount <= range.max;
-    }).slice(0, 3);
+    });
     return { ...category, listings };
   });
+  const landingListings = propertyCategories.flatMap((category) => category.listings);
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
@@ -147,7 +148,7 @@ export default function HomePage() {
           </div>
         </div>
         </div>
-        {propertyCategories.filter((category) => category.listings.length > 0).map((category) => <div className="landing-category-listings" key={category.slug}>{category.slug !== 'houses' && <div className="section-heading split-heading"><h3>{t(language, category.name)}</h3></div>}<div className="property-grid">{category.listings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div></div>)}
+        {landingListings.length > 0 && <div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div>}
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">

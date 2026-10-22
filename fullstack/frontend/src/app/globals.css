@@ -4728,6 +4728,10 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
 .app-realistic .landing-discovery-intro > span { color: #0b7140; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .app-realistic .landing-discovery-intro h2 { margin: 8px 0 7px; color: #183a27; font-size: clamp(21px, 2.5vw, 30px); font-weight: 650; letter-spacing: -.04em; line-height: 1.12; }
 .app-realistic .landing-discovery-intro p { margin: 0; color: #65736a; font-size: 13px; line-height: 1.6; }
+.app-realistic .landing-property-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 22px; }
+.app-realistic .landing-property-grid .property-card { display: flex; min-width: 0; flex-direction: column; height: 100%; }
+.app-realistic .landing-property-grid .property-card-body { display: flex; flex: 1; flex-direction: column; }
+.app-realistic .landing-property-grid .property-card-footer { margin-top: auto; padding-top: 16px; }
 .app-realistic .landing-category-filter { display: flex; gap: 10px; margin: 0 0 22px; overflow-x: auto; padding: 3px 1px 8px; scrollbar-width: thin; }
 .app-realistic .landing-category-filter button { display: inline-flex; min-width: 82px; min-height: 70px; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border: 1px solid #e1e8e2; border-radius: 14px; background: #fff; color: #52645a; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease; }
 .app-realistic .landing-category-filter button:hover, .app-realistic .landing-category-filter button.is-selected { border-color: #0b7140; background: #edf7ef; color: #0b7140; }
@@ -4751,6 +4755,13 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   .app-realistic .landing-price-filter { align-items: flex-start; flex-direction: column; gap: 9px; margin-bottom: 22px; }
   .app-realistic .landing-price-options { gap: 7px; }
   .app-realistic .landing-price-options button { min-height: 34px; padding: 0 11px; font-size: 10px; }
+}
+@media (max-width: 1000px) {
+  .app-realistic .landing-property-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+}
+@media (max-width: 600px) {
+  .app-realistic .landing-property-grid { grid-template-columns: minmax(0, 1fr); gap: 15px; }
+  .app-realistic .landing-property-grid .property-image { height: 240px; }
 }
 .app-realistic .section-property .landing-property-intro-title { max-width: 760px; font-size: clamp(25px, 2.8vw, 38px); line-height: 1.1; }
 .app-realistic .about-page .about-story-copy { width: min(560px, 48%); max-width: 560px; transform: translateY(-3cm); }

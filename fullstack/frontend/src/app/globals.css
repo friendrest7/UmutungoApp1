@@ -4747,14 +4747,6 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
 .app-realistic .landing-category-filter button:hover, .app-realistic .landing-category-filter button.is-selected { border-color: #0b7140; background: #edf7ef; color: #0b7140; }
 .app-realistic.theme-dark .landing-category-filter button { border-color: #39463e; background: #151a17; color: #d6e1d9; }
 .app-realistic.theme-dark .landing-category-filter button:hover, .app-realistic.theme-dark .landing-category-filter button.is-selected { border-color: #138447; background: #173b28; color: #a7e4b8; }
-.app-realistic .landing-price-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 28px; }
-.app-realistic .landing-price-filter > span { color: #53645a; font-size: 12px; font-weight: 750; }
-.app-realistic .landing-price-options { display: flex; flex-wrap: wrap; gap: 8px; }
-.app-realistic .landing-price-options button { min-height: 36px; padding: 0 14px; border: 1px solid #dce6de; border-radius: 999px; background: #fff; color: #294435; font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; transition: background .16s ease, color .16s ease, border-color .16s ease; }
-.app-realistic .landing-price-options button:hover, .app-realistic .landing-price-options button.is-selected { border-color: #0b7140; background: #0b7140; color: #fff; }
-.app-realistic.theme-dark .landing-price-filter > span { color: #d1ddd5; }
-.app-realistic.theme-dark .landing-price-options button { border-color: #39463e; background: #151a17; color: #e6eee8; }
-.app-realistic.theme-dark .landing-price-options button:hover, .app-realistic.theme-dark .landing-price-options button.is-selected { border-color: #138447; background: #138447; color: #fff; }
 .app-realistic.theme-dark .landing-discovery-panel { border-color: #29352e; background: linear-gradient(135deg, #121a15 0%, #15191f 62%, #102016 100%); box-shadow: 0 14px 38px rgba(0, 0, 0, .22); }
 .app-realistic.theme-dark .landing-discovery-intro h2 { color: #f1f7f3; }
 .app-realistic.theme-dark .landing-discovery-intro p { color: #c4d0c8; }
@@ -4762,9 +4754,6 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   .app-realistic .section-property { padding-top: 30px; }
   .app-realistic .landing-discovery-panel { margin-bottom: 29px; padding: 19px 15px; border-radius: 19px; }
   .app-realistic .landing-discovery-intro { margin-bottom: 17px; transform: none; }
-  .app-realistic .landing-price-filter { align-items: flex-start; flex-direction: column; gap: 9px; margin-bottom: 22px; }
-  .app-realistic .landing-price-options { gap: 7px; }
-  .app-realistic .landing-price-options button { min-height: 34px; padding: 0 11px; font-size: 10px; }
 }
 @media (max-width: 1000px) {
   .app-realistic .landing-property-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }

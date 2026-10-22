@@ -14,13 +14,6 @@ import { isLocalDevelopmentHost, readLocalPropertyListings, writeLocalPropertyLi
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 
-const landingPriceRanges = [
-  { label: '0–300,000', min: 0, max: 300_000 },
-  { label: '300,000–500,000', min: 300_000, max: 500_000 },
-  { label: '500,000–1,000,000', min: 500_000, max: 1_000_000 },
-  { label: '1,000,000–10,000,000', min: 1_000_000, max: 10_000_000 },
-  { label: '10,000,000+', min: 10_000_000, max: null },
-];
 export default function HomePage() {
   const { darkMode, toggleTheme } = usePersistentTheme();
   const { language, changeLanguage } = usePersistentLanguage();
@@ -29,7 +22,6 @@ export default function HomePage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [selectedListingCategory, setSelectedListingCategory] = useState<string | null>(null);
-  const [selectedPriceRange, setSelectedPriceRange] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const copy = (key: string) => t(language, key);
 
@@ -124,14 +116,7 @@ export default function HomePage() {
   ];
   const propertyCategories = listingCategories.filter((category) => !selectedListingCategory || category.slug === selectedListingCategory).map((category) => {
     const liveListings = visibleProperties.filter((property) => category.types.includes(property.type.toLowerCase()));
-    const listings = liveListings.filter((property) => {
-      if (!selectedPriceRange) return true;
-      const range = landingPriceRanges.find((item) => item.label === selectedPriceRange);
-      const amount = Number(property.price.replace(/[^\d]/g, ''));
-      if (!range || !Number.isFinite(amount)) return false;
-      return range.max === null ? amount > range.min : range.min === 0 ? amount <= range.max : amount > range.min && amount <= range.max;
-    });
-    return { ...category, listings };
+    return { ...category, listings: liveListings };
   });
   const landingListings = propertyCategories.flatMap((category) => category.listings);
 
@@ -150,19 +135,13 @@ export default function HomePage() {
 
       <section className="section section-property container" id="properties">
         <div className="landing-discovery-panel">
-          <div className="landing-discovery-intro"><h2>{t(language, 'Explore Umutungo and find a property that fits your plans.')}</h2><p>{t(language, 'Browse homes, land, vehicles, furniture and more across Rwanda. Choose a category and price range to explore the available listings.')}</p></div>
+          <div className="landing-discovery-intro"><h2>{t(language, 'Explore Umutungo and find a property that fits your plans.')}</h2><p>{t(language, 'Browse homes, land, vehicles, furniture and more across Rwanda. Choose a category to explore the available listings.')}</p></div>
         <div className="landing-category-filter" aria-label={t(language, 'Filter properties by category')}>
           <button type="button" className={selectedListingCategory === null ? 'is-selected' : ''} aria-pressed={selectedListingCategory === null} onClick={() => setSelectedListingCategory(null)}><Icon name="building" size={18} /><span>{t(language, 'All')}</span></button>
           {listingCategories.map((category) => {
             const icon: IconName = category.slug === 'houses' || category.slug === 'hospitality' ? 'home' : category.slug === 'land' ? 'leaf' : category.slug === 'vehicles' ? 'car' : category.slug === 'appliances' ? 'appliance' : category.slug === 'equipment' ? 'wrench' : 'building';
             return <button key={category.slug} type="button" className={selectedListingCategory === category.slug ? 'is-selected' : ''} aria-pressed={selectedListingCategory === category.slug} onClick={() => setSelectedListingCategory((current) => current === category.slug ? null : category.slug)}><Icon name={icon} size={18} /><span>{t(language, category.name)}</span></button>;
           })}
-        </div>
-        <div className="landing-price-filter" aria-label={t(language, 'Filter properties by price range')}>
-          <span>{t(language, 'Price range')}</span>
-          <div className="landing-price-options">
-            {landingPriceRanges.map((range) => <button key={range.label} type="button" className={selectedPriceRange === range.label ? 'is-selected' : ''} aria-pressed={selectedPriceRange === range.label} onClick={() => setSelectedPriceRange((current) => current === range.label ? null : range.label)}>{range.label}</button>)}
-          </div>
         </div>
         </div>
         {landingListings.length > 0 && <div className="landing-property-backdrop"><div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div></div>}

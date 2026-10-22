@@ -13,7 +13,10 @@ export function PropertyCard({ listing, onPress }: { listing: ApiListing; onPres
   const { width: screenWidth } = useWindowDimensions();
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [activePhoto, setActivePhoto] = useState(0);
-  const photos = listing.media?.filter((item) => item.type === 'photo' && item.url).map((item) => item.url) ?? [];
+  const photos = [...new Set([
+    ...(listing.media ?? []).filter((item) => item.url && !item.type.toLowerCase().includes('video') && !item.type.toLowerCase().includes('tour')).map((item) => item.url),
+    ...(listing.images ?? []).filter(Boolean),
+  ])];
   const imageWidth = Math.min(screenWidth - 40, 720);
   const intent = /rent/i.test(listing.transaction_type || '') ? 'For rent' : /book/i.test(listing.transaction_type || '') ? 'For booking' : 'For sale';
   return <Pressable style={({ pressed }) => [styles.card, { padding: 0, overflow: 'hidden', opacity: pressed ? 0.9 : 1, borderRadius: 20 }]} onPress={onPress}>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useTheme } from '@/theme/ThemeContext';
 import { useRouter } from 'expo-router';
@@ -40,7 +40,7 @@ export default function ChatScreen() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'The assistant could not be reached. Check the chat API URL and connection.'); }
     finally { setBusy(false); }
   };
-  return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+  return <KeyboardAvoidingView style={styles.screen} behavior="padding" keyboardVerticalOffset={0}>
     <View style={{ padding: 18, paddingBottom: 10 }}><Text style={styles.brand}>UMUTUNGO ASSISTANT</Text><Text style={styles.title}>Tell me what you need</Text><Text style={styles.muted}>The assistant uses live listing and professional directory results where available.</Text></View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, gap: 10 }} keyboardShouldPersistTaps="handled">
       {messages.map((message, index) => <View key={`${index}-${message.role}`} style={[styles.card, { alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '92%', backgroundColor: message.role === 'user' ? colors.greenSoft : colors.paper }]}><Text style={styles.body}>{message.content}</Text>{message.listings?.map((listing) => {

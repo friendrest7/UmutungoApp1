@@ -57,7 +57,7 @@ The backend changes are in `backend/internal/httpapi/server.go`, `backend/migrat
 5. The AI route needs the deployed website host and a valid `GROQ_API_KEY` in that website's hosting environment. This repository's local key is never bundled into the APK.
 6. MTN MoMo credentials must be configured in the deployed backend secret store with the correct MTN target environment; local credentials are not used by the live API. Confirm merchant settlement terms before accepting customer property payments.
 7. Apple sign-in and account deletion remain follow-up work because no Apple backend/provider configuration exists yet.
-8. Listing search currently returns a maximum of 100 records and has no cursor/page query contract. "Load more" pages the already returned live result set on-device; server pagination requires a backend contract change.
+8. Listing search currently returns up to 500 records and has no cursor/page query contract. "Load more" pages the returned live result set on-device; server pagination requires a backend contract change.
 9. No push-notification registration endpoint was found, so this release uses on-demand API loading rather than claiming push support.
 
 ## Android phone testing

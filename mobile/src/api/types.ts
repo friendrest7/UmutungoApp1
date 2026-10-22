@@ -37,6 +37,7 @@ export type ApiListing = {
   tags?: string[];
   amenities?: string[];
   media?: ListingMedia[];
+  images?: string[];
   created_at: string;
   expires_at?: string;
 };

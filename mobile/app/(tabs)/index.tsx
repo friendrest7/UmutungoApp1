@@ -135,7 +135,8 @@ export default function HomeScreen() {
     </View>
 
     <View style={{ gap: 12 }}>
-      {loading ? <LoadingState label={t('Loading live properties...')} /> : error ? <ErrorState message={error} onRetry={() => { setLoading(true); void load(); }} /> : visibleListings.length === 0 ? <EmptyState title={t('No listings found')} message={t('Published properties will appear here when they are available from the Umutungo API.')} /> : visibleListings.slice(0, 4).map((listing) => <PropertyCard key={listing.id} listing={listing} onPress={() => router.push({ pathname: '/property/[id]', params: { id: listing.id } })} />)}
+      {!loading && !error && <Text style={styles.heading}>{t('Available properties')} · {visibleListings.length}</Text>}
+      {loading ? <LoadingState label={t('Loading live properties...')} /> : error ? <ErrorState message={error} onRetry={() => { setLoading(true); void load(); }} /> : visibleListings.length === 0 ? <EmptyState title={t('No listings found')} message={t('Published properties will appear here when they are available from the Umutungo API.')} /> : <>{visibleListings.slice(0, 4).map((listing) => <PropertyCard key={listing.id} listing={listing} onPress={() => router.push({ pathname: '/property/[id]', params: { id: listing.id } })} />)}<Pressable style={styles.secondaryButton} onPress={() => goToSearch(selectedCategory ? { category: selectedCategory } : {})}><Text style={styles.secondaryText}>{t('Browse all properties')}</Text></Pressable></>}
     </View>
 
     <Pressable onPress={() => router.push('/(tabs)/profile')} style={{ flexDirection: 'row', alignItems: 'center', gap: 13, padding: 17, borderRadius: 18, backgroundColor: colors.greenSoft }}>

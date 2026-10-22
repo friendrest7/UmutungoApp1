@@ -21,6 +21,7 @@
     },
     "android": {
       "package": "rw.umutungo.mobile",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#0b6b3a"

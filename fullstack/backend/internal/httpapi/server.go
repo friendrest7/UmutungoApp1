@@ -942,7 +942,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		AND ($2='' OR l.province=$2) AND ($3='' OR l.district=$3)
 		AND ($4='' OR l.sector=$4) AND ($5='' OR l.category=$5)
 		AND ($6='' OR l.transaction_type=$6 OR (l.transaction_type='both' AND $6 IN ('buy','sell','rent','rent_out')))
-		ORDER BY l.created_at DESC LIMIT 250`, args...)
+		ORDER BY l.created_at DESC LIMIT 500`, args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load listings")
 		return

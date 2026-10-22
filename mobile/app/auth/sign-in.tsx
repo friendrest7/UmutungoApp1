@@ -45,12 +45,17 @@ export default function SignInScreen() {
     iosClientId: googleIosClientId ?? '',
     webClientId: googleWebClientId ?? '',
     scopes: ['openid', 'profile', 'email'],
+    selectAccount: true,
   });
 
   useEffect(() => {
+    if (googleResponse?.type === 'error') {
+      setError(googleResponse.error?.description ?? 'Google sign-in could not be completed.');
+      return;
+    }
     if (googleResponse?.type !== 'success') return;
     const credential = googleResponse.authentication?.idToken ?? googleResponse.params?.id_token;
-    const accessToken = googleResponse.authentication?.accessToken;
+    const accessToken = googleResponse.authentication?.accessToken ?? googleResponse.params?.access_token;
     void Promise.resolve().then(async () => {
       if (!credential && !accessToken) {
         setError('Google did not return a sign-in token.');
@@ -130,7 +135,7 @@ export default function SignInScreen() {
       <Text style={styles.title}>{t('Sign in to continue.')}</Text>
       <Text style={styles.body}>{t('Use Google or the phone number connected to your Umutungo account.')}</Text>
       {error && <ErrorState message={error} />}
-      <Pressable style={[styles.secondaryButton, { flexDirection: 'row', gap: 8 }]} disabled={!googleConfigured || !googleRequest || googleBusy} onPress={() => void promptGoogle()}>
+      <Pressable style={[styles.secondaryButton, { flexDirection: 'row', gap: 8 }]} disabled={!googleConfigured || !googleRequest || googleBusy} onPress={() => { setError(''); void promptGoogle(); }}>
         <MaterialCommunityIcons name="google" size={19} color="#4285F4" />
         <Text style={styles.secondaryText}>{googleBusy ? t('Connecting to Google...') : googleConfigured && googleRequest ? t('Continue with Google') : t('Google sign-in is not configured')}</Text>
       </Pressable>

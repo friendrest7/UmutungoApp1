@@ -10,6 +10,7 @@ import { ConversationalPropertySearch } from '../components/ConversationalProper
 import { Language, t } from '../data/translations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 import { toProperty, type ApiListing } from '../lib/listings';
+import { isLocalDevelopmentHost, readLocalPropertyListings, writeLocalPropertyListings } from '../lib/localListings';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 
@@ -36,8 +37,24 @@ export default function HomePage() {
     let cancelled = false;
     const loadListings = () => {
       void publicUmutungoApi<{ items: ApiListing[] }>('/api/v1/listings', { cache: 'no-store' })
-        .then((result) => { if (!cancelled) { setListingLoadError(false); setProperties((result?.items ?? []).filter((item) => item.images?.some(Boolean) || item.media?.some((media) => Boolean(media.url))).map(toProperty)); } })
-        .catch(() => { if (!cancelled) { setProperties([]); setListingLoadError(true); } });
+        .then((result) => {
+          if (cancelled) return;
+          const liveListings = (result?.items ?? []).filter((item) => item.images?.some(Boolean) || item.media?.some((media) => Boolean(media.url))).map(toProperty);
+          if (liveListings.length > 0) {
+            setListingLoadError(false);
+            setProperties(liveListings);
+            writeLocalPropertyListings(liveListings);
+            return;
+          }
+          setListingLoadError(false);
+          setProperties(isLocalDevelopmentHost() ? readLocalPropertyListings() : []);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setProperties(readLocalPropertyListings());
+            setListingLoadError(true);
+          }
+        });
     };
     loadListings();
     window.addEventListener('umutungo:listings-changed', loadListings);

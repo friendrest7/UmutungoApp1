@@ -8,6 +8,7 @@ import { InterfacePreferences } from '../../../components/InterfacePreferences';
 import { PropertyViewer } from '../../../components/PropertyViewer';
 import { publicUmutungoApi } from '../../../lib/umutungoApi';
 import { listedOn, toProperty, type ApiListing as SharedApiListing } from '../../../lib/listings';
+import { isLocalDevelopmentHost, readLocalPropertyListings } from '../../../lib/localListings';
 
 type ApiListing = {
   id: string;
@@ -88,9 +89,21 @@ export default function PropertyDetailPage() {
           const mappedProperty = toProperty(result as SharedApiListing);
           setProperty(mappedProperty);
           if (open3d && mappedProperty.type === 'House') setViewerMode('tour');
+          return;
+        }
+        const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id) : undefined;
+        if (localProperty) {
+          setProperty(localProperty);
+          if (open3d && localProperty.type === 'House') setViewerMode('tour');
         }
       })
-      .catch(() => undefined)
+      .catch(() => {
+        const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id) : undefined;
+        if (localProperty) {
+          setProperty(localProperty);
+          if (open3d && localProperty.type === 'House') setViewerMode('tour');
+        }
+      })
       .finally(() => setLoading(false));
   }, [params.id]);
 

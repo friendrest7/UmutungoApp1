@@ -4264,10 +4264,14 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   }
 }
 @media (max-width: 640px) {
+  .app-realistic .hero-copy { width: 100%; min-width: 0; }
   .app-realistic .landing-search-heading {
-    width: calc(100% - 1cm);
-    margin: 0 0 8px 1cm !important;
-    text-align: left;
+    width: min(560px, calc(100vw - 2cm));
+    max-width: none;
+    box-sizing: border-box;
+    margin: 0 auto 8px !important;
+    text-align: center;
+    overflow-wrap: anywhere;
   }
   .hero-role-join { gap: 8px; }
   .landing-conversational-search { width: calc(100% - 1.2cm); margin: 0 0 10px 1.2cm; }

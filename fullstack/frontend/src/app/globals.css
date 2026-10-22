@@ -4820,6 +4820,7 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   .app-realistic .landing-property-grid { grid-template-columns: minmax(0, 1fr); gap: 15px; }
   .app-realistic .landing-property-grid .property-image { height: 240px; }
   .app-realistic .landing-property-backdrop { padding: 12px; border-radius: 18px; }
+  .app-realistic .landing-property-grid > .property-card:nth-child(n + 6) { display: none; }
 }
 .app-realistic .section-property .landing-property-intro-title { max-width: 760px; font-size: clamp(25px, 2.8vw, 38px); line-height: 1.1; }
 .app-realistic .about-page .about-story-copy { width: min(560px, 48%); max-width: 560px; transform: translateY(-3cm); }

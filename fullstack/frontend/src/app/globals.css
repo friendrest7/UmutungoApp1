@@ -4852,3 +4852,47 @@ img, video, iframe { max-width: 100%; }
   .app-realistic .hero-role-join { gap: 7px; }
   .app-realistic .hero-role-join .button { min-width: 0; flex-basis: 100%; }
 }
+
+/* Admin dark mode keeps every workspace panel dark and its copy readable. */
+.app.theme-dark .admin-dashboard {
+  --admin-paper: #000;
+  --admin-ink: #fff;
+  --dashboard-paper: #000;
+  --dashboard-surface: #111;
+  --dashboard-ink: #fff;
+  --dashboard-muted: #d0d0d0;
+  --dashboard-line: #353535;
+  background: #000 !important;
+  color: #fff !important;
+}
+.app.theme-dark .admin-dashboard .role-dashboard-main,
+.app.theme-dark .admin-dashboard .role-dashboard-topbar {
+  border-color: #353535 !important;
+  background: #000 !important;
+  color: #fff !important;
+}
+.app.theme-dark .admin-dashboard :is(.role-dashboard-metrics article, .role-dashboard-panel, .role-dashboard-welcome, .tenant-workspace-section, .admin-about-video-editor, .admin-about-video-preview, .admin-report-download-popover, .dashboard-notification-popover, .dashboard-notification-list, .admin-location-workspace, .listing-editor-form) {
+  border-color: #353535 !important;
+  background: #111 !important;
+  color: #fff !important;
+}
+.app.theme-dark .admin-dashboard :is(h1, h2, h3, h4, p, span, small, strong, em, label, time, a, button, td, th, li, legend) {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+.app.theme-dark .admin-dashboard :is(input, select, textarea) {
+  border-color: #444 !important;
+  background: #080808 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  color-scheme: dark;
+}
+.app.theme-dark .admin-dashboard :is(input, textarea)::placeholder { color: #bbb !important; -webkit-text-fill-color: #bbb !important; }
+.app.theme-dark .admin-dashboard button:not(.role-dashboard-primary) { border-color: #444 !important; background: #222 !important; }
+.app.theme-dark .admin-dashboard .role-dashboard-primary,
+.app.theme-dark .admin-dashboard .role-dashboard-primary:hover { border-color: #08743d !important; background: #08743d !important; }
+.app.theme-dark .admin-dashboard :is(.admin-about-video-status, .role-dashboard-status, .role-dashboard-contact-avatar, .admin-overview-empty > span) { border-color: #444 !important; background: #222 !important; }
+.app.theme-dark .admin-dashboard .admin-about-video-drop { border-color: #666 !important; background: #080808 !important; }
+.app.theme-dark .admin-dashboard .admin-about-video-hero { border-color: #353535 !important; background: #080808 !important; color: #fff !important; }
+.app.theme-dark .admin-dashboard .role-dashboard-activity article,
+.app.theme-dark .admin-dashboard .admin-overview-empty { border-color: #353535 !important; }

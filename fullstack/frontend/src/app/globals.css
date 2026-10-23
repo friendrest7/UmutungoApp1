@@ -113,7 +113,21 @@ button { color: inherit; }
 .tenant-post-upgrade-steps small { color: #65756a; font-size: 9px; line-height: 1.45; }
 .tenant-post-upgrade-note { margin: 0 0 16px; color: #6d786f; font-size: 10px; line-height: 1.5; }
 .tenant-post-upgrade-card > .role-dashboard-primary { display: inline-flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 18px; text-decoration: none; }
+.tenant-post-upgrade-card { width: min(780px, 100%); }
+.tenant-post-plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin: 23px 0 14px; }
+.tenant-post-plan { position: relative; display: flex; min-height: 176px; flex-direction: column; align-items: flex-start; padding: 19px; border: 1px solid #d7e3d8; border-radius: 14px; background: rgba(255,255,255,.78); color: #183324; cursor: pointer; text-align: left; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.tenant-post-plan:hover { transform: translateY(-2px); border-color: #70a27a; }
+.tenant-post-plan.is-selected { border-color: #087d3d; background: #f3faf3; box-shadow: 0 0 0 2px rgba(8,125,61,.12); }
+.tenant-post-plan-check { position: absolute; top: 13px; right: 13px; display: grid; width: 21px; height: 21px; place-items: center; border: 1px solid #cbd9cc; border-radius: 50%; color: #fff; font-size: 12px; }
+.tenant-post-plan.is-selected .tenant-post-plan-check { border-color: #087d3d; background: #087d3d; }
+.tenant-post-plan > strong { max-width: calc(100% - 22px); color: #284333; font-size: 13px; }
+.tenant-post-plan-price { margin-top: 16px; color: #087d3d; font-size: 26px; font-weight: 800; letter-spacing: -.04em; }
+.tenant-post-plan-price small { font-size: 11px; letter-spacing: 0; }
+.tenant-post-plan-period { margin-top: 1px; color: #526a59; font-size: 11px; font-weight: 700; }
+.tenant-post-plan-detail { margin-top: 12px; color: #718075; font-size: 10px; line-height: 1.45; }
+.tenant-post-continue.is-disabled { opacity: .62; }
 @media (max-width: 640px) { .tenant-post-upgrade-panel { align-items: flex-start; flex-direction: column; padding: 15px; } .tenant-post-upgrade-page { padding-right: 14px; padding-left: 14px; } .tenant-post-upgrade-page > header { height: 62px; } .tenant-post-upgrade-card { margin-top: 24px; border-radius: 16px; } .tenant-post-upgrade-steps { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .tenant-post-plan-grid { grid-template-columns: 1fr; } .tenant-post-plan { min-height: 154px; } }
 .nav-utility-group { display: flex; align-items: center; gap: 3px; padding-left: 11px; border-left: 1px solid var(--line); }
 .topbar .nav-actions .nav-dropdown .nav-link { min-height: 34px; padding-right: 8px; padding-left: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .topbar .nav-actions .nav-dropdown .nav-link:hover, .topbar .nav-actions .nav-dropdown .nav-link.is-open { border-color: var(--green); }

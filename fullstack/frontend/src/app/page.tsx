@@ -115,7 +115,7 @@ export default function HomePage() {
     { name: 'Other assets', slug: 'other', types: ['other'] },
   ];
   const propertyCategories = listingCategories.filter((category) => !selectedListingCategory || category.slug === selectedListingCategory).map((category) => {
-    const liveListings = visibleProperties.filter((property) => category.types.includes(property.type.toLowerCase()));
+    const liveListings = visibleProperties.filter((property) => category.types.includes(property.type.toLowerCase())).slice(0, 1);
     return { ...category, listings: liveListings };
   });
   const landingListings = propertyCategories.flatMap((category) => category.listings);

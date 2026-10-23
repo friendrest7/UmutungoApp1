@@ -37,9 +37,25 @@ export function propertySlug(title: string) {
   return title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+function normalizeListingImageUrl(value: string) {
+  const url = value.trim();
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/i.test(parsed.hostname)) {
+      // Seeded listings can retain the local website origin in the database.
+      // Their /properties files are served by the current frontend host.
+      return parsed.pathname.startsWith('/properties/') ? `${parsed.pathname}${parsed.search}` : url;
+    }
+  } catch {
+    // Relative paths are already valid frontend assets.
+  }
+  return url;
+}
+
 export function listingImages(item: ApiListing) {
   const ordered = item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).filter((media) => media.url && !media.type?.toLowerCase().includes('video') && !media.type?.toLowerCase().includes('tour')).map((media) => media.url) ?? [];
-  return (item.images?.length ? item.images : ordered).filter((url) => typeof url === 'string' && url.trim().length > 0);
+  return (item.images?.length ? item.images : ordered).map(normalizeListingImageUrl).filter(Boolean);
 }
 
 const listingImageFallbacks: Record<string, string[]> = {

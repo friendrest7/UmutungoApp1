@@ -12,7 +12,7 @@ import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 import { getDistrictNames } from '../data/rwandaLocations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
-import { fallbackListingImages, propertySlug, type ApiListing } from '../lib/listings';
+import { fallbackListingImages, listingImages, propertySlug, type ApiListing } from '../lib/listings';
 
 type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[] };
@@ -90,8 +90,7 @@ const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Lis
   const bathroomCount = Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0);
   const areaSize = Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0);
   const detail = [...[item.description, ...(item.tags ?? []), ...(item.amenities ?? []), bedroomCount ? `${bedroomCount} bedrooms` : '', bathroomCount ? `${bathroomCount} bathrooms` : '', areaSize ? `${areaSize} m²` : '', dateLabel].filter(Boolean)].join(' Â· ') || 'Details available from the owner';
-  const imageList = item.images?.filter(Boolean) ?? [];
-  const images = imageList.length ? imageList : item.media?.filter((media) => media.url && !media.type?.toLowerCase().includes('video') && !media.type?.toLowerCase().includes('tour')).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((media) => media.url) ?? [];
+  const images = listingImages(item);
   const cardImages = images.length ? images : fallbackListingImages(item);
   const image = cardImages[0] ?? '/properties/listing-placeholder.svg';
   return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, item.owner?.verified ?? false), images: cardImages, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };

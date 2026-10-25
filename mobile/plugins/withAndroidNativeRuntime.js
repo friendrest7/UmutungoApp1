@@ -1,5 +1,6 @@
 const {
   withAppBuildGradle,
+  withGradleProperties,
   withProjectBuildGradle,
 } = require('@expo/config-plugins');
 
@@ -44,6 +45,20 @@ android {
 `;
 
 module.exports = function withAndroidNativeRuntime(config) {
+  config = withGradleProperties(config, (gradleConfig) => {
+    const optimizedProperties = {
+      'android.enableMinifyInReleaseBuilds': 'true',
+      'android.enableShrinkResourcesInReleaseBuilds': 'true',
+      'expo.useLegacyPackaging': 'true',
+    };
+    for (const [key, value] of Object.entries(optimizedProperties)) {
+      const existing = gradleConfig.modResults.find((property) => property.key === key);
+      if (existing) existing.value = value;
+      else gradleConfig.modResults.push({ type: 'property', key, value });
+    }
+    return gradleConfig;
+  });
+
   config = withProjectBuildGradle(config, (projectConfig) => {
     if (projectConfig.modResults.language !== 'groovy') {
       return projectConfig;

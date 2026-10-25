@@ -925,7 +925,44 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	search := q.Get("search")
-	args := []any{search, q.Get("province"), q.Get("district"), q.Get("sector"), q.Get("category"), q.Get("transaction_type")}
+	limit := 500
+	if value := q.Get("limit"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 {
+			errorJSON(w, http.StatusBadRequest, "limit must be a positive integer")
+			return
+		}
+		if parsed < limit {
+			limit = parsed
+		}
+	}
+	offset := 0
+	if value := q.Get("offset"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 {
+			errorJSON(w, http.StatusBadRequest, "offset must be a non-negative integer")
+			return
+		}
+		offset = parsed
+	}
+	var minPrice, maxPrice any
+	if value := q.Get("min_price"); value != "" {
+		parsed, err := strconv.ParseFloat(value, 64)
+		if err != nil || parsed < 0 {
+			errorJSON(w, http.StatusBadRequest, "min_price must be a non-negative number")
+			return
+		}
+		minPrice = parsed
+	}
+	if value := q.Get("max_price"); value != "" {
+		parsed, err := strconv.ParseFloat(value, 64)
+		if err != nil || parsed < 0 {
+			errorJSON(w, http.StatusBadRequest, "max_price must be a non-negative number")
+			return
+		}
+		maxPrice = parsed
+	}
+	args := []any{search, q.Get("province"), q.Get("district"), q.Get("sector"), q.Get("category"), q.Get("transaction_type"), limit + 1, offset, minPrice, maxPrice}
 	rows, err := s.db.Query(r.Context(), `
 		SELECT l.id, l.owner_id, u.name, u.role, l.category, l.transaction_type,
 		l.title, l.description, l.price, l.currency, l.province, l.district, l.sector,
@@ -942,7 +979,8 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		AND ($2='' OR l.province=$2) AND ($3='' OR l.district=$3)
 		AND ($4='' OR l.sector=$4) AND ($5='' OR l.category=$5)
 		AND ($6='' OR l.transaction_type=$6 OR (l.transaction_type='both' AND $6 IN ('buy','sell','rent','rent_out')))
-		ORDER BY l.created_at DESC LIMIT 500`, args...)
+		AND ($9::double precision IS NULL OR l.price >= $9) AND ($10::double precision IS NULL OR l.price < $10)
+		ORDER BY l.created_at DESC, l.id DESC LIMIT $7 OFFSET $8`, args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load listings")
 		return
@@ -982,7 +1020,11 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "could not read listings")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items), "has_more": hasMore})
 }
 
 func (s *Server) publishDueListings(ctx context.Context) error {

@@ -4956,6 +4956,111 @@ img, video, iframe { max-width: 100%; }
   color-scheme: dark;
 }
 .admin-dashboard.dashboard-dark :is(input, textarea)::placeholder { color: #bbb !important; -webkit-text-fill-color: #bbb !important; }
+
+/* Refined listing cards and landing layout across phones, tablets, and desktop. */
+.app-realistic .landing-discovery-intro { transform: none; }
+.app-realistic .landing-property-grid { gap: clamp(14px, 1.6vw, 22px); }
+.app-realistic .landing-property-grid .property-card {
+  overflow: hidden;
+  border: 1px solid #b8d4be;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(18, 49, 30, .08);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.app-realistic .landing-property-grid .property-card:hover {
+  border-color: #168044;
+  box-shadow: 0 14px 30px rgba(18, 72, 39, .15);
+  transform: translateY(-3px);
+}
+.app-realistic .landing-property-grid .property-image { aspect-ratio: 1.55 / 1; }
+.app-realistic .landing-property-grid .landing-card-status {
+  top: 12px;
+  left: 12px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, .72);
+  border-radius: 999px;
+  background: rgba(249, 252, 249, .95);
+  color: #17452c;
+  font-size: 9px;
+  letter-spacing: .035em;
+}
+.app-realistic .landing-property-grid .favorite-button {
+  top: 11px;
+  right: 11px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(16, 53, 29, .1);
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .12);
+}
+.app-realistic .landing-property-grid .property-card-body { gap: 0; padding: 16px; }
+.app-realistic .landing-property-grid .property-card h3 { margin: 0 0 5px; font-size: 17px; line-height: 1.3; }
+.app-realistic .landing-property-grid .property-card p { display: flex; align-items: center; gap: 4px; font-size: 11px; line-height: 1.4; }
+.app-realistic .landing-property-grid .property-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 11px 0;
+  border-top: 1px solid #edf1ed;
+  border-bottom: 1px solid #edf1ed;
+  color: #53665a;
+  font-size: 11px;
+}
+.app-realistic .landing-property-grid .property-details span { display: inline-flex; align-items: center; gap: 3px; }
+.app-realistic .landing-property-grid .property-details strong { color: #234b33; }
+.app-realistic .landing-property-grid .property-card-footer {
+  align-items: center;
+  flex-direction: row;
+  gap: 10px;
+  padding-top: 13px;
+  border-top: 0;
+}
+.app-realistic .landing-property-grid .property-card-footer > div > strong { color: #173f2a; font-size: 17px; line-height: 1.2; }
+.app-realistic .landing-property-grid .property-card-footer > div > strong small { color: #66766b; font-size: 10px; font-weight: 550; }
+.app-realistic .landing-property-grid .property-card-footer .property-listed { margin-top: 4px; color: #79857c; font-size: 10px; }
+.app-realistic .landing-property-grid .view-property-button {
+  width: auto;
+  min-height: 42px;
+  flex: 0 0 auto;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: #0b6b3a;
+  font-size: 11px;
+  font-weight: 650;
+}
+.app-realistic.theme-dark .landing-property-grid .property-card { border-color: #477b58; background: #151a17; }
+.app-realistic.theme-dark .landing-property-grid .property-card h3,
+.app-realistic.theme-dark .landing-property-grid .property-card-footer > div > strong { color: #c3f0cf !important; }
+.app-realistic.theme-dark .landing-property-grid .property-details { border-color: #2b3930; color: #c3d0c7; }
+.app-realistic.theme-dark .landing-property-grid .property-details strong { color: #d8f0df; }
+.app-realistic.theme-dark .landing-property-grid .property-card-footer .property-listed { color: #a9b7ad; }
+@media (max-width: 760px) {
+  .app-realistic .section-property { padding-top: 24px; }
+  .app-realistic .landing-discovery-panel { margin-bottom: 22px; padding: 18px 14px; border-radius: 18px; }
+  .app-realistic .landing-discovery-intro { margin-bottom: 14px; }
+  .app-realistic .landing-discovery-intro h2 { font-size: clamp(20px, 5.4vw, 25px); }
+  .app-realistic .landing-discovery-intro p { font-size: 12px; }
+  .app-realistic .landing-category-filter { gap: 8px; margin-bottom: 15px; padding-bottom: 6px; }
+  .app-realistic .landing-category-filter button { min-width: 76px; min-height: 64px; border-radius: 12px; }
+  .app-realistic .landing-property-backdrop { padding: 10px; border-radius: 17px; }
+  .app-realistic .landing-property-grid { grid-template-columns: minmax(0, 1fr); gap: 13px; }
+  .app-realistic .landing-property-grid .property-image { aspect-ratio: 1.8 / 1; height: auto; }
+  .app-realistic .landing-property-grid .property-card-body { padding: 14px; }
+  .app-realistic .landing-property-grid .property-card h3 { font-size: 16px; }
+  .app-realistic .landing-property-grid .property-details { gap: 8px 12px; margin-top: 10px; padding: 9px 0; }
+  .app-realistic .landing-property-grid .property-card-footer { padding-top: 11px; }
+  .app-realistic .landing-property-grid .property-card-footer > div > strong { font-size: 16px; }
+  .app-realistic .landing-property-grid .view-property-button { min-height: 42px; padding-inline: 12px; }
+  .app-realistic .landing-property-grid > .property-card:nth-child(n + 6) { display: flex; }
+}
+@media (max-width: 380px) {
+  .app-realistic .landing-property-grid .property-card-footer { align-items: stretch; flex-direction: column; }
+  .app-realistic .landing-property-grid .view-property-button { width: 100%; justify-content: space-between; }
+}
 .admin-dashboard.dashboard-dark button:not(.role-dashboard-primary) { border-color: #444 !important; background: #222 !important; }
 .admin-dashboard.dashboard-dark .role-dashboard-primary,
 .admin-dashboard.dashboard-dark .role-dashboard-primary:hover { border-color: #08743d !important; background: #08743d !important; }

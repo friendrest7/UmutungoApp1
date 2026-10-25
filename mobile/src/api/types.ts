@@ -78,4 +78,8 @@ export type ListingQuery = {
   sector?: string;
   category?: string;
   transaction_type?: string;
+  limit?: number;
+  offset?: number;
+  min_price?: number;
+  max_price?: number;
 };

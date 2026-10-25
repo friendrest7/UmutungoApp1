@@ -4,6 +4,7 @@
 .aws/
 .gocache-check/
 .gradle/
+.gradle-fresh/
 docs/
 fullstack/
 backend/
@@ -19,6 +20,8 @@ mobile/coverage/
 **/.env
 **/.env.*
 !**/.env.example
+client_secret_*.json
+mobile/assets/ogland1.mp4
 *.log
 coverage/
 .next/

@@ -17,7 +17,7 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
   if (!base) throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env before connecting to Umutungo.');
   const token = authenticated ? await SecureStore.getItemAsync(TOKEN_KEY) : null;
   const cacheKey = `${base}${path}`;
-  const cacheable = !authenticated && (!init.method || init.method.toUpperCase() === 'GET');
+  const cacheable = !authenticated && init.cache !== 'no-store' && (!init.method || init.method.toUpperCase() === 'GET');
   let response: Response;
   try {
     response = await fetch(`${base}${path}`, {
@@ -74,22 +74,36 @@ export async function signInWithGoogle(input: { access_token?: string; credentia
 }
 
 export async function listListings(query: ListingQuery = {}) {
-  const params = new URLSearchParams(Object.entries(query).filter(([, value]) => Boolean(value)) as string[][]);
+  const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== '').map(([key, value]) => [key, String(value)]));
   const path = `/api/v1/listings${params.toString() ? `?${params}` : ''}`;
-  try { return await request<{ items: ApiListing[]; count: number }>(path); }
+  try {
+    const result = await request<{ items: ApiListing[]; count: number; has_more?: boolean }>(path, { cache: query.offset ? 'no-store' : 'default' });
+    const isUnfiltered = !query.search && !query.province && !query.district && !query.sector && !query.category && !query.transaction_type && query.min_price === undefined && query.max_price === undefined;
+    if (isUnfiltered) {
+      const cacheKey = `${baseUrl()}/api/v1/listings`;
+      const previous = query.offset ? await readPublicCache<{ items: ApiListing[]; count: number }>(cacheKey) : null;
+      const items = [...(previous?.items ?? []), ...result.items].filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 60);
+      await writePublicCache(cacheKey, { items, count: items.length, has_more: result.has_more });
+    }
+    return result;
+  }
   catch (error) {
     if (!(error instanceof ApiError) || error.status !== undefined) throw error;
     const base = await readPublicCache<{ items: ApiListing[]; count: number }>(`${baseUrl()}/api/v1/listings`);
     if (!base) throw error;
     const contains = (value: string | undefined, filter: string | undefined) => !filter || (value ?? '').toLocaleLowerCase().includes(filter.toLocaleLowerCase());
-    const items = base.items.filter((item) => contains(item.title, query.search) || contains(`${item.district} ${item.sector} ${item.province}`, query.search))
+    const filtered = base.items.filter((item) => contains(item.title, query.search) || contains(`${item.district} ${item.sector} ${item.province}`, query.search))
       .filter((item) => contains(item.category, query.category) && contains(item.transaction_type, query.transaction_type)
-        && contains(item.province, query.province) && contains(item.district, query.district) && contains(item.sector, query.sector));
-    return { items, count: items.length };
+        && contains(item.province, query.province) && contains(item.district, query.district) && contains(item.sector, query.sector)
+        && (query.min_price === undefined || item.price >= query.min_price) && (query.max_price === undefined || item.price < query.max_price));
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 500;
+    return { items: filtered.slice(offset, offset + limit), count: filtered.length, has_more: offset + limit < filtered.length };
   }
 }
-export async function getCachedListings() {
-  return await readPublicCache<{ items: ApiListing[]; count: number }>(`${baseUrl()}/api/v1/listings`);
+export async function getCachedListings(query: ListingQuery = {}) {
+  const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined && value !== null && value !== '').map(([key, value]) => [key, String(value)]));
+  return await readPublicCache<{ items: ApiListing[]; count: number; has_more?: boolean }>(`${baseUrl()}/api/v1/listings${params.toString() ? `?${params}` : ''}`);
 }
 export async function getListing(id: string) { return request<ApiListing>(`/api/v1/listings/${encodeURIComponent(id)}`); }
 async function sendFavoriteChange(change: FavoriteChange) {

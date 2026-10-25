@@ -32,3 +32,6 @@ coverage/
 /fullstack/frontend/dist/
 /fullstack/frontend/.turbo/
 /fullstack/backend/storage/
+/.gradle-fresh/
+/client_secret_*.json
+/mobile/assets/ogland1.mp4

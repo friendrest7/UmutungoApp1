@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Image, ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -32,10 +32,20 @@ const priceRanges = [
   { label: '1,000,000–10,000,000', min: 1_000_000, max: 10_000_000 },
   { label: '10,000,000+', min: 10_000_000, max: Infinity },
 ];
+const LISTING_PAGE_SIZE = 12;
+function discoveryFilters(category: string, priceLabel: string) {
+  const range = priceRanges.find((item) => item.label === priceLabel);
+  return {
+    ...(category ? { category } : {}),
+    ...(range?.min ? { min_price: range.min } : {}),
+    ...(range && Number.isFinite(range.max) ? { max_price: range.max } : {}),
+  };
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const { colors, styles } = useTheme();
+  const { width } = useWindowDimensions();
   const { t } = useI18n();
   const { user } = useAuth();
   const [listings, setListings] = useState<ApiListing[]>([]);
@@ -45,17 +55,61 @@ export default function HomeScreen() {
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedPriceRange, setSelectedPriceRange] = useState('');
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [feedBounds, setFeedBounds] = useState({ y: 0, height: 0 });
+  const nextOffset = useRef(0);
+  const paging = useRef(false);
+  const started = useRef(false);
   const load = async () => {
+    started.current = true;
     setError('');
     if (!listings.length) {
       const cached = await getCachedListings();
-      if (cached?.items?.length) { setListings(cached.items); setLoading(false); }
+      if (cached?.items?.length) {
+        setListings(cached.items.slice(0, LISTING_PAGE_SIZE));
+        nextOffset.current = Math.min(cached.items.length, LISTING_PAGE_SIZE);
+        setHasMore(cached.has_more ?? cached.items.length >= LISTING_PAGE_SIZE);
+        setLoading(false);
+      }
     }
-    try { const result = await listListings(); setListings(result.items); }
+    try {
+      const result = await listListings({ ...discoveryFilters(selectedCategory, selectedPriceRange), limit: LISTING_PAGE_SIZE, offset: 0 });
+      setListings(result.items);
+      nextOffset.current = result.items.length;
+      setHasMore(result.has_more ?? result.items.length === LISTING_PAGE_SIZE);
+    }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Properties could not be loaded.'); }
     finally { setLoading(false); setRefreshing(false); }
   };
+  const loadNextPage = async () => {
+    if (paging.current || !hasMore) return;
+    paging.current = true;
+    setLoadingMore(true);
+    try {
+      const result = await listListings({ ...discoveryFilters(selectedCategory, selectedPriceRange), limit: LISTING_PAGE_SIZE, offset: nextOffset.current });
+      setListings((current) => [...current, ...result.items.filter((item) => !current.some((loaded) => loaded.id === item.id))]);
+      nextOffset.current += result.items.length;
+      setHasMore(result.has_more ?? result.items.length === LISTING_PAGE_SIZE);
+    } catch {
+      // Keep the listings already on screen available if a later page fails.
+    } finally {
+      paging.current = false;
+      setLoadingMore(false);
+    }
+  };
   useEffect(() => { void Promise.resolve().then(load); }, []);
+  useEffect(() => {
+    if (!started.current) return;
+    nextOffset.current = 0;
+    setHasMore(true);
+    setLoading(true);
+    setError('');
+    void listListings({ ...discoveryFilters(selectedCategory, selectedPriceRange), limit: LISTING_PAGE_SIZE, offset: 0 })
+      .then((result) => { setListings(result.items); nextOffset.current = result.items.length; setHasMore(result.has_more ?? result.items.length === LISTING_PAGE_SIZE); })
+      .catch((cause) => setError(cause instanceof Error ? cause.message : 'Properties could not be loaded.'))
+      .finally(() => setLoading(false));
+  }, [selectedCategory, selectedPriceRange]);
   const goToSearch = (params: { search?: string; category?: string; transaction_type?: string } = {}) => router.push({ pathname: '/search', params });
   const goToAiSearch = () => { const prompt = query.trim(); router.push({ pathname: '/search', params: prompt ? { ai_query: prompt } : {} }); };
   const visibleListings = listings.filter((item) => {
@@ -65,9 +119,14 @@ export default function HomeScreen() {
     const range = priceRanges.find((item) => item.label === selectedPriceRange);
     return !range || (item.price >= range.min && item.price < range.max);
   });
+  const tabletColumns = width >= 720 ? 2 : 1;
+  const tabletCardWidth = tabletColumns === 2 ? (Math.min(width, 900) - 52) / 2 : undefined;
+  useEffect(() => {
+    if (!loading && hasMore && visibleListings.length === 0) void loadNextPage();
+  }, [hasMore, loading, selectedCategory, selectedPriceRange, visibleListings.length]);
 
-  return <ScrollView style={styles.screen} contentContainerStyle={{ width: '100%', maxWidth: 760, alignSelf: 'center', padding: 20, paddingBottom: 28, gap: 22 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={colors.green} />}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 5 }}>
+  return <ScrollView style={styles.screen} onScroll={(event) => { const { contentOffset, layoutMeasurement } = event.nativeEvent; if (feedBounds.height && contentOffset.y + layoutMeasurement.height >= feedBounds.y + feedBounds.height - 300) void loadNextPage(); }} scrollEventThrottle={250} contentContainerStyle={{ width: '100%', maxWidth: 900, alignSelf: 'center', padding: 20, paddingBottom: 28, gap: 22 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={colors.green} />}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 30 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
         <Image source={require('../../assets/logo.png')} style={{ width: 40, height: 40, borderRadius: 20 }} />
         <View><Text style={[styles.brand, { fontSize: 16, letterSpacing: -0.2 }]}>Umutungo</Text></View>
@@ -134,9 +193,9 @@ export default function HomeScreen() {
       </View>}
     </View>
 
-    <View style={{ gap: 12 }}>
+    <View onLayout={(event) => setFeedBounds({ y: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height })} style={{ gap: 12 }}>
       {!loading && !error && <Text style={styles.heading}>{t('Available properties')} · {visibleListings.length}</Text>}
-      {loading ? <LoadingState label={t('Loading live properties...')} /> : error ? <ErrorState message={error} onRetry={() => { setLoading(true); void load(); }} /> : visibleListings.length === 0 ? <EmptyState title={t('No listings found')} message={t('Published properties will appear here when they are available from the Umutungo API.')} /> : <>{visibleListings.slice(0, 5).map((listing) => <PropertyCard key={listing.id} listing={listing} onPress={() => router.push({ pathname: '/property/[id]', params: { id: listing.id } })} />)}<Pressable style={styles.secondaryButton} onPress={() => goToSearch(selectedCategory ? { category: selectedCategory } : {})}><Text style={styles.secondaryText}>{t('Browse all properties')} ({visibleListings.length})</Text></Pressable></>}
+      {loading ? <LoadingState label={t('Loading live properties...')} /> : error && visibleListings.length === 0 ? <ErrorState message={error} onRetry={() => { setLoading(true); void load(); }} /> : visibleListings.length === 0 ? <EmptyState title={t('No listings found')} message={t('Published properties will appear here when they are available from the Umutungo API.')} /> : <><View style={{ flexDirection: tabletColumns === 2 ? 'row' : 'column', flexWrap: tabletColumns === 2 ? 'wrap' : 'nowrap', gap: 12 }}>{visibleListings.map((listing) => <PropertyCard key={listing.id} cardWidth={tabletCardWidth} listing={listing} onPress={() => router.push({ pathname: '/property/[id]', params: { id: listing.id } })} />)}</View>{loadingMore && <LoadingState label={t('Loading live properties...')} />}<Pressable style={styles.secondaryButton} onPress={() => goToSearch(selectedCategory ? { category: selectedCategory } : {})}><Text style={styles.secondaryText}>{t('Browse all properties')}</Text></Pressable></>}
     </View>
 
     <Pressable onPress={() => router.push('/(tabs)/profile')} style={{ flexDirection: 'row', alignItems: 'center', gap: 13, padding: 17, borderRadius: 18, backgroundColor: colors.greenSoft }}>

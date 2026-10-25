@@ -14,6 +14,8 @@ export type ApiListing = {
   sector?: string;
   cell?: string;
   village?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   status: string;
   created_at: string;
   publish_at?: string | null;
@@ -35,6 +37,11 @@ export function listedOn(value?: string | null) {
 
 export function propertySlug(title: string) {
   return title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+export function supportsSpatialPreview(type: string) {
+  const normalizedType = type.trim().toLowerCase().replace(/[_-]+/g, ' ');
+  return !['vehicle', 'vehicles', 'furniture', 'appliance', 'appliances', 'equipment', 'other assets', 'car part', 'car parts'].includes(normalizedType);
 }
 
 function normalizeListingImageUrl(value: string) {
@@ -109,6 +116,8 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     title: item.title,
     type,
     location: [item.sector, item.district, item.province].filter(Boolean).join(' - ') || 'Rwanda',
+    latitude: item.latitude,
+    longitude: item.longitude,
     price: `${item.currency ?? 'RWF'} ${Number(item.price).toLocaleString()}`,
     priceNote: both ? ' for sale or rent' : book ? '/ night' : rent ? '/ month' : '',
     bedrooms: Number(item.bedrooms ?? item.measurements?.bedrooms ?? 0),

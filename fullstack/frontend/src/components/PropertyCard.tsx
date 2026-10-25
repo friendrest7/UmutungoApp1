@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
-import { propertySlug } from '../lib/listings';
+import { propertySlug, supportsSpatialPreview } from '../lib/listings';
 
 export type PropertyPoster = { name: string; businessName?: string; photoUrl?: string; phone?: string; location?: string; role: 'Komisiyoneri' | 'Landlord' | 'Property Owner'; verified?: boolean; postedAt?: string; rating?: string };
-export type PropertyPlaceholder = { id: string; title: string; type: string; location: string; price: string; priceNote: string; bedrooms: number; bathrooms: number; area: number; accent: string; image: string; images?: string[]; listed: string; availableFor?: 'rent' | 'sale' | 'both'; description?: string; poster?: PropertyPoster };
+export type PropertyPlaceholder = { id: string; title: string; type: string; location: string; latitude?: number | null; longitude?: number | null; price: string; priceNote: string; bedrooms: number; bathrooms: number; area: number; accent: string; image: string; images?: string[]; listed: string; availableFor?: 'rent' | 'sale' | 'both'; description?: string; poster?: PropertyPoster };
 type PropertyCardProps = { language: Language; property: PropertyPlaceholder; favorite: boolean; onFavorite: () => void };
 
 export function PropertyCard({ language, property, favorite, onFavorite }: PropertyCardProps) {
@@ -53,7 +53,7 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
       <div className="property-card-body">
         <div className="property-card-top"><div><h3>{t(language, property.title)}</h3><p><Icon name="pin" size={13} /> {t(language, property.location)}</p></div></div>
         <div className="property-details">{isHouse && property.bedrooms > 0 && <span><strong>{property.bedrooms}</strong> {t(language, 'beds')}</span>}{isHouse && property.bathrooms > 0 && <span><strong>{property.bathrooms}</strong> {t(language, 'baths')}</span>}{property.area > 0 && <span><strong>{property.area}</strong> m²</span>}{!property.bedrooms && !property.bathrooms && !property.area && <span>{t(language, 'Property details available from owner')}</span>}</div>
-        <div className="property-card-footer"><div><strong>{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{t(language, property.priceNote)}</small></>}</strong><small className="property-listed">{t(language, property.listed)}</small></div><Link className="view-property-button" href={`/property/${propertySlug(property.title)}${property.type.trim().toLowerCase() === 'house' ? '?view=3d' : ''}`}>{t(language, 'View property')} <Icon name="arrow" size={14} /></Link></div>
+        <div className="property-card-footer"><div><strong>{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{t(language, property.priceNote)}</small></>}</strong><small className="property-listed">{t(language, property.listed)}</small></div><Link className="view-property-button" href={`/property/${propertySlug(property.title)}${supportsSpatialPreview(property.type) ? '?view=3d' : ''}`}>{t(language, 'View property')} <Icon name="arrow" size={14} /></Link></div>
       </div>
     </article>
   );

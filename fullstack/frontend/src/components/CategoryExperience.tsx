@@ -12,7 +12,7 @@ import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 import { getDistrictNames } from '../data/rwandaLocations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
-import { fallbackListingImages, listingImages, propertySlug, type ApiListing } from '../lib/listings';
+import { fallbackListingImages, listingImages, propertySlug, supportsSpatialPreview, type ApiListing } from '../lib/listings';
 import { readCachedApiListings, writeCachedApiListings } from '../lib/listingCache';
 
 type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string };
@@ -280,7 +280,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
           </div>
           <div className="category-listing-copy"><div className="category-listing-meta"><span>{item.categoryName ?? 'UMUTUNGO LISTING'}</span>{item.listed && <span>{item.listed}</span>}</div>
             <h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p>
-            <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><Link className="category-view-button" href={`/property/${propertySlug(item.title)}`}>View property <Icon name="arrow" size={13} /></Link></div>
+            <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><Link className="category-view-button" href={`/property/${propertySlug(item.title)}${supportsSpatialPreview(item.categoryName ?? item.categorySlug ?? '') ? '?view=3d' : ''}`}>View property <Icon name="arrow" size={13} /></Link></div>
           </div>
         </article>)}</div>
         {visibleListingCount < listings.length && <div ref={listingLoadMoreRef} className="category-listing-scroll-sentinel" aria-hidden="true" />}

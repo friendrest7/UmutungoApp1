@@ -2403,8 +2403,18 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "message body is required")
 		return
 	}
-	if input.RecipientID == "" && input.ListingID != "" {
-		_ = s.db.QueryRow(r.Context(), `SELECT owner_id FROM listings WHERE id=$1 AND status='published'`, input.ListingID).Scan(&input.RecipientID)
+	listingTitle := ""
+	if input.ListingID != "" {
+		var listingOwnerID string
+		if err := s.db.QueryRow(r.Context(), `SELECT owner_id,title FROM listings WHERE id=$1 AND status='published'`, input.ListingID).Scan(&listingOwnerID, &listingTitle); err != nil {
+			errorJSON(w, http.StatusNotFound, "listing is unavailable")
+			return
+		}
+		if user.ID != listingOwnerID {
+			// Property enquiries always go to the account that owns the listing.
+			// Only the owner may choose a recipient when replying to a conversation.
+			input.RecipientID = listingOwnerID
+		}
 	}
 	if input.RecipientID == "" || input.RecipientID == user.ID {
 		errorJSON(w, http.StatusBadRequest, "a valid landlord recipient is required")
@@ -2422,7 +2432,13 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "could not send message")
 		return
 	}
-	if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'message_received','New message',$2)`, input.RecipientID, fmt.Sprintf("%s sent you a message", user.Name)); err != nil {
+	notificationTitle := "New message"
+	notificationBody := fmt.Sprintf("%s sent you a message", user.Name)
+	if listingTitle != "" {
+		notificationTitle = "New message about " + listingTitle
+		notificationBody = fmt.Sprintf("%s sent you a message about %s", user.Name, listingTitle)
+	}
+	if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'message_received',$2,$3)`, input.RecipientID, notificationTitle, notificationBody); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create message notification")
 		return
 	}

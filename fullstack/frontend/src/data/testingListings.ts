@@ -39,12 +39,24 @@ const generatedListings: TestingListing[] = categories.flatMap((category) => cat
   const bedrooms = ['houses', 'apartments', 'hospitality'].includes(category.slug) ? 2 + index % 3 : 0;
   const bathrooms = bedrooms ? 1 + index % 2 : 0;
   const area = category.slug === 'land' ? 300 + index * 65 : bedrooms ? 85 + index * 30 : 0;
-  const image = isMacBook ? '/properties/macbook-demo.jpg' : category.images[index % category.images.length];
-  const images = isMacBook
-    ? [image, '/properties/macbook-demo-02.jpg', '/properties/macbook-demo-03.jpg', '/properties/macbook-demo-04.jpg', '/properties/macbook-demo-05.jpg', '/properties/macbook-demo-06.jpg']
-    : category.images.map((_, imageIndex) => category.images[(index + imageIndex) % category.images.length]);
   const listingCopy = demoCopy[category.slug];
   const title = isMacBook ? 'MacBook laptop' : listingCopy?.titles[index % (listingCopy.titles.length || 1)] ?? category.title;
+  const otherDescription = title.includes('Banquet hall')
+    ? `Banquet hall in ${location}, suited to celebrations, conferences, and community events. Contact the owner to confirm capacity, facilities, available dates, and rental terms.`
+    : title.includes('Event venue')
+      ? `Event venue in ${location} for private and community gatherings. Contact the owner to confirm capacity, available facilities, dates, and pricing.`
+      : title.includes('Event table setup')
+        ? `Event table setup available in ${location}. Contact the owner to confirm the number of tables, included items, condition, and availability.`
+        : title.includes('Restaurant fixtures')
+          ? `Restaurant fixtures in ${location}. Contact the owner to confirm the included equipment, condition, and collection or delivery arrangements.`
+          : `City bicycle available in ${location}. Contact the owner to confirm the frame size, condition, included accessories, and collection arrangements.`;
+  const categoryImages = category.slug === 'other' ? category.images.filter((url) => url !== '/properties/other-demo-06.jpg') : category.images;
+  const bicycleImage = '/properties/other-demo-06.jpg';
+  const isBicycle = category.slug === 'other' && title.toLowerCase().includes('bicycle');
+  const image = isMacBook ? '/properties/macbook-demo.jpg' : isBicycle ? bicycleImage : categoryImages[index % categoryImages.length];
+  const images = isMacBook
+    ? [image, '/properties/macbook-demo-02.jpg', '/properties/macbook-demo-03.jpg', '/properties/macbook-demo-04.jpg', '/properties/macbook-demo-05.jpg', '/properties/macbook-demo-06.jpg']
+    : isBicycle ? [bicycleImage] : categoryImages.map((_, imageIndex) => categoryImages[(index + imageIndex) % categoryImages.length]);
   const price = isMacBook ? 850000 : category.price + category.increment * index;
   return {
     id: `test-${category.slug}-${index + 1}`, categorySlug: category.slug, testingOnly: true as const,
@@ -55,6 +67,7 @@ const generatedListings: TestingListing[] = categories.flatMap((category) => cat
     availableFor: !isMacBook && (category.mode === 'book' || isRent) ? 'rent' : 'sale',
     description: isMacBook
       ? `Demo MacBook laptop listing in ${location}. Ask the seller for the exact model, year, specifications, battery condition, and included accessories.`
+      : category.slug === 'other' ? otherDescription
       : listingCopy?.description(location) ?? `Demo ${category.type.toLowerCase()} listing in ${location}. Ask the owner for details and availability.`,
   };
 }));

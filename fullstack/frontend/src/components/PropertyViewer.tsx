@@ -10,7 +10,7 @@ import { umutungoApi } from '../lib/umutungoApi';
 import { dashboardPathForAccountRole } from '../lib/accountRouting';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
-type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; initialRequest?: boolean };
+type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; initialImageIndex?: number; initialRequest?: boolean; initialContact?: boolean; embedded?: boolean };
 type TransactionType = 'rent' | 'buy';
 type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'pending' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
@@ -39,13 +39,14 @@ function escapeReceiptValue(value: string | number) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character] ?? character);
 }
 
-export function PropertyViewer({ language, property, onClose, initialMode = 'photos', initialRequest = false }: PropertyViewerProps) {
+export function PropertyViewer({ language, property, onClose, initialMode = 'photos', initialImageIndex = 0, initialRequest = false, initialContact = false, embedded = false }: PropertyViewerProps) {
   const images = property.images?.length ? property.images : [property.image];
   const isHouse = property.type.trim().toLowerCase() === 'house';
   const hasPropertyMeasurements = property.bedrooms > 0 || property.bathrooms > 0 || property.area > 0;
   const isProductListing = ['Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other assets'].includes(property.type);
-  const [activeImage, setActiveImage] = useState(0);
-  const [mode, setMode] = useState<ViewerMode>(isHouse && !isProductListing ? initialMode : 'photos');
+  const hasSpatialView = !isProductListing && !['vehicle', 'furniture', 'appliance', 'equipment'].includes(property.type.trim().toLowerCase());
+  const [activeImage, setActiveImage] = useState(() => Math.max(0, Math.min(initialImageIndex, images.length - 1)));
+  const [mode, setMode] = useState<ViewerMode>(hasSpatialView ? initialMode : 'photos');
   const [tourStop, setTourStop] = useState(0);
   const [turn, setTurn] = useState(0);
   const [tilt, setTilt] = useState(0);
@@ -70,7 +71,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [applicationPhone, setApplicationPhone] = useState('');
   const [applicationMessage, setApplicationMessage] = useState('');
   const [landlordVisible, setLandlordVisible] = useState(false);
-  const [contactOpen, setContactOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(initialContact);
   const [messageSent, setMessageSent] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
   const [contactError, setContactError] = useState('');
@@ -80,6 +81,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [houseSeen, setHouseSeen] = useState(false);
   const [viewingRequested, setViewingRequested] = useState(false);
+  const [tourSatisfaction, setTourSatisfaction] = useState<'yes' | 'no' | ''>('');
   const [applicationId, setApplicationId] = useState('');
   const dragStart = useRef<{ x: number; y: number; turn: number; tilt: number; pointerType: string } | null>(null);
   const photoSwipeStart = useRef<{ x: number; pointerId: number } | null>(null);
@@ -91,10 +93,10 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     setSecurityChallenge({ first, second, answer: String(first + second) });
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape' && !authOpen) onClose(); };
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (!embedded) document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', closeOnEscape);
-    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', closeOnEscape); };
-  }, [authOpen, onClose]);
+    return () => { if (!embedded) document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', closeOnEscape); };
+  }, [authOpen, embedded, onClose]);
 
   const changeImage = (direction: number) => setActiveImage((current) => (current + direction + images.length) % images.length);
   const startPhotoSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -311,6 +313,23 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank', 'noopener,noreferrer');
     setViewingRequested(true);
   };
+  const openDirectionsFromCurrentLocation = () => {
+    const destination = property.latitude != null && property.longitude != null
+      ? `${property.latitude},${property.longitude}`
+      : `${property.location}, Rwanda`;
+    const mapWindow = window.open('about:blank', '_blank');
+    const openDirections = (origin: string) => {
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`;
+      if (mapWindow) mapWindow.location.href = url;
+      else window.location.href = url;
+    };
+    if (!navigator.geolocation) { openDirections('Current Location'); return; }
+    navigator.geolocation.getCurrentPosition(
+      (position) => openDirections(`${position.coords.latitude},${position.coords.longitude}`),
+      () => openDirections('Current Location'),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  };
   const paymentOptions: Array<{ id: PaymentMethod; label: string; detail: string; mark: string }> = [
     { id: 'momo', label: 'MTN MoMo', detail: 'Approve securely on your MoMo phone', mark: 'MoMo' },
     { id: 'airtel', label: 'Airtel Money', detail: 'Pay from your Airtel Money wallet', mark: 'A' },
@@ -323,8 +342,9 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const isAppliance = property.type === 'Appliances';
   const isEquipment = property.type === 'Equipment';
   const isOtherAsset = property.type === 'Other assets';
-  const tourNames = isLand ? [t(language, 'Site entrance'), t(language, 'Buildable area'), t(language, 'Access road')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception')] : isVehicle ? ['Exterior', 'Interior', 'Detail view'] : isFurniture ? ['Room view', 'Furniture detail', 'In context'] : isAppliance ? ['Product view', 'Controls', 'In context'] : isEquipment ? ['Equipment view', 'Controls', 'In use'] : isOtherAsset ? ['Main view', 'Details', 'In context'] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom')];
-  const planNames = isLand ? [t(language, 'Plot frontage'), t(language, 'Buildable area'), t(language, 'Access road'), t(language, 'Green buffer')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception'), t(language, 'Staff area')] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom'), t(language, 'Garden')];
+  const isOtherProperty = property.type.trim().toLowerCase() === 'other';
+  const tourNames = isLand ? [t(language, 'Site entrance'), t(language, 'Buildable area'), t(language, 'Access road')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception')] : isOtherProperty ? ['Main hall', 'Event space', 'Entrance'] : isVehicle ? ['Exterior', 'Interior', 'Detail view'] : isFurniture ? ['Room view', 'Furniture detail', 'In context'] : isAppliance ? ['Product view', 'Controls', 'In context'] : isEquipment ? ['Equipment view', 'Controls', 'In use'] : isOtherAsset ? ['Main view', 'Details', 'In context'] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom')];
+  const planNames = isLand ? [t(language, 'Plot frontage'), t(language, 'Buildable area'), t(language, 'Access road'), t(language, 'Green buffer')] : isCommercial ? [t(language, 'Open workspace'), t(language, 'Meeting room'), t(language, 'Reception'), t(language, 'Staff area')] : isOtherProperty ? ['Main hall', 'Dining area', 'Stage', 'Entrance'] : [t(language, 'Living room'), t(language, 'Kitchen'), t(language, 'Bedroom'), t(language, 'Garden')];
   const roomImages = images.filter((image) => /(?:^|\/)tour-[^/]+$/i.test(image.split('?')[0]));
   const tourImages = (roomImages.length >= 3 ? roomImages : images).slice(0, 3);
   const roomPositions = [{ x: 50, y: 62 }, { x: 71, y: 35 }, { x: 31, y: 29 }];
@@ -352,20 +372,27 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     setTourZoom((current) => Math.max(0, Math.min(3, current + (event.deltaY < 0 ? 1 : -1))));
   };
 
-  return <div className="property-viewer-overlay" role="dialog" aria-modal="true" aria-labelledby="property-viewer-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  return <div className={`property-viewer-overlay${embedded ? ' is-embedded' : ''}`} role="dialog" aria-modal={!embedded} aria-labelledby="property-viewer-title" onMouseDown={(event) => { if (!embedded && event.target === event.currentTarget) onClose(); }}>
     <section className={`property-viewer ${isAppliance ? 'is-appliance-viewer' : ''}`}>
       <header className="property-viewer-header">
-        <div><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button></div>
-        <button className="property-viewer-close" type="button" onClick={onClose} aria-label={t(language, 'Close property viewer')}><Icon name="x" size={20} /></button>
+        <div>{embedded ? <h2 id="property-viewer-title">3D property view</h2> : <><h2 id="property-viewer-title">{t(language, property.title)}</h2><p><Icon name="pin" size={14} /> {t(language, property.location)}</p><button className="property-report-link" type="button" onClick={handleReport}>Report this listing</button></>}</div>
+        {embedded && <div className="property-viewer-tabs embedded-property-viewer-tabs" role="tablist" aria-label={t(language, 'Property media')}>
+          <button className={mode === 'photos' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'photos'} onClick={() => setMode('photos')}><Icon name="building" size={15} /> {t(language, 'Photos')}</button>
+          {hasSpatialView && <>
+            <button className={mode === 'tour' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'tour'} onClick={() => setMode('tour')}><Icon name="sparkles" size={15} /> {t(language, '3D tour')}</button>
+            <button className={mode === 'plan' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'plan'} onClick={() => setMode('plan')}><Icon name="home" size={15} /> {t(language, 'Floor plan')}</button>
+          </>}
+        </div>}
+        <button className="property-viewer-close" type="button" onClick={onClose} aria-label={embedded ? 'Close 3D view' : t(language, 'Close property viewer')}><Icon name="x" size={20} /></button>
       </header>
 
-      <div className="property-viewer-tabs" role="tablist" aria-label={t(language, 'Property media')}>
+      {!embedded && <div className="property-viewer-tabs" role="tablist" aria-label={t(language, 'Property media')}>
         <button className={mode === 'photos' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'photos'} onClick={() => setMode('photos')}><Icon name="building" size={15} /> {t(language, 'Photos')}</button>
-        {isHouse && !isProductListing && <>
+        {hasSpatialView && <>
           <button className={mode === 'tour' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'tour'} onClick={() => setMode('tour')}><Icon name="sparkles" size={15} /> {t(language, '3D tour')}</button>
           <button className={mode === 'plan' ? 'is-active' : ''} type="button" role="tab" aria-selected={mode === 'plan'} onClick={() => setMode('plan')}><Icon name="home" size={15} /> {t(language, 'Floor plan')}</button>
         </>}
-      </div>
+      </div>}
 
       <div className="property-viewer-grid">
         <div className="property-viewer-media">
@@ -374,7 +401,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
           {mode === 'tour' && <div className={`viewer-tour-stage viewer-game-stage ${navigationMode ? 'is-navigating' : ''}`} tabIndex={0} onDoubleClick={enterNavigationMode} onKeyDown={handleGameKey} onWheel={handleTourWheel} onPointerDown={startLook} onPointerMove={dragLook} onPointerUp={stopLook} onPointerCancel={stopLook} style={{ backgroundImage: `linear-gradient(180deg, rgba(8, 22, 12, .02), rgba(8, 22, 12, .04) 45%, rgba(8, 22, 12, .76)), url(${tourImages[tourStop] ?? images[0]})`, backgroundPosition: `${Math.max(0, Math.min(100, 50 + turn * .6))}% ${Math.max(0, Math.min(100, 50 + tilt))}%`, backgroundSize: `${navigationMode ? 220 + tourZoom * 20 : 120 + tourZoom * 14}% auto` }}>
             <div className="viewer-tour-topline"><span><Icon name="sparkles" size={15} /> {t(language, 'Interactive walkthrough')}</span><small>{navigationMode ? 'Look-around mode · drag to pan · press Esc to exit' : 'Double-click to look around · scroll to zoom · choose a view'}</small></div>
             <button className="viewer-navigation-exit" type="button" onClick={() => { setNavigationMode((current) => !current); dragStart.current = null; }}>{navigationMode ? 'Exit look-around' : 'Look around'} <Icon name={navigationMode ? 'x' : 'sparkles'} size={13} /></button>
-            <div className="viewer-tour-label"><strong>{tourNames[tourStop]}</strong><span>{t(language, 'Walk through the home and explore each stop')}</span></div>
+            <div className="viewer-tour-label"><strong>{tourNames[tourStop]}</strong><span>{isOtherProperty ? 'Explore this property and its key areas' : t(language, 'Walk through the home and explore each stop')}</span></div>
             <div className="viewer-mini-map" aria-label={t(language, 'Interactive floor plan')}><div className="viewer-mini-map-heading"><span>{(isVehicle || isFurniture || isAppliance || isEquipment || isOtherAsset ? 'VIEWS' : t(language, 'FLOOR PLAN'))}</span><small>{tourStop + 1} / {tourImages.length}</small></div><div className="viewer-mini-map-canvas">{tourNames.slice(0, tourImages.length).map((name, index) => <button key={name} className={tourStop === index ? 'is-active' : ''} type="button" style={{ left: `${roomPositions[index].x}%`, top: `${roomPositions[index].y}%` }} onClick={() => walkTo(index)} aria-label={`${t(language, 'Walk to')} ${name}`}><span>{index + 1}</span></button>)}<i style={{ left: `${roomPositions[tourStop].x}%`, top: `${roomPositions[tourStop].y}%` }} /></div></div>
             {tourStop > 0 && <button className="viewer-tour-door viewer-tour-door-back" type="button" onClick={() => walkTo(tourStop - 1)} aria-label={`Back to ${tourNames[tourStop - 1]}`}><Icon name="chevron" size={17} /><span>{tourNames[tourStop - 1]}</span></button>}
             {tourStop < tourImages.length - 1 && <button className="viewer-tour-door viewer-tour-door-next" type="button" onClick={() => walkTo(tourStop + 1)} aria-label={`Walk to ${tourNames[tourStop + 1]}`}><span>{tourNames[tourStop + 1]}</span><Icon name="chevron" size={17} /></button>}
@@ -382,12 +409,14 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <div className="viewer-tour-zoom" aria-label={t(language, 'Tour zoom controls')}><button type="button" onClick={() => setTourZoom((current) => Math.max(0, current - 1))} aria-label={t(language, 'Zoom out')}>{String.fromCharCode(8722)}</button><span>{100 + tourZoom * 18}%</span><button type="button" onClick={() => setTourZoom((current) => Math.min(3, current + 1))} aria-label={t(language, 'Zoom in')}>+</button></div>
           </div>}
 
+          {mode === 'tour' && !embedded && <section className="viewer-tour-feedback" aria-labelledby="viewer-tour-feedback-title"><div><strong id="viewer-tour-feedback-title">Are you satisfied with the 3D view?</strong><span>Choose what you would like to do next.</span></div><div className="viewer-tour-feedback-options"><button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => setTourSatisfaction('yes')}>Yes, I’m satisfied</button><button type="button" className={tourSatisfaction === 'no' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'no'} onClick={() => setTourSatisfaction('no')}>No, I’d like to visit</button></div>{tourSatisfaction === 'yes' && <button className="property-contact-button" type="button" onClick={() => { setContactError(''); setContactOpen(true); }}><Icon name="bookPen" size={15} /> Message the landlord</button>}{tourSatisfaction === 'no' && <button className="property-map-button" type="button" onClick={openDirectionsFromCurrentLocation}><Icon name="pin" size={15} /> Get directions from my location</button>}</section>}
+
           {mode === 'plan' && <div className="viewer-plan-stage"><div className="viewer-plan-heading"><span>{t(language, isLand ? 'Interactive site plan' : 'Interactive floor plan')}</span><small>{t(language, 'Tap a room to preview it')}</small></div><div className="viewer-floor-plan"><button className="viewer-plan-room plan-living" type="button" onClick={() => { setMode('tour'); walkTo(0); }}>{planNames[0]}<small>{isLand ? '620 m2' : isCommercial ? '82 m2' : '38 m2'}</small></button><button className="viewer-plan-room plan-kitchen" type="button" onClick={() => { setMode('tour'); walkTo(1); }}>{planNames[1]}<small>{isLand ? 'North side' : isCommercial ? '24 m2' : '14 m2'}</small></button><button className="viewer-plan-room plan-bedroom" type="button" onClick={() => { setMode('tour'); walkTo(2); }}>{planNames[2]}<small>{isLand ? 'Street edge' : isCommercial ? 'Front desk' : `${property.bedrooms} rooms`}</small></button><button className="viewer-plan-room plan-garden" type="button" onClick={() => { setMode('tour'); walkTo(2); }}>{planNames[3]}<small>{isLand ? 'Setback' : isCommercial ? 'Back of house' : 'Outdoor'}</small></button><span className="plan-door plan-door-one" /><span className="plan-door plan-door-two" /></div></div>}
 
           <div className="viewer-thumbnails">{images.map((image, index) => <button className={mode === 'photos' && activeImage === index ? 'is-active' : ''} type="button" key={`${image}-thumb-${index}`} onClick={() => { setMode('photos'); setActiveImage(index); }}><Image src={image} alt="" fill sizes="90px" unoptimized={image.startsWith('http')} /></button>)}</div>
         </div>
 
-        <aside className="property-viewer-details"><div className="viewer-price-row"><div><strong>{property.price}</strong>{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <small>{t(language, property.priceNote)}</small>}</div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats">{isHouse && property.bedrooms > 0 && <span><strong>{property.bedrooms}</strong>{t(language, "beds")}</span>}{isHouse && property.bathrooms > 0 && <span><strong>{property.bathrooms}</strong>{t(language, "baths")}</span>}{property.area > 0 && <span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span>}{!hasPropertyMeasurements && <span>{t(language, "Property details available from owner")}</span>}</div><p className="viewer-description">{property.description?.trim() || 'Contact the owner for more information about this property.'}</p><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button><small className="viewer-listed">{t(language, property.listed)}</small></aside>
+        {!embedded && <aside className="property-viewer-details"><div className="viewer-price-row"><div><strong>{property.price}</strong>{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <small>{t(language, property.priceNote)}</small>}</div><button className="viewer-share" type="button" onClick={() => navigator.clipboard?.writeText(window.location.href)} aria-label={t(language, 'Copy property link')}><Icon name="arrow" size={16} /></button></div><div className="viewer-stats">{isHouse && property.bedrooms > 0 && <span><strong>{property.bedrooms}</strong>{t(language, "beds")}</span>}{isHouse && property.bathrooms > 0 && <span><strong>{property.bathrooms}</strong>{t(language, "baths")}</span>}{property.area > 0 && <span><strong>{property.area}</strong>m{String.fromCharCode(178)}</span>}</div><p className="viewer-description">{property.description?.trim() || 'Contact the owner for more information about this property.'}</p><div className="viewer-highlights"><span><Icon name="check" size={15} /> {t(language, 'Secure enquiries')}</span></div><button className="viewer-request-button" type="button" onClick={openTransaction}>{t(language, 'Buy or rent this property')} <Icon name="arrow" size={16} /></button><small className="viewer-listed">{t(language, property.listed)}</small></aside>}
       </div>
     </section>
     {transactionOpen && (
@@ -496,7 +525,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <header className="landlord-contact-header"><div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong id="landlord-contact-title">{property.poster?.businessName || property.poster?.name || 'Property owner'}</strong><small>{property.poster?.verified ? 'Verified owner' : 'Property owner'}</small></span></div><button className="property-action-close" type="button" aria-label="Close owner chat" onClick={() => setContactOpen(false)}><Icon name="x" size={18} /></button></header>
             <p className="landlord-contact-intro">Ask about viewing times, availability, deposit terms, or any detail about {property.title}.</p>
             <div className="landlord-chat-messages">{messageSent && <div className="landlord-chat-bubble landlord-chat-sent">{contactMessage}</div>}</div>
-            {!messageSent ? <form className="landlord-contact-form" onSubmit={handleLandlordMessage}><textarea value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} placeholder="Write your message to the owner" rows={4} required />{contactError && <p className="payment-error" role="alert">{contactError}</p>}<button className="property-contact-button" type="submit">Send message <Icon name="arrow" size={15} /></button></form> : <div className="landlord-contact-sent"><Icon name="check" size={15} /> Message sent to the owner.</div>}
+            {!messageSent ? <form className="landlord-contact-form" onSubmit={handleLandlordMessage}><textarea value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} placeholder="Write your message to the owner" rows={4} required />{contactError && <p className="payment-error" role="alert">{contactError}</p>}<button className="property-contact-button" type="submit">Send message <Icon name="arrow" size={15} /></button></form> : <div className="landlord-contact-sent"><Icon name="check" size={15} /> Message sent to the listing owner. They’ll receive a dashboard notification.</div>}
           </section>
         </div>}
       </div>

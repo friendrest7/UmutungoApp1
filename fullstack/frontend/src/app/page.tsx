@@ -140,7 +140,7 @@ export default function HomePage() {
 
       <section className="section section-property container" id="properties">
         <div className="landing-discovery-panel">
-          <div className="landing-discovery-intro"><h2>{t(language, 'Explore Umutungo and find a property that fits your plans.')}</h2><p>{t(language, 'Browse homes, land, vehicles, furniture and more across Rwanda. Choose a category to explore the available listings.')}</p></div>
+          <div className="landing-discovery-intro"><h2>{t(language, 'Find the right property for whatever comes next.')}</h2><p>{t(language, 'Explore homes, land, vehicles, furniture and more for rent, sale, hire or a stay. Browsing is free, so explore the options and find what interests you.')}</p></div>
         <div className="landing-category-filter" aria-label={t(language, 'Filter properties by category')}>
           <button type="button" className={selectedListingCategory === null ? 'is-selected' : ''} aria-pressed={selectedListingCategory === null} onClick={() => setSelectedListingCategory(null)}><Icon name="building" size={18} /><span>{t(language, 'All')}</span></button>
           {listingCategories.map((category) => {

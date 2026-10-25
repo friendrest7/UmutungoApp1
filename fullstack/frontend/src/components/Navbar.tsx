@@ -83,12 +83,12 @@ export function FavoritesPanel({ language, items, onRemove, onClose }: { languag
   </div>;
 }
 
-type NavNotification = { id?: string; title?: string; message?: string; body?: string; createdAt?: string; created_at?: string };
+type NavNotification = { id?: string; type?: string; title?: string; message?: string; body?: string; createdAt?: string; created_at?: string; applicationId?: string; application_id?: string; propertyId?: string; listingId?: string; href?: string; url?: string; destination?: string; status?: string };
 
-function NotificationsPanel({ language, items }: { language: Language; items: NavNotification[] }) {
+function NotificationsPanel({ language, items, onSelect }: { language: Language; items: NavNotification[]; onSelect: (item: NavNotification) => void }) {
   return <div className="notification-panel" role="dialog" aria-label={t(language, 'Notifications')}>
     <div className="notification-panel-heading"><div><span className="notification-panel-eyebrow">{t(language, 'Recent activity')}</span><h2>{t(language, 'Notifications')}</h2></div><span className="notification-panel-count">{items.length}</span></div>
-    {items.length ? <div className="notification-panel-list">{items.slice(0, 6).map((item, index) => <article className="notification-panel-item" key={item.id ?? `${item.title ?? 'notification'}-${index}`}><span className="notification-panel-icon"><Icon name="bell" size={15} /></span><div><strong>{item.title ?? t(language, 'New update')}</strong><p>{item.message ?? item.body ?? t(language, 'You have a new update.')}</p>{(item.createdAt ?? item.created_at) && <time>{new Date(item.createdAt ?? item.created_at ?? '').toLocaleString()}</time>}</div></article>)}</div> : <div className="notification-panel-empty"><Icon name="check" size={20} /><strong>{t(language, 'No new notifications')}</strong><p>{t(language, 'You are all caught up.')}</p></div>}
+    {items.length ? <div className="notification-panel-list">{items.slice(0, 6).map((item, index) => <button className="notification-panel-item" type="button" key={item.id ?? `${item.title ?? 'notification'}-${index}`} onClick={() => onSelect(item)} aria-label={`${item.title ?? t(language, 'New update')}: ${item.message ?? item.body ?? t(language, 'You have a new update.')}`}><span className="notification-panel-icon"><Icon name="bell" size={15} /></span><span className="notification-panel-item-copy"><strong>{item.title ?? t(language, 'New update')}</strong><span>{item.message ?? item.body ?? t(language, 'You have a new update.')}</span>{(item.createdAt ?? item.created_at) && <time>{new Date(item.createdAt ?? item.created_at ?? '').toLocaleString()}</time>}</span></button>)}</div> : <div className="notification-panel-empty"><Icon name="check" size={20} /><strong>{t(language, 'No new notifications')}</strong><p>{t(language, 'You are all caught up.')}</p></div>}
   </div>;
 }
 
@@ -190,7 +190,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         if (cancelled) return;
         if (remote?.items) {
           const unread = remote.items.filter((item) => !item.read_at);
-          setNotifications(unread.map((item) => ({ id: item.id, title: item.title, body: item.body, created_at: item.created_at })));
+          setNotifications(unread.map((item) => ({ id: item.id, type: item.type, title: item.title, body: item.body, created_at: item.created_at, application_id: item.application_id, status: item.status } as NavNotification)));
           setNotificationCount(unread.length);
           return;
         }
@@ -375,6 +375,24 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     if (destination) router.push(destination);
   };
 
+  const openNotification = (item: NavNotification) => {
+    setNotificationPanelOpen(false);
+    const directPath = item.href ?? item.url ?? (item.destination?.startsWith('/') ? item.destination : undefined);
+    if (directPath?.startsWith('/') && !directPath.startsWith('//')) { router.push(directPath); return; }
+    const detail = `${item.type ?? ''} ${item.title ?? ''} ${item.message ?? item.body ?? ''}`.toLowerCase();
+    const isTenant = roleKey === 'Tenant' || roleKey === 'Client';
+    const section = detail.includes('message') || detail.includes('reply') ? 'Messages'
+      : detail.includes('application') || detail.includes('enquir') ? isTenant ? 'Applications' : 'Enquiries'
+      : detail.includes('visit') || detail.includes('viewing') || detail.includes('booking') ? isTenant ? 'Viewings' : roleKey === 'Commissioner / Komisiyoneri' ? 'Visits' : 'Enquiries'
+      : detail.includes('maintenance') || detail.includes('repair') ? 'Maintenance'
+      : detail.includes('payment') || detail.includes('rent') ? isTenant ? 'Rent & utilities' : 'Income'
+      : detail.includes('listing') || detail.includes('property') ? roleKey === 'Commissioner / Komisiyoneri' ? 'My listings' : 'My properties'
+      : 'Overview';
+    const dashboardPath = dashboardPathForRole(roleKey as AuthRole) ?? '/tenant';
+    const requestedSection = item.destination && !item.destination.startsWith('/') ? item.destination : section;
+    router.push(`${dashboardPath}?section=${encodeURIComponent(requestedSection)}`);
+  };
+
   const postAction = <a className={`nav-link nav-post ${isTenant ? 'nav-post-upgrade' : ''}`} href={isTenant ? '/upgrade/post' : '/post-property'} onClick={() => setMobileOpen(false)} aria-label={t(language, postActionHint)}><span className="nav-post-label">{t(language, postActionLabel)}</span></a>;
 
   return <>
@@ -403,7 +421,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <div className="nav-actions">
           <HoverHint text={t(language, postActionHint)} placement="bottom">{postAction}</HoverHint>
           <div className="nav-favorites-wrap" ref={favoritesRef}><button className="nav-saved" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} aria-expanded={favoritesPanelOpen} onClick={openFavorites}><Icon name="heart" size={17} />{favoriteItems.length > 0 && <b>{favoriteItems.length > 9 ? '9+' : favoriteItems.length}</b>}</button>{favoritesPanelOpen && <FavoritesPanel language={language} items={favoriteItems} onRemove={removeFromFavorites} onClose={() => setFavoritesPanelOpen(false)} />}</div>
-           <div className="nav-notifications-wrap"><button className="nav-notifications" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationPanelOpen} onClick={() => setNotificationPanelOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>{notificationPanelOpen && <NotificationsPanel language={language} items={notifications} />}</div>
+           <div className="nav-notifications-wrap"><button className="nav-notifications" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationPanelOpen} onClick={() => setNotificationPanelOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>{notificationPanelOpen && <NotificationsPanel language={language} items={notifications} onSelect={openNotification} />}</div>
           <div className="nav-utility-group" aria-label="Site preferences"><Dropdown label={languageCodes[language]} items={languages} active={language} onSelect={(value) => onLanguageChange(value as Language)} icon="globe" /><ThemeToggle darkMode={darkMode} onToggle={onToggleTheme} language={language} /></div>
           <div className="account-menu-wrap" ref={accountMenuRef}>
             <button className={`nav-sign-in ${signedIn ? 'nav-account' : ''}`} type="button" title={t(language, signedIn ? 'Account' : 'Sign in')} aria-label={t(language, signedIn ? 'Account' : 'Sign in')} aria-expanded={signedIn ? accountMenuOpen : undefined} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => (onSignIn ? onSignIn() : openSignIn())}>{signedIn && <Icon name="user" size={16} />}{t(language, signedIn ? 'Account' : 'Sign in')}{signedIn && <Icon name="chevron" size={12} />}</button>

@@ -13,6 +13,7 @@ import { usePersistentTheme } from '../lib/theme';
 import { getDistrictNames } from '../data/rwandaLocations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 import { fallbackListingImages, listingImages, propertySlug, type ApiListing } from '../lib/listings';
+import { readCachedApiListings, writeCachedApiListings } from '../lib/listingCache';
 
 type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[] };
@@ -116,6 +117,8 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   const [databaseListings, setDatabaseListings] = useState<Listing[]>([]);
   const [listingLoadError, setListingLoadError] = useState(false);
   const [listingsLoading, setListingsLoading] = useState(true);
+  const [visibleListingCount, setVisibleListingCount] = useState(12);
+  const listingLoadMoreRef = useRef<HTMLDivElement>(null);
   const [hoveredGalleryId, setHoveredGalleryId] = useState<string | null>(null);
   const [galleryIndexes, setGalleryIndexes] = useState<Record<string, number>>({});
   const changeLanguage = (nextLanguage: Language) => {
@@ -146,28 +149,37 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   };
   useEffect(() => {
     let cancelled = false;
+    const aliases = categoryAliases[slug] ?? [normalizedCategory(rawCategory.name)];
+    const mapApiListings = (items: DatabaseListing[]) => items
+      .filter((item) => slug === 'properties' || aliases.includes(normalizedCategory(item.category)))
+      .map((item) => {
+        const itemCategory = Object.entries(categoryAliases).find(([categorySlug, itemAliases]) => categorySlug !== 'properties' && itemAliases.includes(normalizedCategory(item.category)))?.[0];
+        const itemConfig = itemCategory ? categoryConfigs[itemCategory] : rawCategory;
+        return { ...toDatabaseListing(item, itemConfig), categoryName: itemConfig.name, categorySlug: itemCategory, ownerName: item.owner?.name };
+      });
+    const cachedListings = readCachedApiListings();
+    if (cachedListings.length) {
+      setDatabaseListings(mapApiListings(cachedListings as DatabaseListing[]));
+      setListingsLoading(false);
+    }
     const loadListings = () => {
-      const aliases = categoryAliases[slug] ?? [normalizedCategory(rawCategory.name)];
-      setListingsLoading(true);
+      if (!cachedListings.length) setListingsLoading(true);
       void publicUmutungoApi<{ items: DatabaseListing[] }>('/api/v1/listings', { cache: 'no-store' })
         .then((result) => {
           if (cancelled) return;
+          if (!result) { setListingsLoading(false); return; }
           setListingLoadError(false);
           setListingsLoading(false);
-          const matchingItems = (result?.items ?? []).filter((item) => slug === 'properties' || aliases.includes(normalizedCategory(item.category)));
-          const liveListings = matchingItems.map((item) => {
-            const itemCategory = Object.entries(categoryAliases).find(([categorySlug, itemAliases]) => categorySlug !== 'properties' && itemAliases.includes(normalizedCategory(item.category)))?.[0];
-            const itemConfig = itemCategory ? categoryConfigs[itemCategory] : rawCategory;
-            return { ...toDatabaseListing(item, itemConfig), categoryName: itemConfig.name, categorySlug: itemCategory, ownerName: item.owner?.name };
-          });
-          setDatabaseListings(liveListings);
+          if (result?.items) writeCachedApiListings(result.items);
+          setDatabaseListings(mapApiListings(result?.items ?? []));
         })
-        .catch(() => { if (!cancelled) { setDatabaseListings([]); setListingLoadError(true); setListingsLoading(false); } });
+        .catch(() => { if (!cancelled) { if (!cachedListings.length) setDatabaseListings([]); setListingLoadError(true); setListingsLoading(false); } });
     };
     loadListings();
     window.addEventListener('umutungo:listings-changed', loadListings);
     return () => { cancelled = true; window.removeEventListener('umutungo:listings-changed', loadListings); };
   }, [rawCategory, slug]);
+  useEffect(() => { setVisibleListingCount(12); }, [filter, initialDistrict, initialIntent, initialLocation, initialPriceRange, initialSector, query, slug]);
   useEffect(() => {
     const readFavorites = () => {
       try {
@@ -217,6 +229,16 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     }).map(normalizeListing);
     return slug === 'properties' ? filteredListings : filteredListings.slice(0, 10);
   }, [category, databaseListings, filter, initialDistrict, initialIntent, initialLocation, initialPriceRange, initialSector, query, slug]);
+  const visibleListings = listings.slice(0, visibleListingCount);
+  useEffect(() => {
+    const target = listingLoadMoreRef.current;
+    if (!target || visibleListingCount >= listings.length) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) setVisibleListingCount((count) => Math.min(count + 12, listings.length));
+    }, { rootMargin: '320px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [listings.length, visibleListingCount]);
   useEffect(() => {
     const item = listings.find((listingItem) => listingItem.id === hoveredGalleryId);
     const imageCount = item?.images?.length ?? 0;
@@ -247,19 +269,21 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
         <div className="category-results-heading"><div><span className="category-experience-eyebrow">{listings.length} {t(language, 'property listings')}</span><h2>{t(language, 'Find the properties you need.')}</h2><p>{t(language, 'Browse listings for free.')}</p></div></div>
         <div className={`category-filter-row ${slug === 'properties' || slug === 'houses' ? 'category-filter-row-select' : ''}`}>{slug === 'properties' ? <div className="category-picker" ref={categoryPickerRef}><span className="category-picker-label">{t(language, 'Browse categories')}</span><button className="category-picker-trigger" type="button" aria-label={t(language, 'Filter listings by category')} aria-expanded={categoryPickerOpen} aria-controls="property-category-options" onClick={() => setCategoryPickerOpen((open) => !open)}><span className="category-picker-trigger-icon"><Icon name={shopCategories.find((item) => categoryConfigs[item.slug]?.name === filter)?.icon ?? 'building'} size={16} /></span><strong>{filter === 'All properties' ? t(language, 'All categories') : t(language, filter)}</strong><Icon name="chevron" size={15} /></button>{categoryPickerOpen && <div className="category-picker-menu" id="property-category-options" role="listbox" aria-label={t(language, 'Property categories')}><button className={`category-picker-option ${filter === 'All properties' ? 'is-active' : ''}`} type="button" role="option" aria-selected={filter === 'All properties'} onClick={() => { setFilter('All properties'); setCategoryPickerOpen(false); }}><span><Icon name="building" size={17} /></span><strong>{t(language, 'All categories')}</strong><small>{t(language, 'See every listing')}</small></button>{shopCategories.filter((item) => item.slug !== 'properties').map((item) => <button className={`category-picker-option ${filter === categoryConfigs[item.slug]?.name ? 'is-active' : ''}`} type="button" role="option" aria-selected={filter === categoryConfigs[item.slug]?.name} key={item.slug} onClick={() => { setFilter(categoryConfigs[item.slug]?.name ?? 'All properties'); setCategoryPickerOpen(false); }}><span><Icon name={item.icon} size={17} /></span><strong>{t(language, categoryConfigs[item.slug]?.name ?? '')}</strong><small>{t(language, `Browse ${categoryConfigs[item.slug]?.name.toLowerCase()}`)}</small></button>)}</div>}</div> : slug === 'houses' ? <label className="category-filter-select-label"><span>{t(language, 'Listing type')}</span><select aria-label={t(language, 'Filter properties by listing type')} value={filter} onChange={(event) => setFilter(event.target.value)}>{category.filters.map((item) => <option key={item} value={item}>{t(language, item)}</option>)}</select></label> : category.filters.map((item) => <button className={filter === item ? 'active' : ''} key={item} type="button" onClick={() => setFilter(item)}>{t(language, item)}</button>)}</div>
       </div>
-      {listingsLoading ? <div className="category-empty"><h3>{t(language, 'Loading listings…')}</h3></div> : listings.length ? <>
+      {listingsLoading ? <div className="category-listing-grid category-listing-skeleton-grid" role="status" aria-label={t(language, 'Loading listings…')}>{Array.from({ length: 8 }, (_, index) => <article className="category-listing-skeleton" key={index}><span /><div><i /><i /><i /><b /></div></article>)}</div> : listings.length ? <>
         <div className="owner-listing-heading"><h2>Property listings</h2><p>Listings posted directly to Umutungo.</p></div>
-        <div className="category-listing-grid">{listings.map((item) => <article className="category-listing-card" key={item.id}>
+        <div className="category-listing-grid">{visibleListings.map((item) => <article className="category-listing-card" key={item.id}>
           <div className="category-listing-image" onMouseEnter={() => { setHoveredGalleryId(item.id); setGalleryIndexes((current) => ({ ...current, [item.id]: 1 })); }} onMouseLeave={() => { setHoveredGalleryId(null); setGalleryIndexes((current) => ({ ...current, [item.id]: 0 })); }} onFocus={() => { setHoveredGalleryId(item.id); setGalleryIndexes((current) => ({ ...current, [item.id]: 1 })); }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setHoveredGalleryId(null); setGalleryIndexes((current) => ({ ...current, [item.id]: 0 })); } }}>
             <div className="category-listing-image-track" style={{ transform: `translateX(-${(galleryIndexes[item.id] ?? 0) * 100}%)` }}>{(item.images?.length ? item.images : [item.image]).map((image, imageIndex) => <span className="category-listing-image-slide" key={`${image}-${imageIndex}`} style={{ backgroundImage: `linear-gradient(180deg, transparent 45%, rgba(5, 15, 8, .64)), url("${image.replace(/["\\]/g, '')}")` }} />)}</div>
+            <span className={`listing-intent category-card-status ${item.intent === 'For sale' ? 'for-sale' : item.intent === 'For rent' ? 'for-rent' : ''}`}>{item.intent}</span>
             <button className={`category-save ${saved.includes(item.id) ? 'saved' : ''}`} type="button" aria-label={`Save ${item.title}`} onClick={() => toggleListingFavorite(item)}><Icon name="heart" size={16} filled={saved.includes(item.id)} /></button>
             {item.verified && <span className="category-verified"><Icon name="check" size={12} /> Verified</span>}
           </div>
-          <div className="category-listing-copy"><div className="category-listing-meta"><span className={`listing-intent ${item.intent === 'For sale' ? 'for-sale' : item.intent === 'For rent' ? 'for-rent' : ''}`}>{item.intent}</span></div>
-            <h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p>{item.ownerName && <small className="listing-owner-name"><span>{item.ownerName.slice(0, 1).toUpperCase()}</span> Listed by {item.ownerName}</small>}
+          <div className="category-listing-copy"><div className="category-listing-meta"><span>{item.categoryName ?? 'UMUTUNGO LISTING'}</span>{item.listed && <span>{item.listed}</span>}</div>
+            <h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p>
             <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><Link className="category-view-button" href={`/property/${propertySlug(item.title)}`}>View property <Icon name="arrow" size={13} /></Link></div>
           </div>
         </article>)}</div>
+        {visibleListingCount < listings.length && <div ref={listingLoadMoreRef} className="category-listing-scroll-sentinel" aria-hidden="true" />}
       </> : <div className="category-empty"><h3>{t(language, listingLoadError ? 'Listings could not load right now' : 'No listings match that search')}</h3><p>{t(language, listingLoadError ? 'Please try again in a moment.' : 'Try another neighbourhood, property type, or clear the filter.')}</p>{listingLoadError ? <button type="button" onClick={() => window.location.reload()}>{t(language, 'Try again')}</button> : (query || initialLocation || initialDistrict || initialSector || initialIntent || initialPriceRange) && <button type="button" onClick={() => window.location.assign(`/categories/${slug}`)}>{t(language, 'Clear search')}</button>}</div>}
     </section>
   </main><AiChatbot language={language} /></div>;

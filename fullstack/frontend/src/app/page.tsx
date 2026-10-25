@@ -10,6 +10,7 @@ import { ConversationalPropertySearch } from '../components/ConversationalProper
 import { Language, t } from '../data/translations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 import { toProperty, type ApiListing } from '../lib/listings';
+import { readCachedApiListings, writeCachedApiListings } from '../lib/listingCache';
 import { isLocalDevelopmentHost, readLocalPropertyListings, writeLocalPropertyListings } from '../lib/localListings';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
@@ -27,11 +28,15 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    const cachedListings = readCachedApiListings();
+    if (cachedListings.length) setProperties(cachedListings.map(toProperty));
     const loadListings = () => {
       void publicUmutungoApi<{ items: ApiListing[] }>('/api/v1/listings', { cache: 'no-store' })
         .then((result) => {
           if (cancelled) return;
+          if (!result) return;
           const liveListings = (result?.items ?? []).map(toProperty);
+          if (result?.items?.length) writeCachedApiListings(result.items);
           if (liveListings.length > 0) {
             setListingLoadError(false);
             setProperties(liveListings);

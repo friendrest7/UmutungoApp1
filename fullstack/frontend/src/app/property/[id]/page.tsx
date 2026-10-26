@@ -96,6 +96,15 @@ export default function PropertyDetailPage() {
     const id = decodeURIComponent(params.id ?? '');
     const isListingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     setProperty(null);
+    if (isLocalDevelopmentHost()) {
+      const localProperty = readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id);
+      if (localProperty) {
+        setProperty(localProperty);
+        if (open3d && supportsSpatialPreview(localProperty.type)) setViewerMode('tour');
+      }
+      setLoading(false);
+      return;
+    }
     const listingRequest = isListingId
       ? publicUmutungoApi<ApiListing>(`/api/v1/listings/${encodeURIComponent(id)}`)
       : publicUmutungoApi<{ items: ApiListing[] }>('/api/v1/listings', { cache: 'no-store' }).then((result) => result?.items.find((item) => propertySlug(item.title) === id) ?? null);

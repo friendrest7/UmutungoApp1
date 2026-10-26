@@ -14,7 +14,7 @@ import { propertySlug } from '../lib/listings';
 type ViewerMode = 'photos' | 'tour' | 'plan';
 type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; initialImageIndex?: number; initialRequest?: boolean; initialContact?: boolean; embedded?: boolean };
 type TransactionType = 'rent' | 'buy';
-type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'pending' | 'success';
+type TransactionStep = 'choose' | 'application' | 'acquisition' | 'security' | 'payment' | 'pending' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
 type PaymentReceipt = { receiptNumber: string; propertyTitle: string; location: string; amount: number; currency: string; paymentMethod: string; status: 'successful'; transactionType: TransactionType; createdAt: string; demo: boolean };
 type PendingPayment = { id: string; status: string; amount: number; currency: string; provider_reference?: string };
@@ -227,7 +227,27 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const handleTransactionContinue = () => {
     if (!signedIn) { setAuthOpen(true); return; }
     setPaymentError('');
-    setTransactionStep(transactionType === 'rent' ? 'application' : 'security');
+    setTransactionStep(transactionType === 'rent' ? isHouse ? 'application' : 'acquisition' : 'security');
+  };
+  const handleAcquisitionSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (applicationPhone.replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number.'); return; }
+    setPaymentError('');
+    const body = [
+      `Property acquisition inquiry for ${property.title}`,
+      `Name: ${applicationName.trim()}`,
+      `Phone: ${applicationPhone.trim()}`,
+      applicationMessage.trim() ? `Message: ${applicationMessage.trim()}` : '',
+    ].filter(Boolean).join('\n');
+    try {
+      const result = await umutungoApi<{ id?: string }>('/api/v1/messages', { method: 'POST', body: JSON.stringify({ listing_id: property.id, body }) });
+      if (!result) throw new Error('Sign in to send an acquisition inquiry to the property owner.');
+      setContactMessage(body);
+      setMessageSent(true);
+      setTransactionStep('success');
+    } catch (cause) {
+      setPaymentError(cause instanceof Error ? cause.message : 'Your inquiry could not be sent. Please try again.');
+    }
   };
   const openPaymentSecurity = () => {
     setSecurityAnswer('');
@@ -557,17 +577,17 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
           {transactionStep === 'choose' && <>
             <span className="eyebrow">Next step</span>
             <h2 id="property-action-title">Buy or rent this property</h2>
-            <p className="property-action-intro">Choose how you would like to continue. Purchase requests continue to the MTN MoMo payment prompt. Rental applications are sent first; payment follows owner acceptance.</p>
+            <p className="property-action-intro">{isHouse ? 'Choose how you would like to proceed.' : 'Choose how you would like to proceed with this property.'}</p>
             <span className="property-availability-badge">{availableFor === 'both' ? 'Available to buy or rent' : availableFor === 'rent' ? 'Available to rent only' : 'Available to buy only'}</span>
             <div className="property-action-options">
               {availableActions.map((option) => <button className={"property-action-option " + (transactionType === option ? 'is-selected' : '')} type="button" key={option} onClick={() => { setTransactionType(option); setPaymentError(''); }}>
                 <span className="property-action-option-icon"><Icon name={option === 'rent' ? 'home' : 'building'} size={17} /></span>
-                <span><strong>{option === 'rent' ? 'Rent this property' : 'Buy this property'}</strong><small>{option === 'rent' ? 'Discuss the monthly terms and a viewing.' : 'Discuss the asking price and purchase process.'}</small></span>
+              <span><strong>{option === 'rent' ? isHouse ? 'Apply to rent this house' : 'Property acquisition inquiry' : 'Buy this property'}</strong><small>{option === 'rent' ? isHouse ? 'Share your details and viewing time.' : 'Ask the owner about price and availability.' : 'Ask the owner about the purchase.'}</small></span>
                 <Icon name={transactionType === option ? 'check' : 'arrow'} size={15} />
               </button>)}
             </div>
             <button className="property-action-continue" type="button" onClick={handleTransactionContinue}>
-              Continue to {transactionType === 'rent' ? 'rent' : 'buy'} this property <Icon name="arrow" size={16} />
+              {transactionType === 'rent' ? isHouse ? 'Continue to rental application' : 'Continue to acquisition inquiry' : 'Continue to buy this property'} <Icon name="arrow" size={16} />
             </button>
             <p className="property-action-signin-note"><Icon name="user" size={14} /> Sign in is required before you make a payment or contact the landlord.</p>
             <div className="property-success-actions">
@@ -585,6 +605,20 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
               <label>Message <small>Optional</small><textarea value={applicationMessage} onChange={(event) => setApplicationMessage(event.target.value)} placeholder="Tell the landlord a little about your move or preferred viewing time." rows={4} /></label>
               {paymentError && <p className="payment-error" role="alert">{paymentError}</p>}
               <button className="property-action-continue" type="submit">Submit rental application <Icon name="arrow" size={16} /></button>
+            </form>
+            <button className="property-flow-back" type="button" onClick={() => setTransactionStep('choose')}><Icon name="arrow" size={13} /> Back to request options</button>
+          </>}
+
+          {transactionStep === 'acquisition' && <>
+            <span className="eyebrow">Property acquisition</span>
+            <h2 id="property-action-title">Property acquisition inquiry</h2>
+            <p className="property-action-intro">Send your details to the property owner.</p>
+            <form className="payment-form" onSubmit={handleAcquisitionSubmit}>
+              <label>Full name<input value={applicationName} onChange={(event) => setApplicationName(event.target.value)} placeholder="Your full name" required /></label>
+              <label>Rwanda phone number<input type="tel" value={applicationPhone} onChange={(event) => setApplicationPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>
+              <label>Message <small>Optional</small><textarea value={applicationMessage} onChange={(event) => setApplicationMessage(event.target.value)} placeholder="Ask about this property." rows={4} /></label>
+              {paymentError && <p className="payment-error" role="alert">{paymentError}</p>}
+              <button className="property-action-continue" type="submit">Send acquisition inquiry <Icon name="arrow" size={16} /></button>
             </form>
             <button className="property-flow-back" type="button" onClick={() => setTransactionStep('choose')}><Icon name="arrow" size={13} /> Back to request options</button>
           </>}
@@ -638,9 +672,9 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <span className="payment-success-mark"><Icon name="check" size={23} /></span>
             <span className="eyebrow">{paymentReceipt ? 'Payment successful' : 'Request received'}</span>
             <h2 id="property-action-title">{paymentReceipt ? paymentReceipt.demo ? 'Your demo payment was successful' : 'Your MTN MoMo payment is confirmed' : 'You are on your way'}</h2>
-            <p className="property-action-intro">{paymentReceipt ? paymentReceipt.demo ? <>Demo payment for <strong>{paymentReceipt.propertyTitle}</strong> was successful. No money was charged. In live checkout, your provider will send a prompt to your phone to approve the payment with your PIN. Never enter your PIN on Umutungo.</> : <>Your payment for <strong>{paymentReceipt.propertyTitle}</strong> was successful. Keep your receipt for your records.</> : <>Your {transactionType === 'rent' ? 'rental' : 'property'} request for <strong>{property.title}</strong> has been recorded.</>}</p>
+            <p className="property-action-intro">{paymentReceipt ? paymentReceipt.demo ? <>Demo payment for <strong>{paymentReceipt.propertyTitle}</strong> was successful. No money was charged. In live checkout, your provider will send a prompt to your phone to approve the payment with your PIN. Never enter your PIN on Umutungo.</> : <>Your payment for <strong>{paymentReceipt.propertyTitle}</strong> was successful. Keep your receipt for your records.</> : messageSent ? <>Your property acquisition inquiry for <strong>{property.title}</strong> was sent to the owner.</> : <>Your {transactionType === 'rent' ? 'rental' : 'property'} request for <strong>{property.title}</strong> has been recorded.</>}</p>
             {paymentReceipt && <div className="property-receipt-summary"><span>Receipt number<strong>{paymentReceipt.receiptNumber}</strong></span><span>Amount paid<strong>{paymentReceipt.currency} {paymentReceipt.amount.toLocaleString()}</strong></span><button className="property-receipt-button" type="button" onClick={downloadReceipt}><Icon name="download" size={15} /> Download receipt</button></div>}
-            {transactionType === 'rent' && !houseSeen && <div className="property-seen-card"><strong>Have you finished exploring?</strong><span>{viewingRequested ? 'Visit the property first, then return here and confirm when you are ready to pay.' : 'Choose whether you have visited the property or want to open its location before paying.'}</span><div className="property-seen-actions"><button className="property-contact-button" type="button" onClick={markHouseSeen}>I finished exploring <Icon name="check" size={14} /></button><button className="property-map-button" type="button" onClick={openPropertyMap}><Icon name="pin" size={14} /> No, I want to view it</button></div></div>}
+            {isHouse && transactionType === 'rent' && !houseSeen && <div className="property-seen-card"><strong>Have you finished exploring?</strong><span>{viewingRequested ? 'Visit the property first, then return here and confirm when you are ready to pay.' : 'Choose whether you have visited the property or want to open its location before paying.'}</span><div className="property-seen-actions"><button className="property-contact-button" type="button" onClick={markHouseSeen}>I finished exploring <Icon name="check" size={14} /></button><button className="property-map-button" type="button" onClick={openPropertyMap}><Icon name="pin" size={14} /> No, I want to view it</button></div></div>}
             {property.poster && <div className="property-landlord-card">
               <div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong>{property.poster.businessName || property.poster.name || 'Property owner'}</strong><small>{property.poster.verified ? 'Verified owner' : 'Property owner'} {String.fromCharCode(183)} {property.location}</small></span></div>
               {property.poster.phone && <><button className="property-landlord-view" type="button" onClick={() => setLandlordVisible((current) => !current)}>{landlordVisible ? 'Hide phone number' : 'View phone number'} <Icon name="arrow" size={14} /></button>{landlordVisible && <div className="property-landlord-details"><span><b>Phone</b> <a href={`tel:${property.poster.phone}`}>{property.poster.phone}</a></span></div>}</>}
@@ -663,6 +697,6 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         </div>, document.body)}
       </div>
     )}
-    <AuthModal open={authOpen} role="Client" onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { if (accountRole !== 'Client' && accountRole !== 'Tenant') { window.location.assign(dashboardPathForAccountRole(accountRole)); return; } setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? 'application' : 'security'); }} />
+    <AuthModal open={authOpen} role="Client" onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { if (accountRole !== 'Client' && accountRole !== 'Tenant') { window.location.assign(dashboardPathForAccountRole(accountRole)); return; } setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? isHouse ? 'application' : 'acquisition' : 'security'); }} />
   </div>;
 }

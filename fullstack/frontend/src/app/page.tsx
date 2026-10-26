@@ -28,6 +28,13 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (isLocalDevelopmentHost()) {
+      setProperties(readLocalPropertyListings());
+      setListingLoadError(false);
+      const reloadLocalListings = () => setProperties(readLocalPropertyListings());
+      window.addEventListener('umutungo:listings-changed', reloadLocalListings);
+      return () => { cancelled = true; window.removeEventListener('umutungo:listings-changed', reloadLocalListings); };
+    }
     const cachedListings = readCachedApiListings();
     if (cachedListings.length) setProperties(cachedListings.map(toProperty));
     const loadListings = () => {

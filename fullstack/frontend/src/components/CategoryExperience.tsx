@@ -14,6 +14,7 @@ import { getDistrictNames } from '../data/rwandaLocations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
 import { fallbackListingImages, listingImages, propertySlug, supportsSpatialPreview, type ApiListing } from '../lib/listings';
 import { readCachedApiListings, writeCachedApiListings } from '../lib/listingCache';
+import { isLocalDevelopmentHost, readLocalPropertyListings } from '../lib/localListings';
 
 type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string; bedrooms?: number };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[] };
@@ -83,14 +84,40 @@ const normalizedCategory = (value: string) => value.trim().toLowerCase().replace
 
 type DatabaseListing = ApiListing & { tags?: string[]; amenities?: string[]; owner?: ApiListing['owner'] & { verified?: boolean } };
 
+const mapLocalListings = (): Listing[] => readLocalPropertyListings().map((item) => {
+  const categorySlug = Object.entries(categoryAliases).find(([, aliases]) => aliases.includes(normalizedCategory(item.type)))?.[0] ?? 'properties';
+  const intent: Listing['intent'] = item.availableFor === 'rent' ? 'For rent' : item.availableFor === 'both' ? 'For sale or rent' : item.priceNote.includes('/ month') || item.priceNote.includes('/ day') || item.priceNote.includes('/ night') ? 'For rent' : 'For sale';
+  const price = `${item.price}${item.priceNote && !/^\s*asking\s*$/i.test(item.priceNote) ? ` ${item.priceNote.trim()}` : ''}`;
+  return {
+    id: item.id,
+    title: item.title,
+    location: cleanListingText(item.location),
+    price: cleanListingText(price),
+    intent,
+    detail: cleanListingText(item.description || item.listed),
+    image: item.image,
+    images: item.images,
+    listed: item.listed,
+    categoryName: categoryConfigs[categorySlug]?.name ?? item.type,
+    categorySlug,
+    ownerName: item.poster?.businessName || item.poster?.name,
+    bedrooms: item.bedrooms,
+  };
+});
+
 const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Listing => {
   const intent: Listing['intent'] = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'both' ? category.name === 'Land' ? 'For sale or lease' : 'For sale or rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
   const location = [item.sector, item.district, item.province].filter(Boolean).join(' Â· ');
-  const dateLabel = item.created_at && !Number.isNaN(new Date(item.created_at).getTime()) ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable';
   const bedroomCount = Number(item.bedrooms ?? item.measurements?.bedrooms ?? 0);
   const bathroomCount = Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0);
   const areaSize = Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0);
-  const detail = [...[item.description, ...(item.tags ?? []), ...(item.amenities ?? []), bedroomCount ? `${bedroomCount} bedrooms` : '', bathroomCount ? `${bathroomCount} bathrooms` : '', areaSize ? `${areaSize} m²` : '', dateLabel].filter(Boolean)].join(' Â· ') || 'Details available from the owner';
+  const propertyFacts = [bedroomCount ? `${bedroomCount} bedrooms` : '', bathroomCount ? `${bathroomCount} bathrooms` : '', areaSize ? `${areaSize} m²` : ''].filter(Boolean);
+  const shortDescription = item.description?.trim().replace(/\s+/g, ' ');
+  const detail = propertyFacts.length
+    ? propertyFacts.join(' · ')
+    : shortDescription
+      ? `${shortDescription.slice(0, 72).trimEnd()}${shortDescription.length > 72 ? '…' : ''}`
+      : 'Contact owner for details';
   const images = listingImages(item);
   const cardImages = images.length ? images : fallbackListingImages(item);
   const image = cardImages[0] ?? '/properties/listing-placeholder.svg';
@@ -157,6 +184,17 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
         const itemConfig = itemCategory ? categoryConfigs[itemCategory] : rawCategory;
         return { ...toDatabaseListing(item, itemConfig), categoryName: itemConfig.name, categorySlug: itemCategory, ownerName: item.owner?.name };
       });
+    if (isLocalDevelopmentHost()) {
+      const loadLocalListings = () => {
+        if (cancelled) return;
+        setListingLoadError(false);
+        setDatabaseListings(mapLocalListings());
+        setListingsLoading(false);
+      };
+      loadLocalListings();
+      window.addEventListener('umutungo:listings-changed', loadLocalListings);
+      return () => { cancelled = true; window.removeEventListener('umutungo:listings-changed', loadLocalListings); };
+    }
     const cachedListings = readCachedApiListings();
     if (cachedListings.length) {
       setDatabaseListings(mapApiListings(cachedListings as DatabaseListing[]));

@@ -861,7 +861,19 @@ function TenantDashboard() {
       if (!cancelled) setTenantData({ ...emptyTenantData, applications: localApplications, notifications: localNotifications, payments: localPayments, messages: localMessages, bookings: localBookings, reviews: localReviews });
       try {
         const apiData = await umutungoApi<TenantDashboardData>('/api/v1/tenant/dashboard');
-        if (apiData && !cancelled) setTenantData((current) => demoSession ? ({ ...apiData, notifications: current.notifications, applications: [...apiData.applications, ...current.applications.filter((local) => !apiData.applications.some((item) => item.id === local.id))], payments: [...apiData.payments, ...current.payments.filter((local) => !apiData.payments.some((item) => item.id === local.id))], messages: [...apiData.messages, ...current.messages.filter((local) => !apiData.messages.some((item) => item.id === local.id))], bookings: current.bookings, reviews: [...apiData.reviews, ...current.reviews.filter((local) => !apiData.reviews.some((item) => item.id === local.id))] }) : ({ ...apiData, notifications: current.notifications }));
+        if (apiData && !cancelled) {
+          const safeApiData: TenantDashboardData = {
+            ...emptyTenantData,
+            ...apiData,
+            properties: Array.isArray(apiData.properties) ? apiData.properties : [],
+            applications: Array.isArray(apiData.applications) ? apiData.applications : [],
+            payments: Array.isArray(apiData.payments) ? apiData.payments : [],
+            messages: Array.isArray(apiData.messages) ? apiData.messages : [],
+            bookings: Array.isArray(apiData.bookings) ? apiData.bookings : [],
+            reviews: Array.isArray(apiData.reviews) ? apiData.reviews : [],
+          };
+          setTenantData((current) => demoSession ? ({ ...safeApiData, notifications: current.notifications, applications: [...safeApiData.applications, ...current.applications.filter((local) => !safeApiData.applications.some((item) => item.id === local.id))], payments: [...safeApiData.payments, ...current.payments.filter((local) => !safeApiData.payments.some((item) => item.id === local.id))], messages: [...safeApiData.messages, ...current.messages.filter((local) => !safeApiData.messages.some((item) => item.id === local.id))], bookings: current.bookings, reviews: [...safeApiData.reviews, ...current.reviews.filter((local) => !safeApiData.reviews.some((item) => item.id === local.id))] }) : ({ ...safeApiData, notifications: current.notifications }));
+        }
       } catch { /* Keep the local workspace available when the API is not running. */ }
       try {
         const apiNotifications = await umutungoApi<{ items: ApiNotification[] }>('/api/v1/notifications');

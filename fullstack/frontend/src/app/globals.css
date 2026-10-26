@@ -5420,3 +5420,68 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
   outline: 3px solid rgba(0, 168, 79, .35) !important;
   outline-offset: 3px;
 }
+/* Make property photos the primary focus and keep card copy compact. */
+.app-realistic .landing-property-grid .property-image {
+  height: auto;
+  aspect-ratio: 1.28 / 1;
+}
+.app-realistic .landing-property-grid .property-card-body {
+  padding: 12px 13px 13px;
+}
+.app-realistic .landing-property-grid .property-card h3 {
+  font-size: 15px;
+  line-height: 1.25;
+}
+.app-realistic .landing-property-grid .property-card p,
+.app-realistic .landing-property-grid .property-details {
+  font-size: 9px;
+}
+.app-realistic .landing-property-grid .property-details {
+  margin-top: 9px;
+  padding: 9px 0;
+}
+.app-realistic .landing-property-grid .property-details strong {
+  font-size: 10px;
+}
+.app-realistic .landing-property-grid .property-card-footer > div > strong {
+  font-size: 15px;
+}
+.app-realistic .landing-property-grid .property-card-footer > div > strong small,
+.app-realistic .landing-property-grid .property-card-footer .property-listed {
+  font-size: 9px;
+}
+.app-realistic .category-listing-image {
+  height: auto;
+  aspect-ratio: 1.18 / 1;
+}
+.app-realistic .category-listing-copy {
+  min-height: 0;
+  padding: 11px 12px 12px;
+}
+.app-realistic .category-listing-copy h3 {
+  margin: 5px 0 3px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+.app-realistic .category-listing-copy p,
+.app-realistic .category-listing-meta {
+  font-size: 8px;
+}
+.app-realistic .category-listing-footer {
+  gap: 8px;
+  margin-top: 9px;
+  padding-top: 9px;
+}
+.app-realistic .category-listing-footer strong {
+  font-size: 14px;
+}
+.app-realistic .category-view-button,
+.app-realistic .view-property-button {
+  min-height: 36px;
+  padding-inline: 10px;
+  font-size: 9px;
+}
+@media (max-width: 600px) {
+  .app-realistic .landing-property-grid .property-image { aspect-ratio: 1.2 / 1; }
+  .app-realistic .category-listing-image { aspect-ratio: 1.12 / 1; }
+}

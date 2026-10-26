@@ -5812,6 +5812,8 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
   white-space: nowrap;
 }
 .app-realistic .topbar-deals-link:hover { color: #008c42; }
+.app.theme-dark.app-realistic .topbar-brand { transform: translateY(-0.1cm); }
+.app.theme-dark.app-realistic .topbar-deals-link { transform: translate(-0.2cm, -0.05cm); }
 .app-realistic .topbar-home-link { margin-left: 4px; }
 @media (max-width: 760px) {
   .app-realistic .about-page :is(.about-hero-copy > p:not(.eyebrow), .about-film-copy > p:not(.eyebrow), .about-story-copy p, .about-section-heading > p, .about-people-card p, .values-grid p) { font-size: 15px; }

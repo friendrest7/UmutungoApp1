@@ -12,7 +12,7 @@ import { useTheme } from '@/theme/ThemeContext';
 import { useI18n } from '@/i18n';
 
 const categories: Array<{ key: string; label: string; icon: keyof typeof Ionicons.glyphMap; color: string }> = [
-  { key: 'house', label: 'Houses', icon: 'home-outline', color: '#e9f3e8' },
+  { key: 'house', label: 'Houses', icon: 'home-outline', color: '#e8f3ed' },
   { key: 'apartment', label: 'Apartments', icon: 'business-outline', color: '#e8f0f8' },
   { key: 'land', label: 'Land', icon: 'leaf-outline', color: '#eef2df' },
   { key: 'commercial', label: 'Commercial', icon: 'storefront-outline', color: '#f6eee4' },
@@ -21,7 +21,7 @@ const categories: Array<{ key: string; label: string; icon: keyof typeof Ionicon
   { key: 'vehicle', label: 'Vehicles', icon: 'car-outline', color: '#e9eef3' },
   { key: 'car_parts', label: 'Car parts', icon: 'construct-outline', color: '#f1eee4' },
   { key: 'furniture', label: 'Furniture', icon: 'bed-outline', color: '#f2ece4' },
-  { key: 'appliance', label: 'Appliances', icon: 'grid-outline', color: '#e9f0ef' },
+  { key: 'appliance', label: 'Appliances', icon: 'grid-outline', color: '#e9f0ec' },
   { key: 'equipment', label: 'Equipment', icon: 'construct-outline', color: '#f1eee4' },
   { key: 'other', label: 'Other assets', icon: 'apps-outline', color: '#eeebf2' },
 ];
@@ -139,21 +139,21 @@ export default function HomeScreen() {
     <ImageBackground source={require('../../assets/landing-house.jpg')} imageStyle={{ borderRadius: 24 }} style={{ minHeight: 300, overflow: 'hidden', borderRadius: 24, justifyContent: 'flex-end' }}>
       <View style={{ ...StyleSheet.absoluteFill, backgroundColor: 'rgba(8, 28, 17, 0.48)' }} />
       <View style={{ padding: 21, gap: 12 }}>
-        <Text style={{ color: '#d3f0dc', fontSize: 10, fontWeight: '900', letterSpacing: 1.6 }}>{t('UMUTUNGO · RWANDA')}</Text>
+        <Text style={{ color: '#d3f0e0', fontSize: 10, fontWeight: '900', letterSpacing: 1.6 }}>{t('UMUTUNGO · RWANDA')}</Text>
         <Text style={{ color: '#ffffff', fontSize: 31, fontWeight: '800', letterSpacing: -0.8, lineHeight: 36 }}>{t('Find a place that feels right.')}</Text>
-        <Text style={{ color: 'rgba(255,255,255,0.84)', fontSize: 13, lineHeight: 19 }}>{t('Browse homes, land and spaces from local owners.')}</Text>
+        <Text style={{ color: 'rgba(255, 255, 255,0.84)', fontSize: 13, lineHeight: 19 }}>{t('Browse homes, land and spaces from local owners.')}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 50, paddingLeft: 13, paddingRight: 5, borderRadius: 14, backgroundColor: '#ffffff' }}>
           <Ionicons name="sparkles-outline" size={19} color={colors.greenDark} />
-          <TextInput value={query} onChangeText={setQuery} onSubmitEditing={goToAiSearch} placeholder={t('Describe the properties you want and we get them for you')} placeholderTextColor="#68766c" returnKeyType="search" style={{ minWidth: 0, flex: 1, color: '#17251c', fontSize: 13 }} />
+          <TextInput value={query} onChangeText={setQuery} onSubmitEditing={goToAiSearch} placeholder={t('Describe the properties you want and we get them for you')} placeholderTextColor="#68766c" returnKeyType="search" style={{ minWidth: 0, flex: 1, color: '#17251d', fontSize: 13 }} />
           <Pressable onPress={goToAiSearch} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.green }} accessibilityLabel={t('Search')}>
             <Ionicons name="arrow-forward" size={18} color="#ffffff" />
           </Pressable>
         </View>
         <View style={{ flexDirection: 'row', gap: 9 }}>
-          <Pressable onPress={() => goToSearch({ transaction_type: 'rent_out' })} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.42)', backgroundColor: 'rgba(255,255,255,0.13)' }}>
+          <Pressable onPress={() => goToSearch({ transaction_type: 'rent_out' })} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255, 255, 255,0.42)', backgroundColor: 'rgba(255, 255, 255,0.13)' }}>
             <Ionicons name="key-outline" size={14} color="#ffffff" /><Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>{t('Rent a place')}</Text>
           </Pressable>
-          <Pressable onPress={() => goToSearch({ transaction_type: 'sell' })} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.42)', backgroundColor: 'rgba(255,255,255,0.13)' }}>
+          <Pressable onPress={() => goToSearch({ transaction_type: 'sell' })} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255, 255, 255,0.42)', backgroundColor: 'rgba(255, 255, 255,0.13)' }}>
             <Ionicons name="home-outline" size={14} color="#ffffff" /><Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>{t('Buy a place')}</Text>
           </Pressable>
         </View>

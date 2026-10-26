@@ -1,5 +1,5 @@
 import React, { Children, cloneElement, isValidElement } from 'react';
-import { Text as NativeText, type TextProps } from 'react-native';
+import { Platform, Text as NativeText, type TextProps } from 'react-native';
 import { useI18n } from '@/i18n';
 
 function translateChildren(children: React.ReactNode, translate: (value: string) => string): React.ReactNode {
@@ -14,5 +14,6 @@ function translateChildren(children: React.ReactNode, translate: (value: string)
 
 export function LocalizedText({ children, ...props }: TextProps) {
   const { t } = useI18n();
-  return <NativeText {...props}>{translateChildren(children, t)}</NativeText>;
+  const sansSerif = Platform.select({ ios: 'System', android: 'sans-serif', default: 'sans-serif' });
+  return <NativeText {...props} style={[{ fontFamily: sansSerif }, props.style]}>{translateChildren(children, t)}</NativeText>;
 }

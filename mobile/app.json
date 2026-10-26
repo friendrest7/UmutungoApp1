@@ -24,7 +24,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",
-        "backgroundColor": "#0b6b3a"
+        "backgroundColor": "#00a84f"
       },
       "permissions": [
         "android.permission.POST_NOTIFICATIONS"

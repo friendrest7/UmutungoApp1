@@ -61,16 +61,16 @@ export default function MomoQrScanner({ visible, onClose, onPhoneScanned }: Prop
   return <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
     <View style={{ flex: 1, backgroundColor: '#101714', paddingTop: 54, paddingHorizontal: 20, paddingBottom: 28, gap: 18 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>Scan MoMo QR</Text>
-        <Pressable accessibilityRole="button" onPress={onClose} hitSlop={12}><Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Close</Text></Pressable>
+        <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: '800' }}>Scan MoMo QR</Text>
+        <Pressable accessibilityRole="button" onPress={onClose} hitSlop={12}><Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '700' }}>Close</Text></Pressable>
       </View>
       <Text style={{ color: '#d1d5db', lineHeight: 21 }}>Scan a QR code that contains a Rwanda MTN phone number. Check the number before requesting payment.</Text>
       {permission?.granted ? <View style={{ flex: 1, overflow: 'hidden', borderRadius: 20 }}>
         <CameraView style={{ flex: 1 }} active={visible} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={scanned ? undefined : handleScan} />
         <View pointerEvents="none" style={{ position: 'absolute', alignSelf: 'center', top: '30%', width: 240, height: 240, borderWidth: 3, borderColor: '#31d47a', borderRadius: 20 }} />
       </View> : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-        <Text style={{ color: '#fff', textAlign: 'center', lineHeight: 22 }}>{permission?.granted === false && !permission.canAskAgain ? 'Camera permission is disabled. Enable camera access in your phone settings to scan a QR code.' : 'Allow camera access to scan a MoMo phone number QR code.'}</Text>
-        {permission?.granted === false && permission.canAskAgain ? <Pressable style={{ backgroundColor: colors.green, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 }} onPress={() => void requestPermission()}><Text style={{ color: '#fff', fontWeight: '800' }}>Allow camera access</Text></Pressable> : null}
+        <Text style={{ color: '#ffffff', textAlign: 'center', lineHeight: 22 }}>{permission?.granted === false && !permission.canAskAgain ? 'Camera permission is disabled. Enable camera access in your phone settings to scan a QR code.' : 'Allow camera access to scan a MoMo phone number QR code.'}</Text>
+        {permission?.granted === false && permission.canAskAgain ? <Pressable style={{ backgroundColor: colors.green, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 }} onPress={() => void requestPermission()}><Text style={{ color: '#ffffff', fontWeight: '800' }}>Allow camera access</Text></Pressable> : null}
       </View>}
       {scanError ? <Text accessibilityRole="alert" style={{ color: '#ffb4ab', textAlign: 'center', lineHeight: 20 }}>{scanError}</Text> : null}
     </View>

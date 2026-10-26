@@ -6,7 +6,10 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://umutungoapp1-backend.onrender.com"
+      }
     },
     "preview": {
       "environment": "preview",

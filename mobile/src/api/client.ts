@@ -5,7 +5,7 @@ import { readFavoriteQueue, readOfflineFavorites, readPublicCache, writeFavorite
 const TOKEN_KEY = 'umutungo-access-token';
 const SESSION_KEY = 'umutungo-offline-session';
 const DEFAULT_API_URL = 'https://umutungoapp1-backend.onrender.com';
-const baseUrl = () => (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL).trim().replace(/\/$/, '');
+const baseUrl = () => (process.env.EXPO_PUBLIC_API_URL?.trim() || DEFAULT_API_URL).replace(/\/$/, '');
 
 export class ApiError extends Error {
   status?: number;
@@ -173,6 +173,9 @@ export async function removeFavorite(id: string) {
 export async function listMessages(listingId?: string) { return request<{ items: ApiMessage[] }>(`/api/v1/messages${listingId ? `?listing_id=${encodeURIComponent(listingId)}` : ''}`, {}, true); }
 export async function sendMessage(input: { listing_id: string; recipient_id: string; body: string }) { return request<{ id: string; status: string }>('/api/v1/messages', { method: 'POST', body: JSON.stringify(input) }, true); }
 export async function listNotifications() { return request<{ items: ApiNotification[] }>('/api/v1/notifications', {}, true); }
+export async function markNotificationRead(id: string) { return request<{ id: string; status: string }>(`/api/v1/notifications/${encodeURIComponent(id)}`, { method: 'PATCH', body: '{}' }, true); }
+export async function markAllNotificationsRead() { return request<{ status: string }>('/api/v1/notifications/read-all', { method: 'PATCH', body: '{}' }, true); }
+export async function listBookings() { return request<{ items: import('./types').ApiBooking[] }>('/api/v1/bookings', {}, true); }
 export async function listApplications() { return request<{ items: ApiApplication[] }>('/api/v1/applications', {}, true); }
 export async function applyToListing(listingId: string, message: string) { return request<{ id: string; status: string }>(`/api/v1/listings/${encodeURIComponent(listingId)}/applications`, { method: 'POST', body: JSON.stringify({ message }) }, true); }
 export async function createBooking(input: { listing_id: string; check_in: string; check_out: string; guests: number }) { return request<{ id: string; status: string }>('/api/v1/bookings', { method: 'POST', body: JSON.stringify(input) }, true); }

@@ -136,7 +136,7 @@ export default function SignInScreen() {
       <Text style={styles.body}>{t('Use Google or the phone number connected to your Umutungo account.')}</Text>
       {error && <ErrorState message={error} />}
       <Pressable style={[styles.secondaryButton, { flexDirection: 'row', gap: 8 }]} disabled={!googleConfigured || !googleRequest || googleBusy} onPress={() => { setError(''); void promptGoogle(); }}>
-        <MaterialCommunityIcons name="google" size={19} color="#4285F4" />
+        <MaterialCommunityIcons name="google" size={19} color="#4285f4" />
         <Text style={styles.secondaryText}>{googleBusy ? t('Connecting to Google...') : googleConfigured && googleRequest ? t('Continue with Google') : t('Google sign-in is not configured')}</Text>
       </Pressable>
       <Text style={[styles.muted, { textAlign: 'center' }]}>{t('Google access is verified by the Umutungo API before a session is created.')}</Text>

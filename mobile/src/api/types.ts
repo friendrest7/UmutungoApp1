@@ -65,6 +65,8 @@ export type ApiMessage = {
 
 export type ApiNotification = { id: string; type: string; title: string; body: string; read_at?: string | null; created_at: string };
 
+export type ApiBooking = { id: string; listing_id: string; listing_title: string; check_in: string; check_out: string; guests: number; status: 'requested' | 'confirmed' | 'declined' | 'cancelled' | 'completed' | string; guest_name: string; created_at: string };
+
 export type ApiReview = { id: string; author_id: string; author_name: string; rating: number; body: string; created_at: string };
 
 export type ApiApplication = { id: string; listing_id: string; listing_title: string; applicant_id?: string; applicant_name?: string; status: string; message: string; viewed_at?: string | null; created_at: string };

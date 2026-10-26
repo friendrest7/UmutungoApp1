@@ -40,7 +40,7 @@ function AppShell() {
     };
     void prepareNotifications();
   }, []);
-  return <><StatusBar style={isDark ? 'light' : 'dark'} />{offline && <View accessibilityRole="alert" style={{ paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#8a5a00' }}><Text style={{ color: '#fff', textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{t('Offline mode · showing saved properties. Changes to favorites will sync when you reconnect.')}</Text></View>}<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }} /></>;
+  return <><StatusBar style={isDark ? 'light' : 'dark'} />{offline && <View accessibilityRole="alert" style={{ paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#8a5a00' }}><Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{t('Offline mode · showing saved properties. Changes to favorites will sync when you reconnect.')}</Text></View>}<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }} /></>;
 }
 
 export default function RootLayout() {

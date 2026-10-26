@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/about-video", s.aboutVideo)
 	mux.HandleFunc("/api/v1/about-video/media", s.aboutVideoMedia)
 	mux.HandleFunc("/api/v1/notifications", s.notifications)
+	mux.HandleFunc("/api/v1/notifications/", s.notificationRoute)
 	mux.HandleFunc("/api/v1/favorites", s.favorites)
 	mux.HandleFunc("/api/v1/favorites/", s.favoriteRoute)
 	mux.HandleFunc("/api/v1/owner/dashboard", s.ownerDashboard)
@@ -160,8 +161,8 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if s.cfg.AppEnv != "development" && !newMTNSMSClient(s.cfg).configured() {
-		errorJSON(w, http.StatusServiceUnavailable, "SMS verification is not configured. Set MTN SMS credentials and the approved service code.")
+	if s.cfg.AppEnv != "development" && !smsProviderConfigured(s.cfg) {
+		errorJSON(w, http.StatusServiceUnavailable, "SMS verification is not configured. Set MTN SMS or Twilio credentials.")
 		return
 	}
 	input.Phone = phone
@@ -186,27 +187,31 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	code := "111111"
 	if s.cfg.AppEnv != "development" {
-		code = randomDigits(6)
+		code, err = randomDigits(6)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not create verification code")
+			return
+		}
 	}
 	if _, err := s.db.Exec(r.Context(), `INSERT INTO otp_challenges(phone, code_hash, expires_at) VALUES($1, $2, NOW() + INTERVAL '10 minutes')`, input.Phone, hash(code)); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create OTP challenge")
 		return
 	}
-	sms := newMTNSMSClient(s.cfg)
-	if s.cfg.AppEnv != "development" || sms.configured() {
-		if err := sms.sendVerificationCode(r.Context(), input.Phone, code); err != nil {
-			log.Printf("MTN SMS registration delivery failed: %v", err)
+	smsConfigured := smsProviderConfigured(s.cfg)
+	if s.cfg.AppEnv != "development" || smsConfigured {
+		if err := sendVerificationSMS(r.Context(), s.cfg, input.Phone, code); err != nil {
+			log.Printf("registration SMS delivery failed: %v", err)
 			_, _ = s.db.Exec(r.Context(), `DELETE FROM otp_challenges WHERE phone=$1 AND used_at IS NULL`, input.Phone)
 			errorJSON(w, http.StatusBadGateway, "MTN did not accept the verification SMS. Check the SMS API credentials, approved service code, and phone number, then try again.")
 			return
 		}
 	}
 	message := "Registration created; verification code sent by SMS."
-	if s.cfg.AppEnv == "development" && !sms.configured() {
+	if s.cfg.AppEnv == "development" && !smsConfigured {
 		message = "Registration created; use the development verification code."
 	}
 	response := map[string]any{"user": user, "message": message}
-	if s.cfg.AppEnv == "development" && !sms.configured() {
+	if s.cfg.AppEnv == "development" && !smsConfigured {
 		response["development_code"] = code
 	}
 	writeJSON(w, http.StatusCreated, response)
@@ -238,7 +243,12 @@ func (s *Server) devAdminLogin(w http.ResponseWriter, r *http.Request) {
 		FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1`, "admin@umutungo.test").
 		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
 	if err == pgx.ErrNoRows {
-		phone := "+2507" + randomDigits(8)
+		suffix, randomErr := randomDigits(8)
+		if randomErr != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not create development account")
+			return
+		}
+		phone := "+2507" + suffix
 		err = s.db.QueryRow(r.Context(), `
 			INSERT INTO users(name,email,phone,role,verified_at)
 			VALUES('Umutungo Development Admin','admin@umutungo.test',$1,'admin',NOW())
@@ -297,7 +307,12 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1`, email).
 		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
 	if err == pgx.ErrNoRows {
-		phone := "+2507" + randomDigits(8)
+		suffix, randomErr := randomDigits(8)
+		if randomErr != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not create development account")
+			return
+		}
+		phone := "+2507" + suffix
 		err = s.db.QueryRow(r.Context(), `INSERT INTO users(name,email,phone,role,verified_at) VALUES($1,$2,$3,$4,NOW()) RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status`, account.name, email, phone, account.role).
 			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
 		if err == nil {
@@ -417,36 +432,40 @@ func (s *Server) requestOTP(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if s.cfg.AppEnv != "development" && !newMTNSMSClient(s.cfg).configured() {
-		errorJSON(w, http.StatusServiceUnavailable, "SMS verification is not configured. Set MTN SMS credentials and the approved service code.")
+	if s.cfg.AppEnv != "development" && !smsProviderConfigured(s.cfg) {
+		errorJSON(w, http.StatusServiceUnavailable, "SMS verification is not configured. Set MTN SMS or Twilio credentials.")
 		return
 	}
 	var code string
 	if s.cfg.AppEnv == "development" {
 		code = "111111"
 	} else {
-		code = randomDigits(6)
+		code, err = randomDigits(6)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not create verification code")
+			return
+		}
 	}
 	_, err = s.db.Exec(r.Context(), `INSERT INTO otp_challenges(phone, code_hash, expires_at) VALUES($1, $2, NOW() + INTERVAL '10 minutes')`, phone, hash(code))
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create OTP challenge")
 		return
 	}
-	sms := newMTNSMSClient(s.cfg)
-	if s.cfg.AppEnv != "development" || sms.configured() {
-		if err := sms.sendVerificationCode(r.Context(), phone, code); err != nil {
-			log.Printf("MTN SMS OTP delivery failed: %v", err)
+	smsConfigured := smsProviderConfigured(s.cfg)
+	if s.cfg.AppEnv != "development" || smsConfigured {
+		if err := sendVerificationSMS(r.Context(), s.cfg, phone, code); err != nil {
+			log.Printf("SMS OTP delivery failed: %v", err)
 			_, _ = s.db.Exec(r.Context(), `DELETE FROM otp_challenges WHERE phone=$1 AND used_at IS NULL`, phone)
 			errorJSON(w, http.StatusBadGateway, "MTN did not accept the verification SMS. Check the SMS API credentials, approved service code, and phone number, then try again.")
 			return
 		}
 	}
 	message := "Verification code sent by SMS."
-	if s.cfg.AppEnv == "development" && !sms.configured() {
+	if s.cfg.AppEnv == "development" && !smsConfigured {
 		message = "Use the development verification code."
 	}
 	response := map[string]any{"message": message}
-	if s.cfg.AppEnv == "development" && !sms.configured() {
+	if s.cfg.AppEnv == "development" && !smsConfigured {
 		response["development_code"] = code
 	}
 	writeJSON(w, http.StatusOK, response)
@@ -470,19 +489,44 @@ func (s *Server) verifyOTP(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, phoneErr.Error())
 		return
 	}
-	var challengeID string
-	var codeHash string
-	var userID string
-	err := s.db.QueryRow(r.Context(), `
-		SELECT c.id, c.code_hash, u.id
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var challengeID, codeHash, userID string
+	var attempts int
+	err = tx.QueryRow(r.Context(), `
+		SELECT c.id, c.code_hash, u.id, c.attempts
 		FROM otp_challenges c JOIN users u ON u.phone = c.phone
-		WHERE c.phone=$1 AND c.used_at IS NULL AND c.expires_at > NOW()
-		ORDER BY c.created_at DESC LIMIT 1`, phone).Scan(&challengeID, &codeHash, &userID)
-	if err != nil || hash(input.Code) != codeHash {
+		WHERE c.phone=$1 AND c.used_at IS NULL AND c.expires_at > NOW() AND c.attempts < 5 AND u.status='active'
+		ORDER BY c.created_at DESC LIMIT 1 FOR UPDATE OF c`, phone).Scan(&challengeID, &codeHash, &userID, &attempts)
+	if err != nil {
 		errorJSON(w, http.StatusUnauthorized, "invalid or expired OTP")
 		return
 	}
-	if _, err := s.db.Exec(r.Context(), `UPDATE otp_challenges SET used_at=NOW() WHERE id=$1`, challengeID); err != nil {
+	if hash(input.Code) != codeHash {
+		_, updateErr := tx.Exec(r.Context(), `UPDATE otp_challenges SET attempts=attempts+1,used_at=CASE WHEN attempts+1>=5 THEN NOW() ELSE used_at END WHERE id=$1`, challengeID)
+		if updateErr == nil {
+			updateErr = tx.Commit(r.Context())
+		}
+		if updateErr != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
+			return
+		}
+		errorJSON(w, http.StatusUnauthorized, "invalid or expired OTP")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `UPDATE otp_challenges SET used_at=NOW() WHERE id=$1 AND used_at IS NULL`, challengeID); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `UPDATE users SET verified_at=COALESCE(verified_at,NOW()) WHERE id=$1`, userID); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not verify account")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
 		return
 	}
@@ -2504,13 +2548,39 @@ func (s *Server) listReviews(w http.ResponseWriter, r *http.Request, listingID s
 }
 
 func (s *Server) bookings(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
 	user, ok := s.authUser(r)
 	if !ok {
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if r.Method == http.MethodGet {
+		rows, err := s.db.Query(r.Context(), `SELECT b.id,b.listing_id,l.title,b.check_in,b.check_out,b.guests,b.status,b.created_at,u.name FROM bookings b JOIN listings l ON l.id=b.listing_id JOIN users u ON u.id=b.guest_id WHERE b.guest_id=$1 OR l.owner_id=$1 ORDER BY b.created_at DESC LIMIT 100`, user.ID)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load bookings")
+			return
+		}
+		defer rows.Close()
+		items := make([]map[string]any, 0)
+		for rows.Next() {
+			var id, listingID, title, status, guestName string
+			var checkIn, checkOut time.Time
+			var guests int
+			var createdAt time.Time
+			if err := rows.Scan(&id, &listingID, &title, &checkIn, &checkOut, &guests, &status, &createdAt, &guestName); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not read bookings")
+				return
+			}
+			items = append(items, map[string]any{"id": id, "listing_id": listingID, "listing_title": title, "check_in": checkIn.Format("2006-01-02"), "check_out": checkOut.Format("2006-01-02"), "guests": guests, "status": status, "guest_name": guestName, "created_at": createdAt})
+		}
+		if err := rows.Err(); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not read bookings")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET or POST /api/v1/bookings")
 		return
 	}
 	var input struct {
@@ -2933,6 +3003,33 @@ func (s *Server) notifications(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+func (s *Server) notificationRoute(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if r.Method != http.MethodPatch {
+		errorJSON(w, http.StatusMethodNotAllowed, "use PATCH /api/v1/notifications/{id} or /read-all")
+		return
+	}
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/notifications/"), "/")
+	if path == "read-all" {
+		if _, err := s.db.Exec(r.Context(), `UPDATE notifications SET read_at=COALESCE(read_at,NOW()) WHERE user_id=$1`, user.ID); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not mark notifications read")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "read"})
+		return
+	}
+	result, err := s.db.Exec(r.Context(), `UPDATE notifications SET read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND user_id=$2`, path, user.ID)
+	if err != nil || result.RowsAffected() == 0 {
+		errorJSON(w, http.StatusNotFound, "notification not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": path, "status": "read"})
+}
+
 func (s *Server) ownerDashboard(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.authUser(r)
 	if !ok {
@@ -3290,15 +3387,15 @@ func randomToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func randomDigits(length int) string {
+func randomDigits(length int) (string, error) {
 	b := make([]byte, length)
 	if _, err := rand.Read(b); err != nil {
-		return "111111"
+		return "", err
 	}
 	for i := range b {
 		b[i] = '0' + (b[i] % 10)
 	}
-	return string(b)
+	return string(b), nil
 }
 
 func hash(value string) string {

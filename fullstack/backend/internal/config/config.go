@@ -26,6 +26,9 @@ type Config struct {
 	MTNSMSServiceCode    string
 	MTNSMSBaseURL        string
 	MTNSMSTokenURL       string
+	TwilioAccountSID     string
+	TwilioAuthToken      string
+	TwilioFromNumber     string
 	OwnerSilverPrice     float64
 	OwnerGoldPrice       float64
 	OwnerPlatinumPrice   float64
@@ -57,6 +60,9 @@ func Load() Config {
 		MTNSMSServiceCode:    env("MTN_SMS_SERVICE_CODE", ""),
 		MTNSMSBaseURL:        strings.TrimRight(env("MTN_SMS_BASE_URL", "https://api.mtn.com/v3/sms"), "/"),
 		MTNSMSTokenURL:       env("MTN_SMS_TOKEN_URL", "https://api.mtn.com/v1/oauth/access_token/accesstoken?grant_type=client_credentials"),
+		TwilioAccountSID:     env("TWILIO_ACCOUNT_SID", ""),
+		TwilioAuthToken:      env("TWILIO_AUTH_TOKEN", ""),
+		TwilioFromNumber:     env("TWILIO_FROM_NUMBER", ""),
 		OwnerSilverPrice:     envFloat("OWNER_SILVER_PRICE_RWF"),
 		OwnerGoldPrice:       envFloat("OWNER_GOLD_PRICE_RWF"),
 		OwnerPlatinumPrice:   envFloat("OWNER_PLATINUM_PRICE_RWF"),

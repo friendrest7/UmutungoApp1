@@ -53,7 +53,7 @@ export function downloadReportsExcel(reports: AdminReport[]) {
   const xml = `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#d8f1dc" ss:Pattern="Solid"/></Style></Styles>
+  <Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#d8f1e3" ss:Pattern="Solid"/></Style></Styles>
   <Worksheet ss:Name="Admin reports"><Table><Row>${header}</Row>${body || '<Row><Cell ss:MergeAcross="7"><Data ss:Type="String">No reports found</Data></Cell></Row>'}</Table></Worksheet>
 </Workbook>`;
   downloadBlob(new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' }), `umutungo-admin-reports-${new Date().toISOString().slice(0, 10)}.xls`);
@@ -127,9 +127,9 @@ function reportsSvg(reports: AdminReport[]) {
   const height = 190 + Math.max(1, reports.length) * rowHeight;
   const rows = reports.length ? reports.map((report, index) => {
     const y = 155 + index * rowHeight;
-    return `<g><rect x="36" y="${y - 42}" width="1528" height="${rowHeight - 8}" rx="12" fill="${index % 2 ? '#f4f8f4' : '#ffffff'}"/><text x="60" y="${y - 12}" class="title">${escapeHtml(report.listing_title || 'Account report')}</text><text x="60" y="${y + 12}" class="body">${escapeHtml(report.reason)} - ${escapeHtml(report.status)} - ${escapeHtml(formatDate(report.created_at))}</text><text x="60" y="${y + 36}" class="muted">Reporter: ${escapeHtml(report.reporter_name || '-')} - ${escapeHtml(report.details || 'No details')}</text></g>`;
+    return `<g><rect x="36" y="${y - 42}" width="1528" height="${rowHeight - 8}" rx="12" fill="${index % 2 ? '#f4f8f6' : '#ffffff'}"/><text x="60" y="${y - 12}" class="title">${escapeHtml(report.listing_title || 'Account report')}</text><text x="60" y="${y + 12}" class="body">${escapeHtml(report.reason)} - ${escapeHtml(report.status)} - ${escapeHtml(formatDate(report.created_at))}</text><text x="60" y="${y + 36}" class="muted">Reporter: ${escapeHtml(report.reporter_name || '-')} - ${escapeHtml(report.details || 'No details')}</text></g>`;
   }).join('') : '<text x="60" y="170" class="body">No reports found.</text>';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#fbfdfb"/><rect width="100%" height="112" fill="#0b5d31"/><text x="36" y="50" class="heading">UMUTUNGO ADMIN REPORTS</text><text x="36" y="83" class="subheading">${reports.length} report${reports.length === 1 ? '' : 's'} - Generated ${escapeHtml(new Date().toLocaleString())}</text><style>.heading{font:700 31px Arial;fill:#fff}.subheading{font:400 17px Arial;fill:#d8f1dc}.title{font:700 21px Arial;fill:#173a22}.body{font:400 17px Arial;fill:#2b5c39}.muted{font:400 14px Arial;fill:#66816d}</style>${rows}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#fbfdfc"/><rect width="100%" height="112" fill="#0b5d30"/><text x="36" y="50" class="heading">UMUTUNGO ADMIN REPORTS</text><text x="36" y="83" class="subheading">${reports.length} report${reports.length === 1 ? '' : 's'} - Generated ${escapeHtml(new Date().toLocaleString())}</text><style>.heading{font:700 31px Arial;fill:#ffffff}.subheading{font:400 17px Arial;fill:#d8f1e3}.title{font:700 21px Arial;fill:#173a27}.body{font:400 17px Arial;fill:#2b5c41}.muted{font:400 14px Arial;fill:#66816d}</style>${rows}</svg>`;
 }
 
 export async function downloadReportsImage(reports: AdminReport[]) {
@@ -164,7 +164,7 @@ function activityFilename(extension: string) {
 export function downloadActivityExcel(items: AdminActivityExportRecord[]) {
   const header = activityColumns.map((column) => `<Cell ss:StyleID="Header"><Data ss:Type="String">${escapeXml(column.label)}</Data></Cell>`).join('');
   const body = items.map((item) => `<Row>${activityColumns.map((column) => `<Cell><Data ss:Type="String">${escapeXml(column.value(item))}</Data></Cell>`).join('')}</Row>`).join('');
-  const xml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#d8f1dc" ss:Pattern="Solid"/></Style></Styles><Worksheet ss:Name="User activity"><Table><Row>${header}</Row>${body}</Table></Worksheet></Workbook>`;
+  const xml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#d8f1e3" ss:Pattern="Solid"/></Style></Styles><Worksheet ss:Name="User activity"><Table><Row>${header}</Row>${body}</Table></Worksheet></Workbook>`;
   downloadBlob(new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' }), activityFilename('xls'));
 }
 
@@ -206,10 +206,10 @@ export async function downloadActivityImage(items: AdminActivityExportRecord[]) 
   const height = 205 + Math.max(1, displayItems.length) * rowHeight;
   const rows = displayItems.length ? displayItems.map((item, index) => {
     const y = 164 + index * rowHeight;
-    return `<g><rect x="36" y="${y - 40}" width="1528" height="76" rx="8" fill="${index % 2 ? '#f3f7f2' : '#fff'}"/><text x="58" y="${y - 10}" class="title">${escapeHtml(item.actor_name)} · ${escapeHtml(item.actor_role.replaceAll('_', ' '))}</text><text x="58" y="${y + 15}" class="body">${escapeHtml(item.summary)}</text><text x="58" y="${y + 37}" class="muted">${escapeHtml(item.activity_type.replaceAll('_', ' '))} · ${escapeHtml(formatDate(item.created_at))}</text></g>`;
+    return `<g><rect x="36" y="${y - 40}" width="1528" height="76" rx="8" fill="${index % 2 ? '#f2f7f4' : '#ffffff'}"/><text x="58" y="${y - 10}" class="title">${escapeHtml(item.actor_name)} · ${escapeHtml(item.actor_role.replaceAll('_', ' '))}</text><text x="58" y="${y + 15}" class="body">${escapeHtml(item.summary)}</text><text x="58" y="${y + 37}" class="muted">${escapeHtml(item.activity_type.replaceAll('_', ' '))} · ${escapeHtml(formatDate(item.created_at))}</text></g>`;
   }).join('') : '<text x="58" y="170" class="body">No recorded activities.</text>';
   const imageNote = items.length > displayItems.length ? ` · showing newest ${displayItems.length}` : '';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#fbfdfb"/><rect width="100%" height="112" fill="#0b5d31"/><text x="36" y="50" class="heading">UMUTUNGO · USER ACTIVITY</text><text x="36" y="83" class="subheading">${items.length} activities${escapeHtml(imageNote)} · Generated ${escapeHtml(new Date().toLocaleString())}</text><style>.heading{font:700 30px Arial;fill:#fff}.subheading{font:400 16px Arial;fill:#d8f1dc}.title{font:700 20px Arial;fill:#173a22}.body{font:400 16px Arial;fill:#2b5c39}.muted{font:400 13px Arial;fill:#66816d}</style>${rows}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#fbfdfc"/><rect width="100%" height="112" fill="#0b5d30"/><text x="36" y="50" class="heading">UMUTUNGO · USER ACTIVITY</text><text x="36" y="83" class="subheading">${items.length} activities${escapeHtml(imageNote)} · Generated ${escapeHtml(new Date().toLocaleString())}</text><style>.heading{font:700 30px Arial;fill:#ffffff}.subheading{font:400 16px Arial;fill:#d8f1e3}.title{font:700 20px Arial;fill:#173a27}.body{font:400 16px Arial;fill:#2b5c41}.muted{font:400 13px Arial;fill:#66816d}</style>${rows}</svg>`;
   const image = new Image();
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {

@@ -1327,6 +1327,9 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 .auth-submit:hover { border-color: #00a84f; background: #00a84f; }
 .auth-notice { margin: 0; padding: 10px; border-radius: 8px; background: #fbf0d9; color: #8b641b; font-size: 10px; line-height: 1.5; }
 .auth-error { margin: 16px 0 0; padding: 10px; border-radius: 8px; background: #fbe9e7; color: #a62c25; font-size: 10px; line-height: 1.45; }
+.auth-signup-prompt { margin: 15px 0 0; color: #737a72; font-size: 10px; text-align: center; }
+.auth-signup-prompt a { color: #00a84f; font-weight: 800; text-decoration: none; }
+.auth-signup-prompt a:hover { text-decoration: underline; }
 .auth-legal { display: block; margin-top: 18px; color: #979b94; font-size: 8px; line-height: 1.5; text-align: center; }
 
 /* Dedicated category discovery experiences. */
@@ -3926,13 +3929,15 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
   margin: 0 auto;
   padding: 56px 0 72px;
 }
-.posting-selection-intro { max-width: 430px; color: #ffffff; }
+.posting-selection-intro { max-width: 430px; color: #ffffff; transform: translateY(-6cm); }
 .posting-selection-topline { display: flex; align-items: center; gap: 12px; margin-bottom: 58px; color: rgba(255, 255, 255,.73); }
 .posting-selection-topline span { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid rgba(255, 255, 255,.48); border-radius: 50%; font-size: 10px; font-weight: 800; }
 .posting-selection-topline small, .posting-selection-card-heading > div > span { font-size: 9px; font-weight: 900; letter-spacing: .16em; }
 .posting-selection-intro > .post-eyebrow { color: #b9e3cc; }
 .posting-selection-intro h1 { margin: 17px 0 20px; font-family: Inter, system-ui, sans-serif; font-size: clamp(38px, 5.2vw, 67px); font-weight: 500; letter-spacing: -.07em; line-height: .99; }
 .posting-selection-intro h1 em { color: #b9e3cc; font-style: normal; }
+.posting-selection-intro h1 .posting-selection-continue { font-size: .6em; }
+.posting-selection-intro .posting-selection-description { max-width: 430px; margin: 0 0 14px; color: rgba(255, 255, 255,.75); font-size: 13px; line-height: 1.7; }
 .posting-selection-intro > p:last-child { max-width: 365px; margin: 0; color: rgba(255, 255, 255,.75); font-size: 13px; line-height: 1.8; }
 .posting-selection-card { padding: clamp(24px, 3.2vw, 40px); border: 1px solid rgba(255, 255, 255,.55); background: #fffdf8; box-shadow: 0 28px 90px rgba(4, 16, 9,.28); }
 .posting-selection-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 29px; padding-bottom: 20px; border-bottom: 1px solid #e6e4dc; }
@@ -3960,6 +3965,7 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
 .posting-selection-card .post-location-error { margin: -5px 0 14px; }
 @media (max-width: 900px) {
   .posting-selection-shell { width: min(720px, calc(100% - 40px)); grid-template-columns: 1fr; gap: 30px; padding: 35px 0 52px; }
+  .posting-selection-intro { transform: translateY(-0.5cm); }
   .posting-selection-topline { margin-bottom: 25px; }
   .posting-selection-intro h1 { max-width: 580px; font-size: clamp(38px, 8vw, 58px); }
   .posting-selection-intro > p:last-child { max-width: 560px; }
@@ -5814,6 +5820,9 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 .app-realistic .topbar-deals-link:hover { color: #008c42; }
 .app.theme-dark.app-realistic .topbar-brand { transform: translateY(-0.1cm); }
 .app.theme-dark.app-realistic .topbar-deals-link { transform: translate(-0.2cm, -0.05cm); }
+.app.theme-dark.app-realistic .topbar .account-panel,
+.app.theme-dark.app-realistic .topbar .mobile-account-menu-wrap > .account-panel { border-color: rgba(245, 247, 250,.16) !important; background: #15191f !important; color: #f5f7fa !important; box-shadow: 0 18px 42px rgba(0, 0, 0,.34); }
+.app.theme-dark.app-realistic .topbar .account-panel :is(strong, small, span, button, label, select, svg) { color: #f5f7fa !important; }
 .app-realistic .topbar-home-link { margin-left: 4px; }
 @media (max-width: 760px) {
   .app-realistic .about-page :is(.about-hero-copy > p:not(.eyebrow), .about-film-copy > p:not(.eyebrow), .about-story-copy p, .about-section-heading > p, .about-people-card p, .values-grid p) { font-size: 15px; }

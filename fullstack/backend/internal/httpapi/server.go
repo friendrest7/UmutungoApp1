@@ -3169,7 +3169,7 @@ func (s *Server) ownerListings(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query(r.Context(), fmt.Sprintf(`
 		SELECT l.id,l.owner_id,u.name,u.role,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,
 		l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.status,
-		l.tags,l.amenities,l.created_at,l.publish_at,COALESCE((SELECT url FROM listing_media lm WHERE lm.listing_id=l.id ORDER BY lm.sort_order LIMIT 1),''),
+		l.tags,l.amenities,l.created_at,l.publish_at,COALESCE((SELECT url FROM listing_media lm WHERE lm.listing_id=l.id AND lm.media_type='photo' ORDER BY lm.sort_order LIMIT 1),''),
 		COALESCE((SELECT json_agg(json_build_object('type',lm.media_type,'url',lm.url,'sort_order',lm.sort_order) ORDER BY lm.sort_order,lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id),'[]'::json)
 		FROM listings l JOIN users u ON u.id=l.owner_id WHERE %s AND l.deleted_at IS NULL ORDER BY l.created_at DESC`, ownerFilter), args...)
 	if err != nil {

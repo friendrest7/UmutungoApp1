@@ -25,11 +25,16 @@ type Activity = { name: string; detail: string; time: string; status: string; in
 type DashboardConfig = { eyebrow: string; greeting: string; welcome: string; action: string; actionIcon: IconName; navigation: Array<{ label: string; icon: IconName }>; metrics: Metric[]; panelEyebrow: string; panelTitle: string; activity: Activity[]; sideEyebrow: string; sideTitle: string; sideItems: Array<{ title: string; detail: string; icon: IconName }> };
 type DashboardListing = { id: string; title: string; type: string; intent: string; location: string; price: string; priceNote: string; cover: string; images: string[]; bedrooms: string; bathrooms: string; area: string; status: string; savedAt: string };
 type LandlordApplication = ApiApplication & { applicant?: string; phone?: string; decision_note?: string };
-type OwnerListingRecord = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; cover?: string; created_at: string };
+type OwnerListingRecord = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; cover?: string; images?: string[]; media?: Array<{ type?: string; url: string; sort_order?: number }>; created_at: string };
 
 const mapOwnerListing = (item: OwnerListingRecord): DashboardListing => {
   const intent = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
-  return { id: item.id, title: item.title, type: item.category, intent, location: [item.sector, item.district, item.province].filter(Boolean).join(' Ã‚Â· '), price: `${item.currency || 'RWF'} ${item.price.toLocaleString()}`, priceNote: intent === 'For rent' ? '/ month' : '', cover: item.cover || '/properties/house-01.jpg', images: item.cover ? [item.cover] : ['/properties/house-01.jpg'], bedrooms: 'Ã¢â‚¬â€', bathrooms: 'Ã¢â‚¬â€', area: 'Ã¢â‚¬â€', status: item.status, savedAt: item.created_at };
+  const uploadedImages = item.media?.length
+    ? item.media.filter((entry) => entry.url && (!entry.type || entry.type.toLowerCase() === 'photo')).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((entry) => entry.url)
+    : item.images ?? [];
+  const images = Array.from(new Set(uploadedImages.filter(Boolean)));
+  const cover = item.cover && images.includes(item.cover) ? item.cover : images[0] || item.cover || '/properties/house-01.jpg';
+  return { id: item.id, title: item.title, type: item.category, intent, location: [item.sector, item.district, item.province].filter(Boolean).join(' - '), price: (item.currency || 'RWF') + ' ' + item.price.toLocaleString(), priceNote: intent === 'For rent' ? '/ month' : '', cover, images: images.length ? images : [cover], bedrooms: '—', bathrooms: '—', area: '—', status: item.status, savedAt: item.created_at };
 };
 
 const configs: Record<DashboardRole, DashboardConfig> = {

@@ -5800,8 +5800,25 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 .app-realistic .about-page :is(.about-film-copy .eyebrow, .about-hero-meta span, .about-story-marker small, .about-people-card > small, .values-grid span) { font-size: 12px; }
 .app-realistic .about-page .about-story-section .button,
 .app-realistic .about-page .about-closing-inner .button { font-size: 14px; }
+.app-realistic .topbar-brand-group { gap: 12px; }
+.app-realistic .topbar-deals-link {
+  align-self: center;
+  color: #00a84f;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  transform: translate(-0.4cm, -0.05cm);
+  white-space: nowrap;
+}
+.app-realistic .topbar-deals-link:hover { color: #008c42; }
+.app-realistic .topbar-home-link { margin-left: 4px; }
 @media (max-width: 760px) {
   .app-realistic .about-page :is(.about-hero-copy > p:not(.eyebrow), .about-film-copy > p:not(.eyebrow), .about-story-copy p, .about-section-heading > p, .about-people-card p, .values-grid p) { font-size: 15px; }
   .app-realistic .about-page .about-section-heading h2,
   .app-realistic .about-page .values-section .standalone-heading h2 { font-size: clamp(30px, 8vw, 40px); }
+}
+@media (max-width: 920px) {
+  .app-realistic .topbar-deals-link,
+  .app-realistic .topbar-home-link { display: none; }
 }

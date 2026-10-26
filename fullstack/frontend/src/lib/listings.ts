@@ -61,8 +61,12 @@ function normalizeListingImageUrl(value: string) {
 }
 
 export function listingImages(item: ApiListing) {
-  const ordered = item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).filter((media) => media.url && !media.type?.toLowerCase().includes('video') && !media.type?.toLowerCase().includes('tour')).map((media) => media.url) ?? [];
-  return (item.images?.length ? item.images : ordered).map(normalizeListingImageUrl).filter(Boolean);
+  const media = item.media ?? [];
+  const orderedPhotos = media.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .filter((entry) => entry.url && (!entry.type || entry.type.toLowerCase() === 'photo'))
+    .map((entry) => entry.url);
+  const sources = media.length ? orderedPhotos : item.images ?? [];
+  return Array.from(new Set(sources.map(normalizeListingImageUrl).filter(Boolean)));
 }
 
 const listingImageFallbacks: Record<string, string[]> = {

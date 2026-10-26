@@ -156,7 +156,7 @@ export default function HomePage() {
           })}
         </div>
         </div>
-        {landingListings.length > 0 && <div className="landing-property-backdrop"><div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div></div>}
+        {landingListings.length > 0 && <div className="landing-property-backdrop"><div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}{selectedListingCategory === null && <a className="landing-add-property-card" href="/post-property"><span className="landing-add-property-icon" aria-hidden="true">+</span><strong>{t(language, 'Post a property')}</strong><small>{t(language, 'Add a property')}</small><span className="landing-add-property-action">{t(language, 'Post a property')} <Icon name="arrow" size={15} /></span></a>}</div></div>}
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">

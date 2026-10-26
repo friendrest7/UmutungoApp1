@@ -366,7 +366,6 @@ h1 em, h2 em { color: var(--green); font-style: normal; }
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
-
 /* Scroll-led landing story and always-available navigation. */
 .app-realistic { scroll-padding-top: 88px; }
 .app-realistic .topbar { position: fixed; top: 0; right: 0; left: 0; z-index: 50; width: 100%; height: 74px; transition: height .35s cubic-bezier(.22,.8,.24,1), box-shadow .35s ease, background .35s ease, border-color .35s ease; }
@@ -5092,6 +5091,12 @@ img, video, iframe { max-width: 100%; }
 
 /* Refined listing cards and landing layout across phones, tablets, and desktop. */
 .app-realistic .landing-discovery-intro { transform: none; }
+.app-realistic main > .section-property.container {
+  width: min(1440px, calc(100% - 40px));
+  padding-top: 24px;
+}
+.app-realistic .landing-discovery-panel { margin-bottom: 22px; }
+.app-realistic .landing-property-backdrop { padding: clamp(14px, 2vw, 24px); }
 .app-realistic .landing-property-grid { gap: clamp(14px, 1.6vw, 22px); }
 .app-realistic .landing-property-grid .property-card {
   overflow: hidden;
@@ -5173,13 +5178,16 @@ img, video, iframe { max-width: 100%; }
 .app-realistic.theme-dark .landing-property-grid .property-card-footer .property-listed { color: #a9b7ad; }
 @media (max-width: 760px) {
   .app-realistic .section-property { padding-top: 24px; }
-  .app-realistic .landing-discovery-panel { margin-bottom: 22px; padding: 18px 14px; border-radius: 18px; }
+  .app-realistic main > .section-property.container { width: calc(100% - 24px); padding-top: 16px; }
+  .app-realistic .landing-discovery-panel { margin-bottom: 16px; }
+  .app-realistic .landing-property-backdrop { padding: 8px; }
+  .app-realistic .landing-discovery-panel { margin-bottom: 16px; padding: 18px 14px; border-radius: 18px; }
   .app-realistic .landing-discovery-intro { margin-bottom: 14px; }
   .app-realistic .landing-discovery-intro h2 { font-size: clamp(20px, 5.4vw, 25px); }
   .app-realistic .landing-discovery-intro p { font-size: 12px; }
   .app-realistic .landing-category-filter { gap: 8px; margin-bottom: 15px; padding-bottom: 6px; }
   .app-realistic .landing-category-filter button { min-width: 76px; min-height: 64px; border-radius: 12px; }
-  .app-realistic .landing-property-backdrop { padding: 10px; border-radius: 17px; }
+  .app-realistic .landing-property-backdrop { padding: 8px; border-radius: 17px; }
   .app-realistic .landing-property-grid { grid-template-columns: minmax(0, 1fr); gap: 13px; }
   .app-realistic .landing-property-grid .property-image { aspect-ratio: 1.8 / 1; height: auto; }
   .app-realistic .landing-property-grid .property-card-body { padding: 14px; }
@@ -5712,4 +5720,88 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 @media (max-width: 600px) {
   .app-realistic .landing-property-grid .property-image { height: 165px !important; }
   .app-realistic .category-listing-image { height: 155px !important; }
+}
+
+.app-realistic .landing-add-property-card {
+  display: flex;
+  min-width: 0;
+  min-height: 340px;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding: 24px;
+  border: 1px dashed #79ad8e;
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 34%, rgba(0, 168, 79, .1), transparent 48%), #f3faf6;
+  color: #173f29;
+  text-align: center;
+  text-decoration: none;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.app-realistic .landing-add-property-card:hover {
+  transform: translateY(-3px);
+  border-color: #008c42;
+  background-color: #eaf6ef;
+}
+.app-realistic .landing-add-property-icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 50%;
+  background: #008c42;
+  color: #ffffff;
+  font-size: 36px;
+  font-weight: 300;
+  line-height: 1;
+}
+.app-realistic .landing-add-property-card > strong { font-size: 17px; font-weight: 750; }
+.app-realistic .landing-add-property-card > small { color: #65736a; font-size: 12px; }
+.app-realistic .landing-add-property-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 7px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  background: #008c42;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 750;
+}
+.app-realistic.theme-dark .landing-add-property-card { border-color: #477b5e; background: radial-gradient(circle at 50% 34%, rgba(0, 168, 79, .16), transparent 48%), #111a14; color: #e3f1e8; }
+.app-realistic.theme-dark .landing-add-property-card > small { color: #b7c7bc; }
+@media (max-width: 760px) {
+  .app-realistic .landing-add-property-card { min-height: 250px; padding: 20px; }
+}
+
+.app-realistic .app-download-copy h2 { font-size: clamp(26px, 3vw, 36px); line-height: 1.1; }
+.app-realistic .app-download-copy p { font-size: clamp(14px, 1.2vw, 17px); line-height: 1.5; }
+.app-realistic .app-download-option small { font-size: 12px; }
+.app-realistic .app-download-option strong { font-size: 14px; }
+.app-realistic .footer-brand-block p { font-size: 14px; }
+.app-realistic .footer-column > span { font-size: 12px; }
+.app-realistic .footer-column a,
+.app-realistic .footer-social-link span { font-size: 13px; }
+.app-realistic .footer-register-link { font-size: 14px; }
+.app-realistic .footer-bottom { font-size: 12px; }
+
+/* Keep About page text at the same readable scale as the landing page. */
+.app-realistic .about-page .about-hero-copy h1 { font-size: clamp(36px, 4.2vw, 54px); }
+.app-realistic .about-page :is(.about-hero-copy > p:not(.eyebrow), .about-film-copy > p:not(.eyebrow), .about-story-copy p, .about-section-heading > p, .about-people-card p, .values-grid p) { font-size: 16px; line-height: 1.65; }
+.app-realistic .about-page .about-film-copy h2 { font-size: clamp(32px, 4vw, 46px); }
+.app-realistic .about-page .about-section-heading h2,
+.app-realistic .about-page .values-section .standalone-heading h2 { font-size: clamp(34px, 4vw, 48px); }
+.app-realistic .about-page .about-people-card h3,
+.app-realistic .about-page .values-grid h3 { font-size: 20px; }
+.app-realistic .about-page .about-closing-inner h2 { font-size: clamp(30px, 3.6vw, 42px); }
+.app-realistic .about-page :is(.about-film-copy .eyebrow, .about-hero-meta span, .about-story-marker small, .about-people-card > small, .values-grid span) { font-size: 12px; }
+.app-realistic .about-page .about-story-section .button,
+.app-realistic .about-page .about-closing-inner .button { font-size: 14px; }
+@media (max-width: 760px) {
+  .app-realistic .about-page :is(.about-hero-copy > p:not(.eyebrow), .about-film-copy > p:not(.eyebrow), .about-story-copy p, .about-section-heading > p, .about-people-card p, .values-grid p) { font-size: 15px; }
+  .app-realistic .about-page .about-section-heading h2,
+  .app-realistic .about-page .values-section .standalone-heading h2 { font-size: clamp(30px, 8vw, 40px); }
 }

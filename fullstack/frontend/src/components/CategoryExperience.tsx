@@ -88,13 +88,14 @@ const mapLocalListings = (): Listing[] => readLocalPropertyListings().map((item)
   const categorySlug = Object.entries(categoryAliases).find(([, aliases]) => aliases.includes(normalizedCategory(item.type)))?.[0] ?? 'properties';
   const intent: Listing['intent'] = item.availableFor === 'rent' ? 'For rent' : item.availableFor === 'both' ? 'For sale or rent' : item.priceNote.includes('/ month') || item.priceNote.includes('/ day') || item.priceNote.includes('/ night') ? 'For rent' : 'For sale';
   const price = `${item.price}${item.priceNote && !/^\s*asking\s*$/i.test(item.priceNote) ? ` ${item.priceNote.trim()}` : ''}`;
+  const facts = [item.bedrooms ? `${item.bedrooms} bedrooms` : '', item.bathrooms ? `${item.bathrooms} bathrooms` : '', item.area ? `${item.area} m²` : ''].filter(Boolean);
   return {
     id: item.id,
     title: item.title,
     location: cleanListingText(item.location),
     price: cleanListingText(price),
     intent,
-    detail: cleanListingText(item.description || item.listed),
+    detail: cleanListingText(facts.join(' · ')),
     image: item.image,
     images: item.images,
     listed: item.listed,
@@ -112,12 +113,7 @@ const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Lis
   const bathroomCount = Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0);
   const areaSize = Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0);
   const propertyFacts = [bedroomCount ? `${bedroomCount} bedrooms` : '', bathroomCount ? `${bathroomCount} bathrooms` : '', areaSize ? `${areaSize} m²` : ''].filter(Boolean);
-  const shortDescription = item.description?.trim().replace(/\s+/g, ' ');
-  const detail = propertyFacts.length
-    ? propertyFacts.join(' · ')
-    : shortDescription
-      ? `${shortDescription.slice(0, 72).trimEnd()}${shortDescription.length > 72 ? '…' : ''}`
-      : 'Contact owner for details';
+  const detail = propertyFacts.join(' · ');
   const images = listingImages(item);
   const cardImages = images.length ? images : fallbackListingImages(item);
   const image = cardImages[0] ?? '/properties/listing-placeholder.svg';
@@ -319,7 +315,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
           </div>
           <div className="category-listing-copy"><div className="category-listing-meta"><span>{item.categoryName ?? 'UMUTUNGO LISTING'}</span>{item.listed && <span>{item.listed}</span>}</div>
             <h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p>
-            <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><Link className="view-property-button category-view-button" href={`/property/${propertySlug(item.title)}${supportsSpatialPreview(item.categoryName ?? item.categorySlug ?? '') ? '?view=3d' : ''}`}>View property</Link></div>
+            <div className="category-listing-footer"><div><strong>{item.price}</strong>{item.detail && <small>{item.detail}</small>}</div><Link className="view-property-button category-view-button" href={`/property/${propertySlug(item.title)}${supportsSpatialPreview(item.categoryName ?? item.categorySlug ?? '') ? '?view=3d' : ''}`}>View property</Link></div>
           </div>
         </article>)}</div>
         {visibleListingCount < listings.length && <div ref={listingLoadMoreRef} className="category-listing-scroll-sentinel" aria-hidden="true" />}

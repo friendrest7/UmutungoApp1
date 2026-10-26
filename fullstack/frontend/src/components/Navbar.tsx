@@ -410,7 +410,6 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
       <div className="topbar-inner">
         <div className="topbar-brand-group">
           <a className="topbar-brand" href="/" aria-label="Umutungo home"><Logo darkMode={darkMode} /></a>
-          <a className="topbar-deals-link" href="/#properties">Deals</a>
           <a className="topbar-home-link" href="/">{t(language, 'Home')}</a>
         </div>
         <nav className="desktop-nav" aria-label="Primary navigation">

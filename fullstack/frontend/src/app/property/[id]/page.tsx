@@ -36,6 +36,12 @@ type ApiListing = {
 
 function fromApi(item: ApiListing): PropertyPlaceholder {
   const isRent = item.transaction_type === 'rent_out' || item.transaction_type === 'rent';
+  const isDemoExcavator = item.category.toLowerCase().includes('equipment')
+    && item.title.toLowerCase().includes('excavator');
+  const listingImages = item.media?.map((media) => media.url).filter((url) => (
+    !isDemoExcavator
+    || !/\/properties\/equipment-(?:0[1-5]|demo-06)\.jpg(?:$|\?)/i.test(url)
+  ));
   const type = item.category.toLowerCase().includes('land')
     ? 'Land'
     : item.category.toLowerCase().includes('vehicle')
@@ -53,8 +59,8 @@ function fromApi(item: ApiListing): PropertyPlaceholder {
     bathrooms: 0,
     area: 0,
     accent: '#087d3d',
-    image: item.media?.[0]?.url ?? '/properties/house-01.jpg',
-    images: item.media?.map((media) => media.url),
+    image: listingImages?.[0] ?? '/properties/house-01.jpg',
+    images: listingImages,
     listed: item.created_at ? `Listed ${new Date(item.created_at).toLocaleDateString()}` : 'Listed recently',
     description: item.description,
     poster: {
@@ -81,8 +87,8 @@ export default function PropertyDetailPage() {
   const [viewerMode, setViewerMode] = useState<'photos' | 'tour' | 'plan' | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [requestOpen, setRequestOpen] = useState(false);
-  const [messageLandlordOpen, setMessageLandlordOpen] = useState(false);
   const [tourSatisfaction, setTourSatisfaction] = useState<'yes' | 'no' | null>(null);
+  const [directionsMapUrl, setDirectionsMapUrl] = useState('');
   const supports3DView = supportsSpatialPreview(property?.type ?? '');
 
   useEffect(() => {
@@ -129,15 +135,22 @@ export default function PropertyDetailPage() {
   }
 
   const openDirectionsFromCurrentLocation = () => {
-    const destination = encodeURIComponent(property.location || property.title);
-    const openMap = (origin?: string) => {
-      const url = origin
-        ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${destination}`
-        : `https://www.google.com/maps/search/?api=1&query=${destination}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
+    const destination = property.location || property.title;
+    const showMap = (origin?: string) => {
+      const query = new URLSearchParams({ output: 'embed', daddr: destination });
+      if (origin) query.set('saddr', origin);
+      setDirectionsMapUrl(`https://www.google.com/maps?${query.toString()}`);
     };
-    if (!navigator.geolocation) { openMap(); return; }
-    navigator.geolocation.getCurrentPosition(({ coords }) => openMap(`${coords.latitude},${coords.longitude}`), () => openMap(), { enableHighAccuracy: true, timeout: 8000 });
+    if (!navigator.geolocation) { showMap(); return; }
+    navigator.geolocation.getCurrentPosition(({ coords }) => showMap(`${coords.latitude},${coords.longitude}`), () => showMap(), { enableHighAccuracy: true, timeout: 8000 });
+  };
+  const openOwnerMessages = () => {
+    const params = new URLSearchParams({ listingId: property.id, propertyTitle: property.title, ownerName: property.poster?.businessName || property.poster?.name || 'Property owner', propertyImage: property.image, propertyLocation: property.location });
+    router.push(`/messages?${params.toString()}`);
+  };
+  const openPropertyRequest = () => {
+    setViewerMode(null);
+    setRequestOpen(true);
   };
 
   return (
@@ -178,7 +191,7 @@ export default function PropertyDetailPage() {
             <p className="property-detail-location">{property.location}</p>
             <strong className="property-detail-price">{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{property.priceNote}</small></>}</strong>
             <div className="property-detail-actions">
-              <button className="property-detail-rent-button" type="button" onClick={() => setRequestOpen(true)}>{property.availableFor === 'rent' ? 'Rent this property' : property.availableFor === 'both' ? 'Get or rent this property' : 'Get this property'} <Icon name="arrow" size={15} /></button>
+              <button className="property-detail-rent-button" type="button" onClick={openPropertyRequest}>{property.availableFor === 'rent' ? 'Rent this property' : property.availableFor === 'both' ? 'Get or rent this property' : 'Get this property'} <Icon name="arrow" size={15} /></button>
             </div>
             {(property.type === 'House' || property.area > 0) && <div className="property-detail-stats">
               {property.type === 'House' && <><span><b>{property.bedrooms}</b> beds</span><span><b>{property.bathrooms}</b> baths</span></>}
@@ -186,26 +199,25 @@ export default function PropertyDetailPage() {
             </div>}
             <div className="property-detail-meta"><span className="property-detail-listed">{property.listed}</span><span className="property-detail-availability">{property.availableFor === 'rent' ? 'Available to rent' : property.availableFor === 'both' ? 'Available to buy or rent' : 'Available to buy'}</span></div>
             {supports3DView && <section className="viewer-tour-feedback property-detail-feedback" aria-labelledby="property-tour-feedback-title">
-              <div><strong id="property-tour-feedback-title">Are you satisfied with the 3D view?</strong><span>Choose what you would like to do next.</span></div>
+              <div><strong id="property-tour-feedback-title">Are you satisfied with the 3D view to continue checkout?</strong><span>Choose what you would like to do next.</span></div>
               <div className="viewer-tour-feedback-options">
-                <button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => setTourSatisfaction('yes')}>Yes, I’m satisfied</button>
-                <button type="button" className={tourSatisfaction === 'no' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'no'} onClick={() => setTourSatisfaction('no')}>No, I’d like to visit</button>
+                <button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => { setTourSatisfaction('yes'); openPropertyRequest(); }}>Yes, I’m satisfied</button>
+                <button type="button" className={tourSatisfaction === 'no' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'no'} onClick={() => { setTourSatisfaction('no'); openDirectionsFromCurrentLocation(); }}>No, I’d like to visit</button>
+                <button className="property-contact-button" type="button" onClick={openOwnerMessages}><Icon name="bookPen" size={15} /> Message owner</button>
               </div>
-              {tourSatisfaction === 'yes' && <button className="property-contact-button" type="button" onClick={() => { setMessageLandlordOpen(true); setViewerMode('photos'); }}><Icon name="bookPen" size={15} /> Message the landlord</button>}
-              {tourSatisfaction === 'no' && <button className="property-map-button" type="button" onClick={openDirectionsFromCurrentLocation}><Icon name="pin" size={15} /> Get directions from my location</button>}
+              {tourSatisfaction === 'no' && directionsMapUrl && <><div className="property-inline-directions"><div><strong>Directions to this property</strong><button type="button" onClick={() => setDirectionsMapUrl('')} aria-label="Close directions"><Icon name="x" size={14} /></button></div><iframe src={directionsMapUrl} title={`Directions to ${property.title}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div><button className="property-detail-rent-button" type="button" onClick={openPropertyRequest}>Continue to get this property <Icon name="arrow" size={15} /></button></>}
             </section>}
           </article>
         </section>
       </main>
-      {(requestOpen || messageLandlordOpen) && (
+      {requestOpen && (
         <PropertyViewer
           language="English"
           property={property}
           initialMode="photos"
           initialImageIndex={selectedImageIndex}
-          initialRequest={requestOpen}
-          initialContact={messageLandlordOpen}
-          onClose={() => { setViewerMode(null); setRequestOpen(false); setMessageLandlordOpen(false); }}
+          initialRequest
+          onClose={() => setRequestOpen(false)}
         />
       )}
     </>

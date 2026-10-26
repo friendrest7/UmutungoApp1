@@ -105,7 +105,7 @@ async function databaseContext(query: string) {
         province: item.province, district: item.district, sector: item.sector, tags: item.tags ?? [],
         images: item.media?.length ? item.media.filter((media) => !media.type?.toLowerCase().includes('video')).map((media) => media.url) : item.images ?? [],
         media: item.media ?? [],
-        owner: item.owner?.name || '', owner_role: item.owner?.role || '',
+        owner: { name: item.owner?.name || '', role: item.owner?.role || '' }, owner_role: item.owner?.role || '',
       })),
       professionals: (directoryBody.items ?? []).slice(0, 12).map((item) => ({
         id: item.id, name: item.name, role: item.role, business_name: item.business_name,

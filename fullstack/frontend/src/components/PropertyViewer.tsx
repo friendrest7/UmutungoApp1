@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { createPortal } from 'react-dom';
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
 import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
@@ -8,13 +9,15 @@ import { PropertyPlaceholder } from './PropertyCard';
 import { AuthModal } from './AuthModal';
 import { umutungoApi } from '../lib/umutungoApi';
 import { dashboardPathForAccountRole } from '../lib/accountRouting';
+import { propertySlug } from '../lib/listings';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
 type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; initialImageIndex?: number; initialRequest?: boolean; initialContact?: boolean; embedded?: boolean };
 type TransactionType = 'rent' | 'buy';
 type TransactionStep = 'choose' | 'application' | 'security' | 'payment' | 'pending' | 'success';
 type PaymentMethod = 'momo' | 'airtel' | 'mastercard' | 'visa' | 'other';
-type PaymentReceipt = { receiptNumber: string; propertyTitle: string; location: string; amount: number; currency: string; paymentMethod: string; status: 'successful' | 'pending'; transactionType: TransactionType; createdAt: string };
+type PaymentReceipt = { receiptNumber: string; propertyTitle: string; location: string; amount: number; currency: string; paymentMethod: string; status: 'successful'; transactionType: TransactionType; createdAt: string; demo: boolean };
+type PendingPayment = { id: string; status: string; amount: number; currency: string; provider_reference?: string };
 
 function PaymentLogo({ method }: { method: PaymentMethod }) {
   if (method === 'momo') return <span className="payment-brand payment-brand-momo"><b>m</b><small>MoMo</small></span>;
@@ -25,21 +28,92 @@ function PaymentLogo({ method }: { method: PaymentMethod }) {
 }
 
 function propertyPriceAmount(value: string) {
-  const normalized = value.replace(/[^0-9.]/g, '');
-  const amount = Number(normalized);
-  if (!Number.isFinite(amount) || amount <= 0) return 1;
-  return value.toLowerCase().includes('m') ? amount * 1000000 : amount;
+  const amount = Number(value.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
 }
 
 function paymentMethodLabel(method: PaymentMethod) {
   return { momo: 'MTN MoMo', airtel: 'Airtel Money', mastercard: 'Mastercard', visa: 'Visa card', other: 'Other bank card' }[method];
 }
 
-function escapeReceiptValue(value: string | number) {
-  return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character] ?? character);
+function buildReceiptPdf(receipt: PaymentReceipt, propertyUrl: string) {
+  const clean = (value: string | number) => String(value).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, '?');
+  const literal = (value: string | number) => clean(value).replace(/([\\()])/g, '\\$1');
+  const commands: string[] = [];
+  const textAt = (x: number, y: number, value: string | number, size = 11, bold = false, color = '0.12 0.18 0.14') => {
+    commands.push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${color} rg ${x} ${y} Td (${literal(value)}) Tj ET`);
+  };
+  const rectangle = (x: number, y: number, width: number, height: number, color: string) => commands.push(`${color} rg ${x} ${y} ${width} ${height} re f`);
+  const rule = (y: number) => commands.push(`0.86 0.90 0.87 RG 40 ${y} m 555 ${y} l S`);
+  const wrap = (value: string, max = 88) => {
+    const words = clean(value).split(/\s+/);
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      if (line && `${line} ${word}`.length > max) { lines.push(line); line = word; }
+      else line = line ? `${line} ${word}` : word;
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+
+  rectangle(0, 690, 595, 152, '0.04 0.42 0.23');
+  textAt(40, 795, 'UMUTUNGO', 11, true, '1 1 1');
+  textAt(40, 754, 'Payment receipt', 24, true, '1 1 1');
+  textAt(40, 730, 'Thank you for choosing a trusted property journey.', 10, false, '0.9 1 0.92');
+  textAt(40, 657, 'Receipt number', 9, false, '0.37 0.46 0.39');
+  textAt(40, 638, receipt.receiptNumber, 11, true);
+  textAt(330, 657, 'Date', 9, false, '0.37 0.46 0.39');
+  textAt(330, 638, new Date(receipt.createdAt).toLocaleString(), 10, true);
+  rule(620);
+  textAt(40, 594, 'Property', 9, false, '0.37 0.46 0.39');
+  textAt(175, 594, receipt.propertyTitle, 11, true, '0.04 0.42 0.23');
+  textAt(40, 550, 'Location', 9, false, '0.37 0.46 0.39');
+  textAt(175, 550, receipt.location, 11, true);
+  rule(528);
+  textAt(40, 500, 'Request type', 9, false, '0.37 0.46 0.39');
+  textAt(175, 500, receipt.transactionType === 'rent' ? 'Rental request' : 'Purchase request', 11, true);
+  rule(478);
+  textAt(40, 450, 'Payment method', 9, false, '0.37 0.46 0.39');
+  textAt(175, 450, receipt.paymentMethod, 11, true);
+  rectangle(40, 370, 515, 58, '0.93 0.97 0.94');
+  textAt(55, 404, 'Total paid', 10, true, '0.25 0.43 0.3');
+  textAt(55, 382, `${receipt.currency} ${receipt.amount.toLocaleString()}`, 17, true, '0.04 0.55 0.25');
+  textAt(40, 340, 'PAYMENT SUCCESSFUL', 9, true, '0.04 0.55 0.25');
+  const notice = receipt.demo
+    ? 'Prototype demo receipt: no real money was charged. In live checkout, your provider will send a secure approval prompt to your phone.'
+    : 'This receipt confirms the payment recorded by Umutungo. Keep it for your records.';
+  wrap(notice).forEach((line, index) => textAt(40, 313 - index * 14, line, 9, false, '0.37 0.46 0.39'));
+  rectangle(40, 220, 515, 42, '0.04 0.42 0.23');
+  textAt(228, 236, 'Continue exploring', 11, true, '1 1 1');
+
+  const stream = `${commands.join('\n')}\n`;
+  const safeUri = clean(propertyUrl).replace(/([\\()])/g, '\\$1');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 7 0 R /F2 8 0 R >> >> /Contents 4 0 R /Annots [5 0 R 6 0 R] >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}endstream`,
+    `<< /Type /Annot /Subtype /Link /Rect [165 584 555 607] /Border [0 0 0] /A << /S /URI /URI (${safeUri}) >> >>`,
+    `<< /Type /Annot /Subtype /Link /Rect [40 220 555 262] /Border [0 0 0] /A << /S /URI /URI (${safeUri}) >> >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return new Blob([pdf], { type: 'application/pdf' });
 }
 
 export function PropertyViewer({ language, property, onClose, initialMode = 'photos', initialImageIndex = 0, initialRequest = false, initialContact = false, embedded = false }: PropertyViewerProps) {
+  const demoPaymentsEnabled = process.env.NEXT_PUBLIC_PAYMENT_DEMO_MODE !== 'live';
   const images = property.images?.length ? property.images : [property.image];
   const isHouse = property.type.trim().toLowerCase() === 'house';
   const hasPropertyMeasurements = property.bedrooms > 0 || property.bathrooms > 0 || property.area > 0;
@@ -67,6 +141,8 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [cardCvv, setCardCvv] = useState('');
   const [paymentError, setPaymentError] = useState('');
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null);
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  const [checkingPayment, setCheckingPayment] = useState(false);
   const [applicationName, setApplicationName] = useState('');
   const [applicationPhone, setApplicationPhone] = useState('');
   const [applicationMessage, setApplicationMessage] = useState('');
@@ -82,6 +158,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [houseSeen, setHouseSeen] = useState(false);
   const [viewingRequested, setViewingRequested] = useState(false);
   const [tourSatisfaction, setTourSatisfaction] = useState<'yes' | 'no' | ''>('');
+  const [directionsMapUrl, setDirectionsMapUrl] = useState('');
   const [applicationId, setApplicationId] = useState('');
   const dragStart = useRef<{ x: number; y: number; turn: number; tilt: number; pointerType: string } | null>(null);
   const photoSwipeStart = useRef<{ x: number; pointerId: number } | null>(null);
@@ -130,6 +207,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     setCardCvv('');
     setPaymentError('');
     setPaymentReceipt(null);
+    setPendingPayment(null);
     setApplicationName('');
     setApplicationPhone('');
     setApplicationMessage('');
@@ -210,16 +288,72 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     window.localStorage.setItem('umutungo-tenant-bookings', JSON.stringify([booking, ...stored.filter((item) => item.property_id !== property.id)]));
     window.dispatchEvent(new CustomEvent('umutungo:tenant-data-changed'));
   };
+  const completeSuccessfulPayment = (payment: PendingPayment) => {
+    const createdAt = new Date().toISOString();
+    const providerReference = payment.provider_reference || payment.id;
+    const localPayment = { id: payment.id, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: payment.amount, currency: payment.currency, provider: 'mtn_momo', provider_reference: providerReference, status: 'successful', created_at: createdAt };
+    const storedPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as typeof localPayment[];
+    window.localStorage.setItem('umutungo-payments', JSON.stringify([localPayment, ...storedPayments.filter((item) => item.id !== localPayment.id)]));
+    window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...localPayment, propertyId: property.id }));
+    saveTenantBooking('paid');
+    setPaymentReceipt({ receiptNumber: providerReference, propertyTitle: property.title, location: property.location, amount: payment.amount, currency: payment.currency, paymentMethod: 'MTN MoMo', status: 'successful', transactionType, createdAt, demo: false });
+    setPendingPayment(null);
+    setPaymentPhone('');
+    setTransactionStep('success');
+  };
+  const checkPendingPayment = async () => {
+    if (!pendingPayment || checkingPayment) return;
+    setCheckingPayment(true);
+    setPaymentError('');
+    try {
+      const check = await umutungoApi<{ status: string }>(`/api/v1/payments/${encodeURIComponent(pendingPayment.id)}/confirm`, { method: 'POST', body: '{}' });
+      if (!check) throw new Error('Please sign in again to check the MTN MoMo payment.');
+      if (check.status === 'successful') {
+        completeSuccessfulPayment({ ...pendingPayment, status: check.status });
+      } else if (check.status === 'failed') {
+        setPaymentError('MTN MoMo reports that this payment was not completed. You can retry the payment.');
+        setTransactionStep('payment');
+      }
+    } catch (cause) {
+      setPaymentError(cause instanceof Error ? cause.message : 'We could not check the payment status. Please try again shortly.');
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
   const handlePaymentSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (paymentPhone.trim().replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number to continue.'); return; }
+    const isMobileMoney = paymentMethod === 'momo' || paymentMethod === 'airtel';
+    if (isMobileMoney && paymentPhone.trim().replace(/\D/g, '').length < 9) { setPaymentError('Enter a valid Rwanda phone number to continue.'); return; }
+    if (!isMobileMoney && (!cardNumber.trim() || !cardExpiry.trim() || !cardCvv.trim())) { setPaymentError('Enter the card details to continue.'); return; }
     setPaymentError('');
-    let paymentStatus: 'paid' | 'pending' = 'pending';
-    let providerReference = '';
+    if (demoPaymentsEnabled) {
+      const amount = propertyPriceAmount(property.price);
+      if (!amount) { setPaymentError('The property price is missing, so a demo receipt cannot be created.'); return; }
+      const createdAt = new Date().toISOString();
+      const reference = `UM-DEMO-${Date.now()}`;
+      const localPayment = { id: reference, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount, currency: 'RWF', provider: paymentMethod, provider_reference: reference, status: 'successful', created_at: createdAt };
+      const storedPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as typeof localPayment[];
+      window.localStorage.setItem('umutungo-payments', JSON.stringify([localPayment, ...storedPayments]));
+      window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...localPayment, propertyId: property.id, demo: true }));
+      saveTenantBooking('paid');
+      setPaymentReceipt({ receiptNumber: reference, propertyTitle: property.title, location: property.location, amount, currency: 'RWF', paymentMethod: paymentMethodLabel(paymentMethod), status: 'successful', transactionType, createdAt, demo: true });
+      setPaymentPhone('');
+      setCardNumber('');
+      setCardExpiry('');
+      setCardCvv('');
+      setTransactionStep('success');
+      return;
+    }
+    if (paymentMethod !== 'momo') {
+      setPaymentError('This payment option is not connected yet. Please choose MTN MoMo.');
+      return;
+    }
+    let startedPayment: PendingPayment | null = null;
     try {
-      const result = await umutungoApi<{ id: string; status: string; amount: number; currency: string; provider_reference: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, transaction_type: transactionType, provider: 'mtn_momo', phone: paymentPhone }) });
+      const result = await umutungoApi<PendingPayment>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, transaction_type: transactionType, provider: 'mtn_momo', phone: paymentPhone }) });
       if (!result) throw new Error('Sign in before starting an MTN MoMo payment.');
-      providerReference = result.provider_reference;
+      startedPayment = result;
+      setPendingPayment(result);
       let status = result.status;
       for (let attempt = 0; status === 'pending' && attempt < 15; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 4000));
@@ -227,40 +361,37 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         if (!check) throw new Error('Sign in again to check your MTN payment.');
         status = check.status;
       }
-      if (status === 'failed' || (status !== 'successful' && status !== 'pending') || status === 'pending') {
+      if (status === 'successful') {
+        completeSuccessfulPayment({ ...result, status });
+        return;
+      }
+      if (status === 'failed') {
+        setPaymentError('MTN MoMo reports that this payment was not completed. You can retry the payment.');
+        setTransactionStep('payment');
+        return;
+      }
+      if (status !== 'successful') {
         setTransactionStep('pending');
         return;
       }
-      paymentStatus = 'paid';
-      window.localStorage.setItem('umutungo-last-payment', JSON.stringify({ ...result, status, propertyId: property.id, createdAt: new Date().toISOString() }));
     } catch (cause) {
-      console.warn('MoMo payment is unavailable; keeping the request pending.', cause);
-      setPaymentError('');
-      setTransactionStep('pending');
+      if (startedPayment) {
+        setPendingPayment(startedPayment);
+        setTransactionStep('pending');
+      } else {
+        setPaymentError(cause instanceof Error ? cause.message : 'We could not start the MTN MoMo payment. Please try again.');
+      }
       return;
     }
-    const localPayment: { id: string; related_type: string; related_id: string; amount: number; currency: string; provider: string; provider_reference: string; status: 'successful' | 'pending'; created_at: string } = { id: `payment-${property.id}-${Date.now()}`, related_type: applicationId ? 'application' : 'listing', related_id: applicationId || property.id, amount: propertyPriceAmount(property.price), currency: 'RWF', provider: 'mtn_momo', provider_reference: providerReference, status: paymentStatus === 'paid' ? 'successful' : 'pending', created_at: new Date().toISOString() };
-    const storedPayments = JSON.parse(window.localStorage.getItem('umutungo-payments') ?? '[]') as typeof localPayment[];
-    window.localStorage.setItem('umutungo-payments', JSON.stringify([localPayment, ...storedPayments.filter((item) => item.related_id !== localPayment.related_id)]));
-    saveTenantBooking(paymentStatus);
-    setPaymentPhone('');
-    setCardNumber('');
-    setCardExpiry('');
-    setCardCvv('');
-    setPaymentReceipt({ receiptNumber: `UM-${localPayment.id.replace(/^payment-/, '').toUpperCase()}`, propertyTitle: property.title, location: property.location, amount: localPayment.amount, currency: localPayment.currency, paymentMethod: paymentMethodLabel(paymentMethod), status: localPayment.status, transactionType, createdAt: localPayment.created_at });
-    setTransactionStep('success');
   };
   const downloadReceipt = () => {
     if (!paymentReceipt) return;
-    const receipt = paymentReceipt;
-    const formattedAmount = `${receipt.currency} ${receipt.amount.toLocaleString()}`;
-    const formattedDate = new Date(receipt.createdAt).toLocaleString();
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Umutungo receipt ${escapeReceiptValue(receipt.receiptNumber)}</title><style>body{margin:0;background:#eef4ef;color:#172219;font-family:Arial,sans-serif}.page{width:min(680px,calc(100% - 32px));margin:42px auto}.receipt{background:#fff;border:1px solid #d6e4d8;border-radius:20px;box-shadow:0 18px 50px rgba(25,65,37,.12);overflow:hidden}.top{padding:30px 34px;background:linear-gradient(135deg,#00a84f,#23734a);color:#fff}.brand{font-size:13px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}.top h1{margin:26px 0 6px;font-size:30px;font-weight:600}.top p{margin:0;color:rgba(255,255,255,.78);font-size:13px}.body{padding:30px 34px}.meta{display:flex;justify-content:space-between;gap:18px;padding-bottom:24px;border-bottom:1px solid #e1ebe2}.meta span{display:grid;gap:5px;color:#6d7d70;font-size:11px}.meta strong{color:#172219;font-size:13px}.line{display:flex;justify-content:space-between;gap:20px;padding:18px 0;border-bottom:1px solid #e1ebe2}.line span{color:#6d7d70;font-size:12px}.line strong{max-width:55%;color:#172219;font-size:13px;text-align:right}.total{display:flex;justify-content:space-between;gap:20px;padding:24px 0 8px}.total span{color:#51705b;font-size:12px;font-weight:700}.total strong{color:#00a84f;font-size:22px}.status{display:inline-flex;margin-top:22px;padding:7px 11px;border-radius:999px;background:#e5f4e8;color:#00a84f;font-size:11px;font-weight:800;text-transform:capitalize}.foot{padding:18px 34px;background:#f5faf5;color:#6d7d70;font-size:11px;line-height:1.6}.print{margin:22px auto 0;display:block;border:0;border-radius:999px;padding:11px 18px;background:#00a84f;color:#fff;cursor:pointer;font-weight:700}@media print{body{background:#fff}.page{width:100%;margin:0}.receipt{border:0;box-shadow:none}.print{display:none}}</style></head><body><main class="page"><section class="receipt"><header class="top"><div class="brand">Umutungo</div><h1>Payment receipt</h1><p>Thank you for choosing a trusted property journey.</p></header><div class="body"><div class="meta"><span>Receipt number<strong>${escapeReceiptValue(receipt.receiptNumber)}</strong></span><span>Date<strong>${escapeReceiptValue(formattedDate)}</strong></span></div><div class="line"><span>Property</span><strong>${escapeReceiptValue(receipt.propertyTitle)}</strong></div><div class="line"><span>Location</span><strong>${escapeReceiptValue(receipt.location)}</strong></div><div class="line"><span>Request type</span><strong>${escapeReceiptValue(receipt.transactionType === 'rent' ? 'Rental request' : 'Purchase request')}</strong></div><div class="line"><span>Payment method</span><strong>${escapeReceiptValue(receipt.paymentMethod)}</strong></div><div class="total"><span>Total paid</span><strong>${escapeReceiptValue(formattedAmount)}</strong></div><span class="status">${escapeReceiptValue(receipt.status)}</span></div><footer class="foot">This receipt confirms the payment recorded by Umutungo. Keep it for your records. You can print this page or choose â€œSave as PDFâ€ from your browser.</footer></section><button class="print" onclick="window.print()">Print / Save as PDF</button></main></body></html>`;
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const propertyUrl = `${window.location.origin}/property/${encodeURIComponent(propertySlug(paymentReceipt.propertyTitle))}`;
+    const blob = buildReceiptPdf(paymentReceipt, propertyUrl);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `umutungo-receipt-${receipt.receiptNumber}.html`;
+    link.download = `umutungo-receipt-${paymentReceipt.receiptNumber}.pdf`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -317,27 +448,25 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     const destination = property.latitude != null && property.longitude != null
       ? `${property.latitude},${property.longitude}`
       : `${property.location}, Rwanda`;
-    const mapWindow = window.open('about:blank', '_blank');
-    const openDirections = (origin: string) => {
-      const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`;
-      if (mapWindow) mapWindow.location.href = url;
-      else window.location.href = url;
+    const showDirections = (origin?: string) => {
+      const query = new URLSearchParams({ output: 'embed', daddr: destination });
+      if (origin) query.set('saddr', origin);
+      setDirectionsMapUrl(`https://www.google.com/maps?${query.toString()}`);
     };
-    if (!navigator.geolocation) { openDirections('Current Location'); return; }
+    if (!navigator.geolocation) { showDirections(); return; }
     navigator.geolocation.getCurrentPosition(
-      (position) => openDirections(`${position.coords.latitude},${position.coords.longitude}`),
-      () => openDirections('Current Location'),
+      (position) => showDirections(`${position.coords.latitude},${position.coords.longitude}`),
+      () => showDirections(),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
   };
-  const paymentOptions: Array<{ id: PaymentMethod; label: string; detail: string; mark: string }> = [
-    { id: 'momo', label: 'MTN MoMo', detail: 'Approve securely on your MoMo phone', mark: 'MoMo' },
-    { id: 'airtel', label: 'Airtel Money', detail: 'Pay from your Airtel Money wallet', mark: 'A' },
-    { id: 'mastercard', label: 'Mastercard', detail: 'Debit or credit card', mark: 'MC' },
-    { id: 'visa', label: 'Visa card', detail: 'Debit or credit card', mark: 'VISA' },
-    { id: 'other', label: 'Other bank card', detail: 'Other supported cards in Rwanda', mark: 'â€¢â€¢â€¢' },
-  ];
-  const isVehicle = property.type === 'Vehicles';
+  const paymentOptions: Array<{ id: PaymentMethod; label: string; detail: string; mark: string; available: boolean }> = [
+    { id: 'momo', label: 'MTN MoMo', detail: 'Approve securely on your MoMo phone', mark: 'MoMo', available: true },
+    { id: 'airtel', label: 'Airtel Money', detail: 'Pay from your Airtel Money wallet', mark: 'A', available: demoPaymentsEnabled },
+    { id: 'mastercard', label: 'Mastercard', detail: 'Debit or credit card', mark: 'MC', available: demoPaymentsEnabled },
+    { id: 'visa', label: 'Visa card', detail: 'Debit or credit card', mark: 'VISA', available: demoPaymentsEnabled },
+    { id: 'other', label: 'Other bank card', detail: 'Other supported cards in Rwanda', mark: 'Other', available: demoPaymentsEnabled },
+  ];  const isVehicle = property.type === 'Vehicles';
   const isFurniture = property.type === 'Furniture';
   const isAppliance = property.type === 'Appliances';
   const isEquipment = property.type === 'Equipment';
@@ -409,7 +538,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <div className="viewer-tour-zoom" aria-label={t(language, 'Tour zoom controls')}><button type="button" onClick={() => setTourZoom((current) => Math.max(0, current - 1))} aria-label={t(language, 'Zoom out')}>{String.fromCharCode(8722)}</button><span>{100 + tourZoom * 18}%</span><button type="button" onClick={() => setTourZoom((current) => Math.min(3, current + 1))} aria-label={t(language, 'Zoom in')}>+</button></div>
           </div>}
 
-          {mode === 'tour' && !embedded && <section className="viewer-tour-feedback" aria-labelledby="viewer-tour-feedback-title"><div><strong id="viewer-tour-feedback-title">Are you satisfied with the 3D view?</strong><span>Choose what you would like to do next.</span></div><div className="viewer-tour-feedback-options"><button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => setTourSatisfaction('yes')}>Yes, I’m satisfied</button><button type="button" className={tourSatisfaction === 'no' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'no'} onClick={() => setTourSatisfaction('no')}>No, I’d like to visit</button></div>{tourSatisfaction === 'yes' && <button className="property-contact-button" type="button" onClick={() => { setContactError(''); setContactOpen(true); }}><Icon name="bookPen" size={15} /> Message the landlord</button>}{tourSatisfaction === 'no' && <button className="property-map-button" type="button" onClick={openDirectionsFromCurrentLocation}><Icon name="pin" size={15} /> Get directions from my location</button>}</section>}
+          {mode === 'tour' && !embedded && <section className="viewer-tour-feedback" aria-labelledby="viewer-tour-feedback-title"><div><strong id="viewer-tour-feedback-title">Are you satisfied with the 3D view to continue checkout?</strong><span>Choose what you would like to do next.</span></div><div className="viewer-tour-feedback-options"><button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => { setTourSatisfaction('yes'); openTransaction(); }}>Yes, I’m satisfied</button><button type="button" className={tourSatisfaction === 'no' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'no'} onClick={() => { setTourSatisfaction('no'); openDirectionsFromCurrentLocation(); }}>No, I’d like to visit</button></div><button className="property-contact-button" type="button" onClick={() => { setContactError(''); setContactOpen(true); }}><Icon name="bookPen" size={15} /> Message the landlord</button>{tourSatisfaction === 'no' && directionsMapUrl && <><div className="property-inline-directions"><div><strong>Directions to this property</strong><button type="button" onClick={() => setDirectionsMapUrl('')} aria-label="Close directions"><Icon name="x" size={14} /></button></div><iframe src={directionsMapUrl} title={`Directions to ${property.title}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div><button className="property-contact-button" type="button" onClick={openTransaction}><Icon name="arrow" size={15} /> Continue to get this property</button></>}</section>}
 
           {mode === 'plan' && <div className="viewer-plan-stage"><div className="viewer-plan-heading"><span>{t(language, isLand ? 'Interactive site plan' : 'Interactive floor plan')}</span><small>{t(language, 'Tap a room to preview it')}</small></div><div className="viewer-floor-plan"><button className="viewer-plan-room plan-living" type="button" onClick={() => { setMode('tour'); walkTo(0); }}>{planNames[0]}<small>{isLand ? '620 m2' : isCommercial ? '82 m2' : '38 m2'}</small></button><button className="viewer-plan-room plan-kitchen" type="button" onClick={() => { setMode('tour'); walkTo(1); }}>{planNames[1]}<small>{isLand ? 'North side' : isCommercial ? '24 m2' : '14 m2'}</small></button><button className="viewer-plan-room plan-bedroom" type="button" onClick={() => { setMode('tour'); walkTo(2); }}>{planNames[2]}<small>{isLand ? 'Street edge' : isCommercial ? 'Front desk' : `${property.bedrooms} rooms`}</small></button><button className="viewer-plan-room plan-garden" type="button" onClick={() => { setMode('tour'); walkTo(2); }}>{planNames[3]}<small>{isLand ? 'Setback' : isCommercial ? 'Back of house' : 'Outdoor'}</small></button><span className="plan-door plan-door-one" /><span className="plan-door plan-door-two" /></div></div>}
 
@@ -442,7 +571,6 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             </button>
             <p className="property-action-signin-note"><Icon name="user" size={14} /> Sign in is required before you make a payment or contact the landlord.</p>
             <div className="property-success-actions">
-              {paymentReceipt && <button className="property-receipt-button" type="button" onClick={downloadReceipt}><Icon name="download" size={15} /> Download receipt</button>}
               <button className="property-success-back" type="button" onClick={() => setTransactionOpen(false)}>Go back</button>
             </div>
           </>}
@@ -463,11 +591,12 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
 
           {transactionStep === 'security' && <>
             <span className="eyebrow">Security check</span>
-            <h2 id="property-action-title">Verify you are human</h2>
-            <p className="property-action-intro">Complete this quick check before we connect you to the payment system.</p>
+            <h2 id="property-action-title">A quick check before payment</h2>
+            <p className="property-action-intro">Confirm it’s you to continue to secure payment.</p>
+            <div className="security-check-intro"><span className="security-check-icon"><Icon name="sparkles" size={19} /></span><span><small>PAYMENT PROTECTION</small><strong>Human verification</strong><em>This helps protect your checkout.</em></span><b>1 step</b></div>
             <form className="payment-form security-check-form" onSubmit={handleSecuritySubmit}>
-              <label className="human-check-label"><input type="checkbox" checked={humanConfirmed} onChange={(event) => { setHumanConfirmed(event.target.checked); setPaymentError(''); }} /> <span>I am human and I am ready to continue.</span></label>
-              <label>Security question <span className="registration-captcha-question">{securityChallenge.first} + {securityChallenge.second} = ?</span><input inputMode="numeric" value={securityAnswer} onChange={(event) => { setSecurityAnswer(event.target.value); setPaymentError(''); }} placeholder="Enter the answer" autoComplete="off" required /></label>
+              <label className={`human-check-label${humanConfirmed ? ' is-confirmed' : ''}`}><input type="checkbox" checked={humanConfirmed} onChange={(event) => { setHumanConfirmed(event.target.checked); setPaymentError(''); }} /><span><strong>I’m here and ready to continue</strong><small>Confirm this is a person using the checkout</small></span>{humanConfirmed && <Icon name="check" size={18} />}</label>
+              <label className="security-answer-label"><span>Answer this quick question</span><span className="security-answer-row"><span className="registration-captcha-question">{securityChallenge.first} + {securityChallenge.second} = ?</span><input aria-label="Answer to security question" inputMode="numeric" value={securityAnswer} onChange={(event) => { setSecurityAnswer(event.target.value); setPaymentError(''); }} placeholder="Your answer" autoComplete="off" required /></span></label>
               {paymentError && <p className="payment-error" role="alert">{paymentError}</p>}
               <button className="property-action-continue" type="submit">Continue to secure payment <Icon name="arrow" size={16} /></button>
             </form>
@@ -479,12 +608,13 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <p className="property-action-intro">Choose a payment option available in Rwanda for this {transactionType === 'rent' ? 'rental request' : 'property request'}.</p>
             <div className="payment-summary"><span>{property.title}</span><strong>{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{property.priceNote}</small></>}</strong></div>
             <div className="payment-method-grid" aria-label="Payment options">
-              {paymentOptions.filter((option) => option.id === 'momo').map((option) => <button className={"payment-method-card " + (paymentMethod === option.id ? 'is-selected' : '')} type="button" key={option.id} onClick={() => { setPaymentMethod(option.id); setPaymentError(''); }}>
+              {paymentOptions.map((option) => <button className={`payment-method-card ${paymentMethod === option.id ? 'is-selected' : ''} ${!option.available ? 'is-unavailable' : ''}`} type="button" key={option.id} disabled={!option.available} aria-label={`${option.label}${option.available ? '' : ', coming soon'}`} onClick={() => { setPaymentMethod(option.id); setPaymentError(''); }}>
                 <PaymentLogo method={option.id} />
-                <span><strong>{option.label}</strong><small>{option.detail}</small></span>
+                <span><strong>{option.label}</strong><small>{option.available ? option.detail : 'Coming soon'}</small></span>
                 <Icon name={paymentMethod === option.id ? 'check' : 'chevron'} size={14} />
               </button>)}
             </div>
+            <p className="payment-demo-note">{demoPaymentsEnabled ? 'Demo mode: all payment choices simulate a successful payment for presentation. No charge or phone PIN prompt is sent.' : 'MTN MoMo is available now. Other options will be enabled after their payment services are connected.'}</p>
             <form className="payment-form" onSubmit={handlePaymentSubmit}>
               {(paymentMethod === 'momo' || paymentMethod === 'airtel') && <label>Rwanda phone number<input type="tel" value={paymentPhone} onChange={(event) => setPaymentPhone(event.target.value)} placeholder="+250 7XX XXX XXX" autoComplete="tel" required /></label>}
               {paymentMethod !== 'momo' && paymentMethod !== 'airtel' && <label>Card number<input inputMode="numeric" value={cardNumber} onChange={(event) => setCardNumber(event.target.value)} placeholder="1234 5678 9012 3456" autoComplete="cc-number" required /></label>}
@@ -497,16 +627,19 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
 
           {transactionStep === 'pending' && <>
             <span className="eyebrow">Payment pending</span>
-            <h2 id="property-action-title">Your request is still pending</h2>
-            <p className="property-action-intro">We have not received payment confirmation yet. No payment has been marked as complete. You can close this window and return later.</p>
+            <h2 id="property-action-title">Waiting for MTN MoMo</h2>
+            <p className="property-action-intro">Approve the payment on your phone. We’ll show your confirmation and receipt here as soon as MTN confirms it.</p>
+            {paymentError && <p className="payment-error" role="alert">{paymentError}</p>}
+            <button className="property-action-continue" type="button" onClick={() => void checkPendingPayment()} disabled={checkingPayment || !pendingPayment}>{checkingPayment ? 'Checking payment…' : 'Check payment status'} <Icon name="arrow" size={15} /></button>
             <button className="property-action-continue" type="button" onClick={onClose}>Close</button>
           </>}
 
           {transactionStep === 'success' && <>
             <span className="payment-success-mark"><Icon name="check" size={23} /></span>
-            <span className="eyebrow">Request received</span>
-            <h2 id="property-action-title">You are on your way</h2>
-            <p className="property-action-intro">Your {transactionType === 'rent' ? 'rental' : 'property'} request for <strong>{property.title}</strong> has been recorded.</p>
+            <span className="eyebrow">{paymentReceipt ? 'Payment successful' : 'Request received'}</span>
+            <h2 id="property-action-title">{paymentReceipt ? paymentReceipt.demo ? 'Your demo payment was successful' : 'Your MTN MoMo payment is confirmed' : 'You are on your way'}</h2>
+            <p className="property-action-intro">{paymentReceipt ? paymentReceipt.demo ? <>Demo payment for <strong>{paymentReceipt.propertyTitle}</strong> was successful. No money was charged. In live checkout, your provider will send a prompt to your phone to approve the payment with your PIN. Never enter your PIN on Umutungo.</> : <>Your payment for <strong>{paymentReceipt.propertyTitle}</strong> was successful. Keep your receipt for your records.</> : <>Your {transactionType === 'rent' ? 'rental' : 'property'} request for <strong>{property.title}</strong> has been recorded.</>}</p>
+            {paymentReceipt && <div className="property-receipt-summary"><span>Receipt number<strong>{paymentReceipt.receiptNumber}</strong></span><span>Amount paid<strong>{paymentReceipt.currency} {paymentReceipt.amount.toLocaleString()}</strong></span><button className="property-receipt-button" type="button" onClick={downloadReceipt}><Icon name="download" size={15} /> Download receipt</button></div>}
             {transactionType === 'rent' && !houseSeen && <div className="property-seen-card"><strong>Have you finished exploring?</strong><span>{viewingRequested ? 'Visit the property first, then return here and confirm when you are ready to pay.' : 'Choose whether you have visited the property or want to open its location before paying.'}</span><div className="property-seen-actions"><button className="property-contact-button" type="button" onClick={markHouseSeen}>I finished exploring <Icon name="check" size={14} /></button><button className="property-map-button" type="button" onClick={openPropertyMap}><Icon name="pin" size={14} /> No, I want to view it</button></div></div>}
             {property.poster && <div className="property-landlord-card">
               <div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong>{property.poster.businessName || property.poster.name || 'Property owner'}</strong><small>{property.poster.verified ? 'Verified owner' : 'Property owner'} {String.fromCharCode(183)} {property.location}</small></span></div>
@@ -519,7 +652,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             </div>}
           </>}
         </section>
-        {contactOpen && <div className="landlord-contact-overlay" role="dialog" aria-modal="true" aria-labelledby="landlord-contact-title">
+        {contactOpen && createPortal(<div className="landlord-contact-overlay" role="dialog" aria-modal="true" aria-labelledby="landlord-contact-title">
           <button className="landlord-contact-backdrop" type="button" aria-label="Close landlord chat" onClick={() => setContactOpen(false)} />
           <section className="landlord-contact-panel">
             <header className="landlord-contact-header"><div className="property-landlord-heading"><span className="property-landlord-avatar"><Icon name="user" size={18} /></span><span><strong id="landlord-contact-title">{property.poster?.businessName || property.poster?.name || 'Property owner'}</strong><small>{property.poster?.verified ? 'Verified owner' : 'Property owner'}</small></span></div><button className="property-action-close" type="button" aria-label="Close owner chat" onClick={() => setContactOpen(false)}><Icon name="x" size={18} /></button></header>
@@ -527,7 +660,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
             <div className="landlord-chat-messages">{messageSent && <div className="landlord-chat-bubble landlord-chat-sent">{contactMessage}</div>}</div>
             {!messageSent ? <form className="landlord-contact-form" onSubmit={handleLandlordMessage}><textarea value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} placeholder="Write your message to the owner" rows={4} required />{contactError && <p className="payment-error" role="alert">{contactError}</p>}<button className="property-contact-button" type="submit">Send message <Icon name="arrow" size={15} /></button></form> : <div className="landlord-contact-sent"><Icon name="check" size={15} /> Message sent to the listing owner. They’ll receive a dashboard notification.</div>}
           </section>
-        </div>}
+        </div>, document.body)}
       </div>
     )}
     <AuthModal open={authOpen} role="Client" onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { if (accountRole !== 'Client' && accountRole !== 'Tenant') { window.location.assign(dashboardPathForAccountRole(accountRole)); return; } setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? 'application' : 'security'); }} />

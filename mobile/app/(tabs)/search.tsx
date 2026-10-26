@@ -25,7 +25,7 @@ const priceRanges = [
 ];
 
 type SearchMessage = { role: 'user' | 'assistant'; content: string };
-type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; query: string; location: string; intent: string; priceRange: string };
+type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; location: string; province: string; district: string; sector: string; intent: string; priceRange: string; minBedrooms: number };
 const PROPERTY_SEARCH_URL = process.env.EXPO_PUBLIC_PROPERTY_SEARCH_API_URL || (process.env.EXPO_PUBLIC_CHAT_API_URL || 'https://umutungo.rw/api/chat').replace(/\/api\/chat\/?$/, '/api/property-search');
 const LISTING_PAGE_SIZE = 12;
 const searchCategoryMap: Record<string, string> = { houses: 'house', apartments: 'apartment', land: 'land', commercial: 'commercial', offices: 'office', hospitality: 'hospitality', vehicles: 'vehicle', 'car-parts': 'car_parts', furniture: 'furniture', appliances: 'appliance', equipment: 'equipment', other: 'other' };
@@ -112,23 +112,36 @@ export default function SearchScreen() {
       const response = await fetch(PROPERTY_SEARCH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ messages: nextMessages.slice(-10) }) });
       const plan = await response.json() as SearchPlan & { error?: string };
       if (!response.ok || !plan.reply) throw new Error(plan.error || `Property search assistant unavailable (${response.status}).`);
-      setAssistantMessages((current) => [...current, { role: 'assistant', content: plan.reply }]);
       if (plan.status === 'search') {
-        const categoryFilter = searchCategoryMap[plan.category] ?? '';
+        const categoryFilter = plan.category === 'properties' ? '' : searchCategoryMap[plan.category] ?? '';
         const transactionFilter = plan.intent === 'Rent' ? 'rent_out' : plan.intent === 'Buy' ? 'sell' : '';
-        const filters: ListingQuery = { search: plan.query || plan.location || '', category: categoryFilter, transaction_type: transactionFilter };
-        skipFilterReload.current = category !== categoryFilter || transactionType !== transactionFilter;
-        setSearch(filters.search ?? ''); setCategory(categoryFilter); setTransactionType(transactionFilter); setLoading(true);
         const range = priceRanges.find((item) => item.label === plan.priceRange);
-        const priceFilter = { ...(range?.min ? { min_price: range.min } : {}), ...(range && Number.isFinite(range.max) ? { max_price: range.max } : {}) };
-        const result = await listListings({ ...filters, ...priceFilter, limit: LISTING_PAGE_SIZE, offset: 0 });
+        const filters: ListingQuery = {
+          category: categoryFilter,
+          transaction_type: transactionFilter,
+          ...(plan.province ? { province: plan.province } : {}),
+          ...(plan.district ? { district: plan.district } : {}),
+          ...(plan.sector ? { sector: plan.sector } : {}),
+          ...(range?.min ? { min_price: range.min } : {}),
+          ...(range && Number.isFinite(range.max) ? { max_price: range.max } : {}),
+          ...(plan.minBedrooms > 0 ? { min_bedrooms: plan.minBedrooms } : {}),
+          limit: LISTING_PAGE_SIZE,
+          offset: 0,
+        };
+        skipFilterReload.current = category !== categoryFilter || transactionType !== transactionFilter || selectedPriceRange !== plan.priceRange;
+        setSearch(''); setCategory(categoryFilter); setTransactionType(transactionFilter); setSelectedPriceRange(plan.priceRange); setLoading(true); setError('');
+        activeFilters.current = filters;
+        const result = await listListings(filters);
         let matches = result.items;
         if (plan.location) {
           const location = plan.location.toLocaleLowerCase();
           matches = matches.filter((item) => `${item.province} ${item.district} ${item.sector} ${item.cell ?? ''} ${item.village ?? ''}`.toLocaleLowerCase().includes(location));
         }
         matches = matches.filter((item) => matchesPriceRange(item.price, plan.priceRange));
-        setListings(matches); setHasMore(false); setLoading(false);
+        nextOffset.current = result.items.length; setHasMore(result.has_more ?? result.items.length === LISTING_PAGE_SIZE); setListings(matches); setLoading(false);
+        setAssistantMessages((current) => [...current, { role: 'assistant', content: matches.length ? plan.reply : 'I couldn’t find a live listing matching all those details. Which area, budget, or property feature would you like to adjust?' }]);
+      } else {
+        setAssistantMessages((current) => [...current, { role: 'assistant', content: plan.reply }]);
       }
     } catch (cause) { setAssistantError(cause instanceof Error ? cause.message : 'The property search assistant could not be reached.'); setLoading(false); }
     finally { setAssistantBusy(false); }

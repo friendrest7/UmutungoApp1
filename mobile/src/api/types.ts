@@ -19,7 +19,7 @@ export type ListingMedia = { type: 'photo' | 'video' | 'tour_3d' | string; url: 
 
 export type ApiListing = {
   id: string;
-  owner: { id: string; name: string; role: UserRole | string };
+  owner: { id: string; name: string; role: UserRole | string; phone?: string };
   category: string;
   transaction_type: string;
   title: string;
@@ -65,7 +65,8 @@ export type ApiMessage = {
 
 export type ApiNotification = { id: string; type: string; title: string; body: string; read_at?: string | null; created_at: string };
 
-export type ApiBooking = { id: string; listing_id: string; listing_title: string; check_in: string; check_out: string; guests: number; status: 'requested' | 'confirmed' | 'declined' | 'cancelled' | 'completed' | string; guest_name: string; created_at: string };
+export type ApiBookingQuote = { pricing_period: 'daily' | 'monthly'; rate_amount: number; billed_units: number; base_amount: number; service_fee_amount: number; total_amount: number; currency: 'RWF' | string };
+export type ApiBooking = { id: string; listing_id: string; listing_title: string; check_in: string; check_out: string; guests: number; status: 'requested' | 'confirmed' | 'declined' | 'cancelled' | 'completed' | string; guest_name: string; is_guest: boolean; created_at: string; quote: ApiBookingQuote; payment_status?: string };
 
 export type ApiReview = { id: string; author_id: string; author_name: string; rating: number; body: string; created_at: string };
 
@@ -84,4 +85,5 @@ export type ListingQuery = {
   offset?: number;
   min_price?: number;
   max_price?: number;
+  min_bedrooms?: number;
 };

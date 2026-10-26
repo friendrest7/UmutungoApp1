@@ -118,14 +118,16 @@ func (m mtnSMSClient) sendVerificationCode(ctx context.Context, phone, code stri
 			Status string `json:"status"`
 		} `json:"data"`
 	}
-	_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result)
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		return fmt.Errorf("MTN SMS returned an invalid response")
+	}
 	if resp.StatusCode != http.StatusOK {
 		if result.StatusMessage != "" {
 			return fmt.Errorf("MTN SMS rejected the message: %s", result.StatusMessage)
 		}
 		return fmt.Errorf("MTN SMS send request returned HTTP %d", resp.StatusCode)
 	}
-	if result.StatusCode != "" && result.StatusCode != "0000" {
+	if result.StatusCode != "0000" || strings.TrimSpace(result.Data.Status) == "" {
 		return fmt.Errorf("MTN SMS rejected the message: %s", firstNonEmpty(result.StatusMessage, "provider error"))
 	}
 	return nil

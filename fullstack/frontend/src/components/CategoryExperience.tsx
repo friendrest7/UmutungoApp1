@@ -15,7 +15,7 @@ import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type Fa
 import { fallbackListingImages, listingImages, propertySlug, supportsSpatialPreview, type ApiListing } from '../lib/listings';
 import { readCachedApiListings, writeCachedApiListings } from '../lib/listingCache';
 
-type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string };
+type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string; bedrooms?: number };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[] };
 
 
@@ -94,10 +94,10 @@ const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Lis
   const images = listingImages(item);
   const cardImages = images.length ? images : fallbackListingImages(item);
   const image = cardImages[0] ?? '/properties/listing-placeholder.svg';
-  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, item.owner?.verified ?? false), images: cardImages, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
+  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, item.owner?.verified ?? false), images: cardImages, bedrooms: bedroomCount, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
 };
 
-export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialDistrict = '', initialSector = '', initialIntent = '', initialPriceRange = '' }: { slug: string; initialQuery?: string; initialLocation?: string; initialDistrict?: string; initialSector?: string; initialIntent?: string; initialPriceRange?: string }) {
+export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialDistrict = '', initialSector = '', initialIntent = '', initialPriceRange = '', initialMinBedrooms = 0 }: { slug: string; initialQuery?: string; initialLocation?: string; initialDistrict?: string; initialSector?: string; initialIntent?: string; initialPriceRange?: string; initialMinBedrooms?: number }) {
   const { language, changeLanguage: setLanguage } = usePersistentLanguage();
   const { darkMode, toggleTheme } = usePersistentTheme();
   const rawCategory = categoryConfigs[slug] ?? categoryConfigs.properties;
@@ -216,6 +216,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     const matchesLocation = !initialLocation || initialLocation === 'Kigali' || item.location.toLowerCase().includes(initialLocation.toLowerCase()) || provinceDistricts.some((districtName) => item.location.toLowerCase().includes(districtName.toLowerCase()));
     const matchesDistrict = !initialDistrict || item.location.toLowerCase().includes(initialDistrict.toLowerCase());
     const matchesSector = !initialSector || item.location.toLowerCase().includes(initialSector.toLowerCase());
+    const matchesBedrooms = !initialMinBedrooms || (item.bedrooms ?? 0) >= initialMinBedrooms;
     const matchesIntent = !initialIntent || initialIntent === 'Buy or rent' || (initialIntent === 'Rent' && (item.intent === 'For rent' || item.intent === 'For sale or rent' || item.intent === 'For lease' || item.intent === 'For sale or lease')) || (initialIntent === 'Buy' && (item.intent === 'For sale' || item.intent === 'For sale or rent' || item.intent === 'For sale or lease'));
     const numericPrice = Number(item.price.replace(/[^0-9]/g, ''));
     const matchesPrice = !initialPriceRange || initialPriceRange === 'Any price' || (initialPriceRange === '0–300,000' && numericPrice <= 300000) || (initialPriceRange === '300,000–500,000' && numericPrice > 300000 && numericPrice <= 500000) || (initialPriceRange === '500,000–1,000,000' && numericPrice > 500000 && numericPrice <= 1000000) || (initialPriceRange === '1,000,000–10,000,000' && numericPrice > 1000000 && numericPrice <= 10000000) || (initialPriceRange === '10,000,000+' && numericPrice > 10000000) || (initialPriceRange === 'Under RWF 500,000' && numericPrice < 500000) || (initialPriceRange === 'RWF 500,000 - 1,000,000' && numericPrice >= 500000 && numericPrice <= 1000000) || (initialPriceRange === 'Over RWF 1,000,000' && numericPrice > 1000000);
@@ -225,10 +226,10 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     const matchesFilter = slug === 'properties'
       ? matchesCategory
       : filter.startsWith('All') || (filter === 'For rent' && ['For rent', 'For sale or rent', 'For lease', 'For sale or lease'].includes(item.intent)) || (filter === 'For sale' && ['For sale', 'For sale or rent', 'For sale or lease'].includes(item.intent)) || (filter === 'Book now' && item.intent === 'Book') || ['Residential', 'Commercial', 'Private office', 'Open workspace'].includes(filter);
-      return matchesQuery && matchesLocation && matchesDistrict && matchesSector && matchesIntent && matchesPrice && matchesFilter;
+      return matchesQuery && matchesLocation && matchesDistrict && matchesSector && matchesBedrooms && matchesIntent && matchesPrice && matchesFilter;
     }).map(normalizeListing);
     return slug === 'properties' ? filteredListings : filteredListings.slice(0, 10);
-  }, [category, databaseListings, filter, initialDistrict, initialIntent, initialLocation, initialPriceRange, initialSector, query, slug]);
+  }, [category, databaseListings, filter, initialDistrict, initialIntent, initialLocation, initialMinBedrooms, initialPriceRange, initialSector, query, slug]);
   const visibleListings = listings.slice(0, visibleListingCount);
   useEffect(() => {
     const target = listingLoadMoreRef.current;
@@ -280,7 +281,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
           </div>
           <div className="category-listing-copy"><div className="category-listing-meta"><span>{item.categoryName ?? 'UMUTUNGO LISTING'}</span>{item.listed && <span>{item.listed}</span>}</div>
             <h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p>
-            <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><Link className="view-property-button category-view-button" href={`/property/${propertySlug(item.title)}${supportsSpatialPreview(item.categoryName ?? item.categorySlug ?? '') ? '?view=3d' : ''}`}>View property <Icon name="arrow" size={13} /></Link></div>
+            <div className="category-listing-footer"><div><strong>{item.price}</strong><small>{item.detail}</small></div><Link className="view-property-button category-view-button" href={`/property/${propertySlug(item.title)}${supportsSpatialPreview(item.categoryName ?? item.categorySlug ?? '') ? '?view=3d' : ''}`}>View property</Link></div>
           </div>
         </article>)}</div>
         {visibleListingCount < listings.length && <div ref={listingLoadMoreRef} className="category-listing-scroll-sentinel" aria-hidden="true" />}

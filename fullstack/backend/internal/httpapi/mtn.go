@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,14 @@ type momoRequestError struct {
 	ambiguous bool
 }
 
+type momoPaymentStatus struct {
+	Status                 string `json:"status"`
+	ExternalID             string `json:"externalId"`
+	Amount                 string `json:"amount"`
+	Currency               string `json:"currency"`
+	FinancialTransactionID string `json:"financialTransactionId"`
+}
+
 func (e *momoRequestError) Error() string { return e.message }
 
 var momoTokenMu sync.Mutex
@@ -38,7 +47,10 @@ func newMoMoClient(cfg config.Config) momoClient {
 }
 
 func (m momoClient) configured() bool {
-	return m.cfg.MTNAPIUser != "" && m.cfg.MTNAPIKey != "" && m.cfg.MTNSubscriptionKey != "" && m.cfg.MTNBaseURL != ""
+	baseURL := strings.TrimRight(m.cfg.MTNBaseURL, "/")
+	validEnvironment := (m.cfg.MTNTargetEnvironment == "sandbox" && baseURL == "https://sandbox.momodeveloper.mtn.com") ||
+		(m.cfg.MTNTargetEnvironment == "mtnrwanda" && baseURL == "https://momoapi.mtn.com")
+	return validEnvironment && m.cfg.MTNAPIUser != "" && m.cfg.MTNAPIKey != "" && m.cfg.MTNSubscriptionKey != ""
 }
 
 func (m momoClient) token(ctx context.Context) (string, error) {
@@ -47,7 +59,7 @@ func (m momoClient) token(ctx context.Context) (string, error) {
 	}
 	momoTokenMu.Lock()
 	defer momoTokenMu.Unlock()
-	tokenKey := m.cfg.MTNBaseURL + ":" + m.cfg.MTNAPIUser + ":" + m.cfg.MTNTargetEnvironment + ":" + m.cfg.MTNSubscriptionKey
+	tokenKey := m.cfg.MTNBaseURL + ":" + m.cfg.MTNAPIUser + ":" + m.cfg.MTNAPIKey + ":" + m.cfg.MTNTargetEnvironment + ":" + m.cfg.MTNSubscriptionKey
 	if momoCachedToken != "" && tokenKey == momoCachedTokenKey && time.Now().Before(momoTokenExpires) {
 		return momoCachedToken, nil
 	}
@@ -87,6 +99,9 @@ func (m momoClient) token(ctx context.Context) (string, error) {
 }
 
 func (m momoClient) requestToPay(ctx context.Context, ref, phone string, amount float64, currency string) error {
+	if !strings.EqualFold(strings.TrimSpace(currency), "RWF") || amount <= 0 || math.Trunc(amount) != amount {
+		return fmt.Errorf("MTN MoMo payments require a positive whole-number RWF amount")
+	}
 	token, err := m.token(ctx)
 	if err != nil {
 		return err
@@ -103,9 +118,6 @@ func (m momoClient) requestToPay(ctx context.Context, ref, phone string, amount 
 		if digit < '0' || digit > '9' {
 			return fmt.Errorf("enter a valid Rwanda mobile number")
 		}
-	}
-	if math.Trunc(amount) != amount {
-		return fmt.Errorf("MTN MoMo supports whole RWF amounts only")
 	}
 	body, _ := json.Marshal(map[string]any{
 		"amount": fmt.Sprintf("%.0f", amount), "currency": currency, "externalId": ref,
@@ -132,42 +144,53 @@ func (m momoClient) requestToPay(ctx context.Context, ref, phone string, amount 
 	return nil
 }
 
-func (m momoClient) paymentStatus(ctx context.Context, ref string) (string, error) {
+func (m momoClient) paymentStatus(ctx context.Context, ref string) (momoPaymentStatus, error) {
 	token, err := m.token(ctx)
 	if err != nil {
-		return "", err
+		return momoPaymentStatus{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.cfg.MTNBaseURL+"/collection/v1_0/requesttopay/"+ref, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.cfg.MTNBaseURL+"/collection/v1_0/requesttopay/"+url.PathEscape(ref), nil)
 	if err != nil {
-		return "", err
+		return momoPaymentStatus{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Ocp-Apim-Subscription-Key", m.cfg.MTNSubscriptionKey)
 	req.Header.Set("X-Target-Environment", m.cfg.MTNTargetEnvironment)
 	resp, err := m.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("MTN status request failed: %w", err)
+		return momoPaymentStatus{}, fmt.Errorf("MTN status request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return "failed", nil
+		return momoPaymentStatus{}, fmt.Errorf("MTN did not find the payment reference")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("MTN status request returned HTTP %d", resp.StatusCode)
+		return momoPaymentStatus{}, fmt.Errorf("MTN status request returned HTTP %d", resp.StatusCode)
 	}
-	var result struct {
-		Status                 string `json:"status"`
-		FinancialTransactionID string `json:"financialTransactionId"`
-	}
+	var result momoPaymentStatus
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
-		return "", fmt.Errorf("could not read MTN status response")
+		return momoPaymentStatus{}, fmt.Errorf("could not read MTN status response")
 	}
-	switch strings.ToUpper(result.Status) {
+	switch strings.ToUpper(strings.TrimSpace(result.Status)) {
 	case "SUCCESSFUL":
-		return "successful", nil
-	case "FAILED":
-		return "failed", nil
+		result.Status = "successful"
+	case "FAILED", "REJECTED":
+		result.Status = "failed"
+	case "EXPIRED", "TIMEOUT", "TIMED_OUT":
+		result.Status = "expired"
 	default:
-		return "pending", nil
+		result.Status = "pending"
 	}
+	return result, nil
+}
+
+func (m momoClient) verifiedPaymentStatus(ctx context.Context, reference string, amount float64, currency string) (momoPaymentStatus, error) {
+	result, err := m.paymentStatus(ctx, reference)
+	if err != nil {
+		return momoPaymentStatus{}, err
+	}
+	if err := validateMoMoPayment(reference, amount, currency, result); err != nil {
+		return momoPaymentStatus{}, err
+	}
+	return result, nil
 }

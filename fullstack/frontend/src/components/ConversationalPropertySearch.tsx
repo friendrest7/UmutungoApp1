@@ -6,7 +6,7 @@ import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
 
 type SearchMessage = { role: 'user' | 'assistant'; content: string };
-type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; query: string; location: string; intent: string; priceRange: string };
+type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; location: string; province: string; district: string; sector: string; intent: string; priceRange: string; minBedrooms: number };
 
 export function ConversationalPropertySearch({ language, compact = false }: { language: Language; compact?: boolean }) {
   const [messages, setMessages] = useState<SearchMessage[]>([]);
@@ -14,6 +14,7 @@ export function ConversationalPropertySearch({ language, compact = false }: { la
   const [isOpen, setIsOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
+  const [activePlan, setActivePlan] = useState<SearchPlan | null>(null);
 
   const submitSearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -23,6 +24,7 @@ export function ConversationalPropertySearch({ language, compact = false }: { la
     setMessages(nextMessages);
     setPrompt('');
     setError('');
+    setActivePlan(null);
     setIsSending(true);
     try {
       const response = await fetch('/api/property-search', {
@@ -33,11 +35,7 @@ export function ConversationalPropertySearch({ language, compact = false }: { la
       const result = await response.json() as SearchPlan | { error?: string };
       if (!response.ok || !('reply' in result)) throw new Error('error' in result ? result.error : undefined);
       setMessages((current) => [...current, { role: 'assistant', content: result.reply }]);
-      if (result.status === 'search') {
-        const params = new URLSearchParams({ location: result.location, intent: result.intent, priceRange: result.priceRange });
-        if (result.query) params.set('q', result.query);
-        window.location.assign(`/categories/${result.category}?${params.toString()}`);
-      }
+      if (result.status === 'search') setActivePlan(result);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The property search assistant is unavailable right now.');
     } finally {
@@ -57,6 +55,14 @@ export function ConversationalPropertySearch({ language, compact = false }: { la
         {messages.map((message, index) => <p className={`conversational-search-message ${message.role}`} key={`${message.role}-${index}`}>{message.content}</p>)}
         {isSending && <p className="conversational-search-status">Finding the right next step…</p>}
         {error && <p className="conversational-search-error" role="alert">{error}</p>}
+        {activePlan && <button className="conversational-search-results-button" type="button" onClick={() => {
+          const params = new URLSearchParams({ location: activePlan.location, intent: activePlan.intent, priceRange: activePlan.priceRange });
+          if (activePlan.district) params.set('district', activePlan.district);
+          if (activePlan.sector) params.set('sector', activePlan.sector);
+          if (activePlan.province) params.set('province', activePlan.province);
+          if (activePlan.minBedrooms > 0) params.set('minBedrooms', String(activePlan.minBedrooms));
+          window.location.assign(`/categories/${activePlan.category}?${params.toString()}`);
+        }}>Browse matching properties</button>}
       </div>}
       <form className="conversational-search-form" onSubmit={submitSearch}>
         <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={compact ? 'Describe the properties you want and we’ll get them for you…' : 'Describe the property you need'} aria-label={compact ? 'Describe the properties you want and we’ll get them for you' : 'Describe the property you need'} disabled={isSending} />

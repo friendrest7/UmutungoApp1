@@ -49,7 +49,7 @@ func Load() Config {
 		MigrationsPath:       env("MIGRATIONS_PATH", "migrations"),
 		MediaUploadDir:       env("MEDIA_UPLOAD_DIR", "storage/media"),
 		MediaPublicBaseURL:   env("MEDIA_PUBLIC_BASE_URL", ""),
-		GoogleClientIDs:      env("GOOGLE_CLIENT_IDS", "947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com,128904720035-13hdispbjdum6iphqb3e1ct5ohmdnkb1.apps.googleusercontent.com"),
+		GoogleClientIDs:      env("GOOGLE_CLIENT_IDS", ""),
 		MTNAPIUser:           env("MTN_API_USER", ""),
 		MTNAPIKey:            env("MTN_API_KEY", ""),
 		MTNSubscriptionKey:   env("MTN_SUBSCRIPTION_KEY_PRIMARY", ""),

@@ -178,15 +178,15 @@ export async function markAllNotificationsRead() { return request<{ status: stri
 export async function listBookings() { return request<{ items: import('./types').ApiBooking[] }>('/api/v1/bookings', {}, true); }
 export async function listApplications() { return request<{ items: ApiApplication[] }>('/api/v1/applications', {}, true); }
 export async function applyToListing(listingId: string, message: string) { return request<{ id: string; status: string }>(`/api/v1/listings/${encodeURIComponent(listingId)}/applications`, { method: 'POST', body: JSON.stringify({ message }) }, true); }
-export async function createBooking(input: { listing_id: string; check_in: string; check_out: string; guests: number }) { return request<{ id: string; status: string }>('/api/v1/bookings', { method: 'POST', body: JSON.stringify(input) }, true); }
+export async function createBooking(input: { listing_id: string; check_in: string; check_out: string; guests: number; pricing_period: 'daily' | 'monthly'; idempotency_key: string }) { return request<{ id: string; status: string; quote: import('./types').ApiBookingQuote; idempotent_replay?: boolean }>('/api/v1/bookings', { method: 'POST', body: JSON.stringify(input) }, true); }
 export async function listListingReviews(listingId: string) { return request<{ items: ApiReview[] }>(`/api/v1/listings/${encodeURIComponent(listingId)}/reviews`); }
 export async function createListingReview(input: { listing_id: string; rating: number; body: string }) { return request<{ id: string; status: string }>('/api/v1/reviews', { method: 'POST', body: JSON.stringify(input) }, true); }
 export async function markApplicationViewed(id: string) { return request<{ id: string; status: string }>(`/api/v1/applications/${encodeURIComponent(id)}/viewed`, { method: 'POST', body: '{}' }, true); }
 export async function decideApplication(id: string, status: 'accepted' | 'rejected' | 'more_info', note = '') { return request<{ id: string; status: string }>(`/api/v1/applications/${encodeURIComponent(id)}/decision`, { method: 'POST', body: JSON.stringify({ status, note }) }, true); }
-export async function startMomoPayment(input: { related_type: 'listing'; related_id: string; transaction_type: 'buy' | 'rent'; phone: string }) {
+export async function startMomoPayment(input: { related_type: 'listing' | 'booking'; related_id: string; transaction_type: 'buy' | 'rent'; phone: string }) {
   return request<{ id: string; status: string; amount: number; currency: string }>('/api/v1/payments', { method: 'POST', body: JSON.stringify({ ...input, provider: 'mtn_momo' }) }, true);
 }
-export async function getPayment(id: string) { return request<{ id: string; status: 'pending' | 'successful' | 'failed' }>(`/api/v1/payments/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' }, true); }
+export async function getPayment(id: string) { return request<{ id: string; status: 'pending' | 'successful' | 'failed' | 'expired' }>(`/api/v1/payments/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' }, true); }
 export type OwnerPlan = 'silver' | 'gold' | 'platinum';
 export type OwnerPurchase = { id: string; plan: OwnerPlan; amount: number; currency: string; status: string; payment_status: string; transaction_reference: string; activated_at?: string | null; expires_at?: string | null };
 export async function getOwnerUpgrades() { return request<{ prices: Record<OwnerPlan, number>; purchases: OwnerPurchase[] }>('/api/v1/owner/upgrades', {}, true); }

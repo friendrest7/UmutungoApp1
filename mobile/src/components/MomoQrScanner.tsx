@@ -40,8 +40,6 @@ export default function MomoQrScanner({ visible, onClose, onPhoneScanned }: Prop
 
   useEffect(() => {
     if (!visible) return;
-    setScanned(false);
-    setScanError('');
     if (permission && !permission.granted && permission.canAskAgain) void requestPermission();
   }, [visible, permission, requestPermission]);
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -75,6 +76,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/messages", s.messages)
 	mux.HandleFunc("/api/v1/reviews", s.reviews)
 	mux.HandleFunc("/api/v1/bookings", s.bookings)
+	mux.HandleFunc("/api/v1/bookings/", s.bookingRoute)
 	mux.HandleFunc("/api/v1/reports", s.reports)
 	mux.HandleFunc("/api/v1/admin/reports", s.adminReports)
 	mux.HandleFunc("/api/v1/admin/reports/", s.adminReportRoute)
@@ -193,16 +195,21 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := s.db.Exec(r.Context(), `INSERT INTO otp_challenges(phone, code_hash, expires_at) VALUES($1, $2, NOW() + INTERVAL '10 minutes')`, input.Phone, hash(code)); err != nil {
+	otpID, err := s.issueOTP(r.Context(), input.Phone, code)
+	if err != nil {
+		if errors.Is(err, errOTPResendLimited) {
+			errorJSON(w, http.StatusTooManyRequests, "request another verification code after the resend limit resets")
+			return
+		}
 		errorJSON(w, http.StatusInternalServerError, "could not create OTP challenge")
 		return
 	}
 	smsConfigured := smsProviderConfigured(s.cfg)
 	if s.cfg.AppEnv != "development" || smsConfigured {
 		if err := sendVerificationSMS(r.Context(), s.cfg, input.Phone, code); err != nil {
-			log.Printf("registration SMS delivery failed: %v", err)
-			_, _ = s.db.Exec(r.Context(), `DELETE FROM otp_challenges WHERE phone=$1 AND used_at IS NULL`, input.Phone)
-			errorJSON(w, http.StatusBadGateway, "MTN did not accept the verification SMS. Check the SMS API credentials, approved service code, and phone number, then try again.")
+			log.Printf("registration verification message delivery failed")
+			s.invalidateOTP(r.Context(), otpID)
+			errorJSON(w, http.StatusBadGateway, "could not deliver the verification code; try again later")
 			return
 		}
 	}
@@ -446,17 +453,21 @@ func (s *Server) requestOTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	_, err = s.db.Exec(r.Context(), `INSERT INTO otp_challenges(phone, code_hash, expires_at) VALUES($1, $2, NOW() + INTERVAL '10 minutes')`, phone, hash(code))
+	otpID, err := s.issueOTP(r.Context(), phone, code)
 	if err != nil {
+		if errors.Is(err, errOTPResendLimited) {
+			errorJSON(w, http.StatusTooManyRequests, "request another verification code after the resend limit resets")
+			return
+		}
 		errorJSON(w, http.StatusInternalServerError, "could not create OTP challenge")
 		return
 	}
 	smsConfigured := smsProviderConfigured(s.cfg)
 	if s.cfg.AppEnv != "development" || smsConfigured {
 		if err := sendVerificationSMS(r.Context(), s.cfg, phone, code); err != nil {
-			log.Printf("SMS OTP delivery failed: %v", err)
-			_, _ = s.db.Exec(r.Context(), `DELETE FROM otp_challenges WHERE phone=$1 AND used_at IS NULL`, phone)
-			errorJSON(w, http.StatusBadGateway, "MTN did not accept the verification SMS. Check the SMS API credentials, approved service code, and phone number, then try again.")
+			log.Printf("verification message delivery failed")
+			s.invalidateOTP(r.Context(), otpID)
+			errorJSON(w, http.StatusBadGateway, "could not deliver the verification code; try again later")
 			return
 		}
 	}
@@ -500,14 +511,14 @@ func (s *Server) verifyOTP(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(r.Context(), `
 		SELECT c.id, c.code_hash, u.id, c.attempts
 		FROM otp_challenges c JOIN users u ON u.phone = c.phone
-		WHERE c.phone=$1 AND c.used_at IS NULL AND c.expires_at > NOW() AND c.attempts < 5 AND u.status='active'
-		ORDER BY c.created_at DESC LIMIT 1 FOR UPDATE OF c`, phone).Scan(&challengeID, &codeHash, &userID, &attempts)
+		WHERE c.phone=$1 AND c.used_at IS NULL AND c.expires_at > NOW() AND c.attempts < $2 AND u.status='active'
+		ORDER BY c.created_at DESC LIMIT 1 FOR UPDATE OF c`, phone, otpAttemptLimit).Scan(&challengeID, &codeHash, &userID, &attempts)
 	if err != nil {
 		errorJSON(w, http.StatusUnauthorized, "invalid or expired OTP")
 		return
 	}
 	if hash(input.Code) != codeHash {
-		_, updateErr := tx.Exec(r.Context(), `UPDATE otp_challenges SET attempts=attempts+1,used_at=CASE WHEN attempts+1>=5 THEN NOW() ELSE used_at END WHERE id=$1`, challengeID)
+		_, updateErr := tx.Exec(r.Context(), `UPDATE otp_challenges SET attempts=attempts+1,used_at=CASE WHEN attempts+1>=$2 THEN NOW() ELSE used_at END WHERE id=$1`, challengeID, otpAttemptLimit)
 		if updateErr == nil {
 			updateErr = tx.Commit(r.Context())
 		}
@@ -1006,7 +1017,16 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		}
 		maxPrice = parsed
 	}
-	args := []any{search, q.Get("province"), q.Get("district"), q.Get("sector"), q.Get("category"), q.Get("transaction_type"), limit + 1, offset, minPrice, maxPrice}
+	var minBedrooms any
+	if value := q.Get("min_bedrooms"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 20 {
+			errorJSON(w, http.StatusBadRequest, "min_bedrooms must be between 1 and 20")
+			return
+		}
+		minBedrooms = parsed
+	}
+	args := []any{search, q.Get("province"), q.Get("district"), q.Get("sector"), q.Get("category"), q.Get("transaction_type"), limit + 1, offset, minPrice, maxPrice, minBedrooms}
 	rows, err := s.db.Query(r.Context(), `
 		SELECT l.id, l.owner_id, u.name, u.role, l.category, l.transaction_type,
 		l.title, l.description, l.price, l.currency, l.province, l.district, l.sector,
@@ -1024,6 +1044,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		AND ($4='' OR l.sector=$4) AND ($5='' OR l.category=$5)
 		AND ($6='' OR l.transaction_type=$6 OR (l.transaction_type='both' AND $6 IN ('buy','sell','rent','rent_out')))
 		AND ($9::double precision IS NULL OR l.price >= $9) AND ($10::double precision IS NULL OR l.price < $10)
+		AND ($11::integer IS NULL OR EXISTS (SELECT 1 FROM measurements m WHERE m.listing_id=l.id AND COALESCE(m.bedrooms,0) >= $11))
 		ORDER BY l.created_at DESC, l.id DESC LIMIT $7 OFFSET $8`, args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load listings")
@@ -1874,8 +1895,8 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 	if input.TransactionType != "rent" && input.TransactionType != "buy" {
 		input.TransactionType = "rent"
 	}
-	if input.RelatedType != "application" && input.RelatedType != "agreement" && input.RelatedType != "listing" {
-		errorJSON(w, http.StatusBadRequest, "related_type must be application, agreement, or listing")
+	if input.RelatedType != "application" && input.RelatedType != "agreement" && input.RelatedType != "listing" && input.RelatedType != "booking" {
+		errorJSON(w, http.StatusBadRequest, "related_type must be application, agreement, listing, or booking")
 		return
 	}
 	if input.Provider != "mtn_momo" {
@@ -1908,13 +1929,15 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusBadRequest, "could not determine the active rental amount")
 			return
 		}
+	case "booking":
+		if err := s.db.QueryRow(r.Context(), `SELECT total_amount,currency FROM bookings WHERE id=$1 AND guest_id=$2 AND status='confirmed'`, input.RelatedID, user.ID).Scan(&input.Amount, &input.Currency); err != nil {
+			errorJSON(w, http.StatusBadRequest, "booking must be confirmed before payment")
+			return
+		}
 	}
-	if input.Amount <= 0 || input.Currency == "" {
-		errorJSON(w, http.StatusBadRequest, "the server has no payable amount configured for this request")
+	if input.Amount <= 0 || input.Currency != "RWF" || math.Trunc(input.Amount) != input.Amount {
+		errorJSON(w, http.StatusBadRequest, "the payable amount must be a positive whole-number RWF amount")
 		return
-	}
-	if input.Currency == "" {
-		input.Currency = "RWF"
 	}
 	reference, err := randomToken()
 	if err != nil {
@@ -1953,19 +1976,21 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var id string
-	err = tx.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status,receipt_number) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $8='successful' THEN $7 ELSE NULL END) RETURNING id`, user.ID, input.RelatedType, input.RelatedID, input.Amount, input.Currency, input.Provider, providerReference, status).Scan(&id)
+	err = tx.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,NOW()+INTERVAL '30 minutes') RETURNING id`, user.ID, input.RelatedType, input.RelatedID, input.Amount, input.Currency, input.Provider, providerReference, status).Scan(&id)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, "could not create payment")
 		return
 	}
-	if input.RelatedType == "listing" || input.RelatedType == "application" {
+	if input.RelatedType == "listing" || input.RelatedType == "application" || input.RelatedType == "booking" {
 		var ownerID, listingTitle string
 		lookup := `SELECT l.owner_id,l.title FROM listings l WHERE l.id=$1`
 		lookupID := input.RelatedID
 		if input.RelatedType == "application" {
 			lookup = `SELECT l.owner_id,l.title FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.id=$1 AND a.applicant_id=$2`
+		} else if input.RelatedType == "booking" {
+			lookup = `SELECT l.owner_id,l.title FROM bookings b JOIN listings l ON l.id=b.listing_id WHERE b.id=$1 AND b.guest_id=$2 AND b.status='confirmed'`
 		}
-		if input.RelatedType == "application" {
+		if input.RelatedType == "application" || input.RelatedType == "booking" {
 			err = tx.QueryRow(r.Context(), lookup, lookupID, user.ID).Scan(&ownerID, &listingTitle)
 		} else {
 			err = tx.QueryRow(r.Context(), lookup, lookupID).Scan(&ownerID, &listingTitle)
@@ -2033,7 +2058,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		if user.Role == "admin" {
 			ownerID = nil
 		}
-		rows, err := s.db.Query(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.amount,p.currency,p.status,p.transaction_reference,p.purchased_at,p.activated_at,p.expires_at,p.created_at,COALESCE(pay.status,'pending'),p.provider_transaction_id,p.verified_at,COALESCE(pay.receipt_number,''),COALESCE(pay.provider,''),COALESCE(pay.provider_reference,'') FROM owner_upgrade_purchases p LEFT JOIN payments pay ON pay.id=p.payment_id WHERE ($1::uuid IS NULL OR p.owner_id=$1) ORDER BY p.created_at DESC LIMIT 200`, ownerID)
+		rows, err := s.db.Query(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.amount,p.currency,p.status,p.transaction_reference,p.purchased_at,p.activated_at,p.expires_at,p.created_at,COALESCE(pay.status,'pending'),p.provider_transaction_id,p.verified_at,COALESCE(pay.receipt_number,''),COALESCE(pay.provider,''),COALESCE(pay.provider_reference,''),COALESCE(pay.id::text,''),COALESCE(pay.amount,0) FROM owner_upgrade_purchases p LEFT JOIN payments pay ON pay.id=p.payment_id WHERE ($1::uuid IS NULL OR p.owner_id=$1) ORDER BY p.created_at DESC LIMIT 200`, ownerID)
 		if err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not load owner upgrades")
 			return
@@ -2041,21 +2066,22 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		purchases := make([]map[string]any, 0)
 		for rows.Next() {
-			var id, purchaseOwnerID, plan, currency, status, reference, paymentStatus, receipt, provider, providerReference string
+			var id, purchaseOwnerID, plan, currency, status, reference, paymentStatus, receipt, provider, providerReference, paymentID string
 			var amount float64
+			var paymentAmount float64
 			var purchasedAt, activatedAt, expiresAt *time.Time
 			var providerTransactionID *string
 			var verifiedAt *time.Time
 			var createdAt time.Time
-			if err := rows.Scan(&id, &purchaseOwnerID, &plan, &amount, &currency, &status, &reference, &purchasedAt, &activatedAt, &expiresAt, &createdAt, &paymentStatus, &providerTransactionID, &verifiedAt, &receipt, &provider, &providerReference); err != nil {
+			if err := rows.Scan(&id, &purchaseOwnerID, &plan, &amount, &currency, &status, &reference, &purchasedAt, &activatedAt, &expiresAt, &createdAt, &paymentStatus, &providerTransactionID, &verifiedAt, &receipt, &provider, &providerReference, &paymentID, &paymentAmount); err != nil {
 				errorJSON(w, http.StatusInternalServerError, "could not read owner upgrades")
 				return
 			}
 			if user.Role != "admin" && status == "pending" && paymentStatus == "pending" && provider == "mtn_momo" {
-				momoStatus, statusErr := newMoMoClient(s.cfg).paymentStatus(r.Context(), providerReference)
-				if statusErr == nil && momoStatus != "pending" && s.syncOwnerPurchase(r.Context(), id, providerReference, momoStatus) == nil {
-					paymentStatus = momoStatus
-					if momoStatus == "successful" {
+				momoStatus, statusErr := newMoMoClient(s.cfg).verifiedPaymentStatus(r.Context(), providerReference, paymentAmount, currency)
+				if statusErr == nil && momoStatus.Status != "pending" && s.applyVerifiedPayment(r.Context(), paymentID, momoStatus.Status, momoStatus.FinancialTransactionID) == nil {
+					paymentStatus = momoStatus.Status
+					if momoStatus.Status == "successful" {
 						status = "active"
 						now := time.Now().UTC()
 						purchasedAt, activatedAt = &now, &now
@@ -2067,9 +2093,10 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 						}
 						expires := now.Add(time.Duration(days) * 24 * time.Hour)
 						expiresAt = &expires
-						receipt = providerReference
+						receipt = momoStatus.FinancialTransactionID
+						providerTransactionID = &momoStatus.FinancialTransactionID
 					} else {
-						status = "failed"
+						status = momoStatus.Status
 					}
 				}
 			}
@@ -2093,7 +2120,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		input.Plan = strings.ToLower(strings.TrimSpace(input.Plan))
 		input.Provider = strings.ToLower(strings.TrimSpace(input.Provider))
 		price, validPlan := s.ownerUpgradePrices()[input.Plan]
-		if !validPlan || price <= 0 {
+		if !validPlan || price <= 0 || math.Trunc(price) != price {
 			errorJSON(w, http.StatusBadRequest, "choose a plan with a configured server price")
 			return
 		}
@@ -2191,18 +2218,9 @@ func (s *Server) ownerUpgradeRoute(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "admin verification required")
 		return
 	}
-	var input struct {
-		ProviderTransactionID string `json:"provider_transaction_id"`
-	}
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	if strings.TrimSpace(input.ProviderTransactionID) == "" {
-		errorJSON(w, http.StatusBadRequest, "provider_transaction_id is required after checking the payment with its provider")
-		return
-	}
-	var provider, providerReference string
-	if err := s.db.QueryRow(r.Context(), `SELECT pay.provider,COALESCE(pay.provider_reference,'') FROM owner_upgrade_purchases p JOIN payments pay ON pay.id=p.payment_id WHERE p.id=$1 AND p.status='pending' AND pay.status='pending'`, parts[0]).Scan(&provider, &providerReference); err != nil {
+	var provider, providerReference, paymentID, currency string
+	var amount float64
+	if err := s.db.QueryRow(r.Context(), `SELECT pay.provider,COALESCE(pay.provider_reference,''),pay.id::text,pay.amount,pay.currency FROM owner_upgrade_purchases p JOIN payments pay ON pay.id=p.payment_id WHERE p.id=$1 AND p.status='pending' AND pay.status='pending'`, parts[0]).Scan(&provider, &providerReference, &paymentID, &amount, &currency); err != nil {
 		errorJSON(w, http.StatusNotFound, "pending owner payment not found")
 		return
 	}
@@ -2210,79 +2228,20 @@ func (s *Server) ownerUpgradeRoute(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusConflict, "this payment provider cannot be verified automatically")
 		return
 	}
-	providerStatus, err := newMoMoClient(s.cfg).paymentStatus(r.Context(), providerReference)
+	providerStatus, err := newMoMoClient(s.cfg).verifiedPaymentStatus(r.Context(), providerReference, amount, currency)
 	if err != nil {
 		errorJSON(w, http.StatusBadGateway, "MTN payment status is temporarily unavailable")
 		return
 	}
-	if providerStatus != "successful" {
-		errorJSON(w, http.StatusConflict, "MTN has not confirmed a successful payment")
+	if providerStatus.Status == "pending" {
+		writeJSON(w, http.StatusAccepted, map[string]string{"id": parts[0], "payment_status": "pending"})
 		return
 	}
-	input.ProviderTransactionID = providerReference
-	tx, err := s.db.Begin(r.Context())
-	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not begin payment verification")
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var purchaseID, plan, paymentID string
-	var ownerID string
-	err = tx.QueryRow(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.payment_id FROM owner_upgrade_purchases p JOIN payments pay ON pay.id=p.payment_id WHERE p.id=$1 AND p.status='pending' AND pay.status='pending' FOR UPDATE OF p,pay`, parts[0]).Scan(&purchaseID, &ownerID, &plan, &paymentID)
-	if err == pgx.ErrNoRows {
-		errorJSON(w, http.StatusNotFound, "pending owner payment not found")
-		return
-	}
-	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not load payment for verification")
-		return
-	}
-	var verified bool
-	if err := tx.QueryRow(r.Context(), `UPDATE payments SET status='successful',receipt_number=provider_reference WHERE id=$1 AND status='pending' RETURNING TRUE`, paymentID).Scan(&verified); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not verify payment")
-		return
-	}
-	if _, err := tx.Exec(r.Context(), `UPDATE owner_upgrade_purchases SET status='expired' WHERE owner_id=$1 AND status='active'`, ownerID); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not close previous owner entitlement")
-		return
-	}
-	if _, err := tx.Exec(r.Context(), `UPDATE owner_upgrade_purchases SET status='active',purchased_at=NOW(),activated_at=NOW(),expires_at=NOW()+CASE plan WHEN 'silver' THEN INTERVAL '90 days' WHEN 'gold' THEN INTERVAL '180 days' ELSE INTERVAL '365 days' END,verified_by=$2,provider_transaction_id=$3,verified_at=NOW() WHERE id=$1`, purchaseID, user.ID, strings.TrimSpace(input.ProviderTransactionID)); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not activate owner entitlement")
-		return
-	}
-	if err := tx.Commit(r.Context()); err != nil {
+	if err := s.applyVerifiedPayment(r.Context(), paymentID, providerStatus.Status, providerStatus.FinancialTransactionID); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not commit verified purchase")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": purchaseID, "owner_id": ownerID, "plan": plan, "status": "active", "payment_status": "successful", "activated_at": time.Now().UTC()})
-}
-
-func (s *Server) syncOwnerPurchase(ctx context.Context, purchaseID, providerReference, providerStatus string) error {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	var ownerID, plan, paymentID string
-	if err := tx.QueryRow(ctx, `SELECT p.owner_id,p.plan,p.payment_id FROM owner_upgrade_purchases p JOIN payments pay ON pay.id=p.payment_id WHERE p.id=$1 AND p.status='pending' AND pay.status='pending' FOR UPDATE OF p,pay`, purchaseID).Scan(&ownerID, &plan, &paymentID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `UPDATE payments SET status=$2,receipt_number=CASE WHEN $2='successful' THEN provider_reference ELSE receipt_number END WHERE id=$1`, paymentID, providerStatus); err != nil {
-		return err
-	}
-	if providerStatus == "successful" {
-		if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='expired' WHERE owner_id=$1 AND status='active'`, ownerID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='active',purchased_at=NOW(),activated_at=NOW(),expires_at=NOW()+CASE plan WHEN 'silver' THEN INTERVAL '90 days' WHEN 'gold' THEN INTERVAL '180 days' ELSE INTERVAL '365 days' END,provider_transaction_id=$2,verified_at=NOW() WHERE id=$1`, purchaseID, providerReference); err != nil {
-			return err
-		}
-	} else {
-		if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='failed' WHERE id=$1`, purchaseID); err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
+	writeJSON(w, http.StatusOK, map[string]any{"id": parts[0], "payment_status": providerStatus.Status, "provider_transaction_id": providerStatus.FinancialTransactionID})
 }
 
 func (s *Server) canPayFor(r *http.Request, userID, relatedType, relatedID string) bool {
@@ -2294,6 +2253,8 @@ func (s *Server) canPayFor(r *http.Request, userID, relatedType, relatedID strin
 		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_agreements WHERE id=$1 AND tenant_id=$2)`, relatedID, userID).Scan(&exists)
 	case "listing":
 		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listings WHERE id=$1 AND status='published' AND owner_id<>$2)`, relatedID, userID).Scan(&exists)
+	case "booking":
+		_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM bookings WHERE id=$1 AND guest_id=$2 AND status='confirmed')`, relatedID, userID).Scan(&exists)
 	}
 	return exists
 }
@@ -2318,22 +2279,25 @@ func (s *Server) paymentRoute(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	var id, relatedType, relatedID, provider, status, currency, providerReference string
+	var id, relatedType, relatedID, provider, status, currency, providerReference, providerTransactionID string
 	var amount float64
 	var createdAt time.Time
-	err := s.db.QueryRow(r.Context(), `SELECT id,related_type,COALESCE(related_id::text,''),amount,currency,provider,COALESCE(provider_reference,''),status,created_at FROM payments WHERE id=$1 AND user_id=$2`, parts[0], user.ID).Scan(&id, &relatedType, &relatedID, &amount, &currency, &provider, &providerReference, &status, &createdAt)
+	err := s.db.QueryRow(r.Context(), `SELECT id,related_type,COALESCE(related_id::text,''),amount,currency,provider,COALESCE(provider_reference,''),status,created_at,COALESCE(provider_transaction_id,'') FROM payments WHERE id=$1 AND user_id=$2`, parts[0], user.ID).Scan(&id, &relatedType, &relatedID, &amount, &currency, &provider, &providerReference, &status, &createdAt, &providerTransactionID)
 	if err != nil {
 		errorJSON(w, http.StatusNotFound, "payment not found")
 		return
 	}
 	if provider == "mtn_momo" && status == "pending" {
-		momoStatus, statusErr := newMoMoClient(s.cfg).paymentStatus(r.Context(), providerReference)
-		if statusErr == nil && momoStatus != "pending" {
-			_, _ = s.db.Exec(r.Context(), `UPDATE payments SET status=$2,receipt_number=CASE WHEN $2='successful' THEN provider_reference ELSE receipt_number END WHERE id=$1 AND status='pending'`, id, momoStatus)
-			status = momoStatus
+		momoStatus, statusErr := newMoMoClient(s.cfg).verifiedPaymentStatus(r.Context(), providerReference, amount, currency)
+		if statusErr == nil && momoStatus.Status != "pending" {
+			if err := s.applyVerifiedPayment(r.Context(), id, momoStatus.Status, momoStatus.FinancialTransactionID); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not record provider payment status")
+				return
+			}
+			status, providerTransactionID = momoStatus.Status, momoStatus.FinancialTransactionID
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "related_type": relatedType, "related_id": relatedID, "amount": amount, "currency": currency, "provider": provider, "provider_reference": providerReference, "status": status, "created_at": createdAt})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "related_type": relatedType, "related_id": relatedID, "amount": amount, "currency": currency, "provider": provider, "provider_reference": providerReference, "provider_transaction_id": providerTransactionID, "status": status, "created_at": createdAt})
 }
 
 func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id string) {
@@ -2356,57 +2320,20 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request, id strin
 		errorJSON(w, http.StatusConflict, "payment status can only be confirmed by its payment provider")
 		return
 	}
-	providerStatus, err := newMoMoClient(s.cfg).paymentStatus(r.Context(), reference)
+	providerStatus, err := newMoMoClient(s.cfg).verifiedPaymentStatus(r.Context(), reference, amount, currency)
 	if err != nil {
 		errorJSON(w, http.StatusBadGateway, "MTN payment status is temporarily unavailable")
 		return
 	}
-	if providerStatus == "pending" {
+	if providerStatus.Status == "pending" {
 		writeJSON(w, http.StatusAccepted, map[string]string{"id": id, "status": "pending"})
 		return
 	}
-	tx, err := s.db.Begin(r.Context())
-	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not start payment confirmation")
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var relatedType, relatedID string
-	err = tx.QueryRow(r.Context(), `UPDATE payments SET status=$3, receipt_number=CASE WHEN $3='successful' THEN COALESCE(receipt_number,provider_reference) ELSE receipt_number END WHERE id=$1 AND user_id=$2 AND status='pending' AND related_type <> 'owner_upgrade' RETURNING related_type,COALESCE(related_id::text,'')`, id, user.ID, providerStatus).Scan(&relatedType, &relatedID)
-	if err != nil {
-		errorJSON(w, http.StatusNotFound, "pending payment not found")
-		return
-	}
-	if providerStatus == "successful" && (relatedType == "listing" || relatedType == "application") {
-		var ownerID, listingTitle string
-		if relatedType == "application" {
-			err = tx.QueryRow(r.Context(), `SELECT l.owner_id,l.title FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE a.id=$1`, relatedID).Scan(&ownerID, &listingTitle)
-		} else {
-			err = tx.QueryRow(r.Context(), `SELECT owner_id,title FROM listings WHERE id=$1`, relatedID).Scan(&ownerID, &listingTitle)
-		}
-		if err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not find property owner")
-			return
-		}
-		if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_confirmed','Property payment confirmed',$2)`, ownerID, fmt.Sprintf("A payment for %s has been confirmed by %s.", listingTitle, user.Name)); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not notify property owner")
-			return
-		}
-		if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_confirmed','MTN MoMo payment confirmed',$2)`, user.ID, fmt.Sprintf("Your %s %.0f payment for %s was confirmed by MTN MoMo.", currency, amount, listingTitle)); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not notify customer")
-			return
-		}
-	} else if providerStatus == "failed" {
-		if _, err = tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'payment_failed','MTN MoMo payment failed',$2)`, user.ID, "MTN MoMo could not confirm your payment. Check your phone and try again."); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not notify customer")
-			return
-		}
-	}
-	if err := tx.Commit(r.Context()); err != nil {
+	if err := s.applyVerifiedPayment(r.Context(), id, providerStatus.Status, providerStatus.FinancialTransactionID); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not confirm payment")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": providerStatus})
+	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": providerStatus.Status, "provider_transaction_id": providerStatus.FinancialTransactionID})
 }
 
 func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
@@ -2554,7 +2481,7 @@ func (s *Server) bookings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		rows, err := s.db.Query(r.Context(), `SELECT b.id,b.listing_id,l.title,b.check_in,b.check_out,b.guests,b.status,b.created_at,u.name FROM bookings b JOIN listings l ON l.id=b.listing_id JOIN users u ON u.id=b.guest_id WHERE b.guest_id=$1 OR l.owner_id=$1 ORDER BY b.created_at DESC LIMIT 100`, user.ID)
+		rows, err := s.db.Query(r.Context(), `SELECT b.id,b.listing_id,l.title,b.check_in,b.check_out,b.guests,b.status,b.created_at,u.name,b.pricing_period,b.rate_amount,b.billed_units,b.base_amount,b.service_fee_amount,b.total_amount,b.currency,COALESCE(pay.status,''),b.guest_id=$1 FROM bookings b JOIN listings l ON l.id=b.listing_id JOIN users u ON u.id=b.guest_id LEFT JOIN LATERAL (SELECT status FROM payments WHERE related_type='booking' AND related_id=b.id ORDER BY created_at DESC LIMIT 1) pay ON true WHERE b.guest_id=$1 OR l.owner_id=$1 ORDER BY b.created_at DESC LIMIT 100`, user.ID)
 		if err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not load bookings")
 			return
@@ -2562,15 +2489,18 @@ func (s *Server) bookings(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		items := make([]map[string]any, 0)
 		for rows.Next() {
-			var id, listingID, title, status, guestName string
+			var id, listingID, title, status, guestName, period, currency, paymentStatus string
+			var isGuest bool
 			var checkIn, checkOut time.Time
-			var guests int
+			var guests, billedUnits int
+			var rate, base, fee, total int64
 			var createdAt time.Time
-			if err := rows.Scan(&id, &listingID, &title, &checkIn, &checkOut, &guests, &status, &createdAt, &guestName); err != nil {
+			if err := rows.Scan(&id, &listingID, &title, &checkIn, &checkOut, &guests, &status, &createdAt, &guestName, &period, &rate, &billedUnits, &base, &fee, &total, &currency, &paymentStatus, &isGuest); err != nil {
 				errorJSON(w, http.StatusInternalServerError, "could not read bookings")
 				return
 			}
-			items = append(items, map[string]any{"id": id, "listing_id": listingID, "listing_title": title, "check_in": checkIn.Format("2006-01-02"), "check_out": checkOut.Format("2006-01-02"), "guests": guests, "status": status, "guest_name": guestName, "created_at": createdAt})
+			quote := bookingQuote{PricingPeriod: period, RateAmount: rate, BilledUnits: billedUnits, BaseAmount: base, ServiceFeeAmount: fee, TotalAmount: total, Currency: currency}
+			items = append(items, map[string]any{"id": id, "listing_id": listingID, "listing_title": title, "check_in": checkIn.Format("2006-01-02"), "check_out": checkOut.Format("2006-01-02"), "guests": guests, "status": status, "guest_name": guestName, "is_guest": isGuest, "created_at": createdAt, "quote": quote, "payment_status": paymentStatus})
 		}
 		if err := rows.Err(); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not read bookings")
@@ -2584,17 +2514,29 @@ func (s *Server) bookings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		ListingID string `json:"listing_id"`
-		CheckIn   string `json:"check_in"`
-		CheckOut  string `json:"check_out"`
-		Guests    int    `json:"guests"`
+		ListingID      string `json:"listing_id"`
+		CheckIn        string `json:"check_in"`
+		CheckOut       string `json:"check_out"`
+		Guests         int    `json:"guests"`
+		PricingPeriod  string `json:"pricing_period"`
+		IdempotencyKey string `json:"idempotency_key"`
 	}
-	if !decodeJSON(w, r, &input) || input.ListingID == "" || input.CheckIn == "" || input.CheckOut == "" {
-		errorJSON(w, http.StatusBadRequest, "listing_id, check_in, and check_out are required")
+	if !decodeJSON(w, r, &input) || input.ListingID == "" || input.CheckIn == "" || input.CheckOut == "" || input.IdempotencyKey == "" {
+		errorJSON(w, http.StatusBadRequest, "listing_id, check_in, check_out, and idempotency_key are required")
 		return
 	}
-	if input.Guests < 1 {
-		input.Guests = 1
+	if len(input.IdempotencyKey) > 100 || input.Guests < 1 || input.Guests > 100 {
+		errorJSON(w, http.StatusBadRequest, "idempotency_key and guest count are invalid")
+		return
+	}
+	input.PricingPeriod = strings.ToLower(strings.TrimSpace(input.PricingPeriod))
+	if input.PricingPeriod == "" {
+		input.PricingPeriod = "daily"
+	}
+	checkIn, checkOut, nights, dateErr := parseBookingDates(input.CheckIn, input.CheckOut, time.Now())
+	if dateErr != nil {
+		errorJSON(w, http.StatusBadRequest, dateErr.Error())
+		return
 	}
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
@@ -2602,8 +2544,76 @@ func (s *Server) bookings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var id, ownerID, listingTitle string
-	err = tx.QueryRow(r.Context(), `INSERT INTO bookings(listing_id,guest_id,check_in,check_out,guests) SELECT $1,$2,$3,$4,$5 WHERE EXISTS(SELECT 1 FROM listings WHERE id=$1 AND status='published') RETURNING id,(SELECT owner_id FROM listings WHERE id=$1),(SELECT title FROM listings WHERE id=$1)`, input.ListingID, user.ID, input.CheckIn, input.CheckOut, input.Guests).Scan(&id, &ownerID, &listingTitle)
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtext('umutungo_booking'),hashtext($1))`, input.ListingID); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not lock availability")
+		return
+	}
+	var existingID, existingStatus, existingListing, existingCheckIn, existingCheckOut, existingPeriod, existingCurrency string
+	var existingGuests, existingUnits int
+	var existingRate, existingBase, existingFee, existingTotal int64
+	var existingCreated time.Time
+	loadExisting := func(idempotencyKey string) bool {
+		return tx.QueryRow(r.Context(), `SELECT id,status,listing_id::text,check_in::text,check_out::text,guests,pricing_period,rate_amount,billed_units,base_amount,service_fee_amount,total_amount,currency,created_at FROM bookings WHERE guest_id=$1 AND idempotency_key=$2`, user.ID, idempotencyKey).Scan(&existingID, &existingStatus, &existingListing, &existingCheckIn, &existingCheckOut, &existingGuests, &existingPeriod, &existingRate, &existingUnits, &existingBase, &existingFee, &existingTotal, &existingCurrency, &existingCreated) == nil
+	}
+	writeExisting := func() {
+		quote := bookingQuote{PricingPeriod: existingPeriod, RateAmount: existingRate, BilledUnits: existingUnits, BaseAmount: existingBase, ServiceFeeAmount: existingFee, TotalAmount: existingTotal, Currency: existingCurrency}
+		writeJSON(w, http.StatusOK, map[string]any{"id": existingID, "status": existingStatus, "check_in": existingCheckIn, "check_out": existingCheckOut, "guests": existingGuests, "created_at": existingCreated, "quote": quote, "idempotent_replay": true})
+	}
+	if loadExisting(input.IdempotencyKey) {
+		if existingListing != input.ListingID || existingCheckIn != input.CheckIn || existingCheckOut != input.CheckOut || existingGuests != input.Guests || existingPeriod != input.PricingPeriod {
+			errorJSON(w, http.StatusConflict, "idempotency_key was already used for a different booking")
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load existing booking")
+			return
+		}
+		writeExisting()
+		return
+	}
+	var ownerID, listingTitle, transactionType, listingStatus, currency string
+	var rateFloat float64
+	err = tx.QueryRow(r.Context(), `SELECT owner_id,title,transaction_type,status,price::float8,currency FROM listings WHERE id=$1 FOR SHARE`, input.ListingID).Scan(&ownerID, &listingTitle, &transactionType, &listingStatus, &rateFloat, &currency)
+	if err != nil {
+		errorJSON(w, http.StatusNotFound, "property not found")
+		return
+	}
+	if ownerID == user.ID || listingStatus != "published" || transactionType != "book" {
+		errorJSON(w, http.StatusConflict, "this property is not available for booking")
+		return
+	}
+	if currency != "RWF" || math.Trunc(rateFloat) != rateFloat || rateFloat > float64(math.MaxInt64) {
+		errorJSON(w, http.StatusConflict, "the property must have a whole-number RWF booking rate")
+		return
+	}
+	quote, err := calculateBookingQuote(int64(rateFloat), nights, input.PricingPeriod)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var conflict bool
+	if err := tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM bookings WHERE listing_id=$1 AND status='confirmed' AND check_in<$3 AND check_out>$2)`, input.ListingID, checkIn, checkOut).Scan(&conflict); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not check property availability")
+		return
+	}
+	if conflict {
+		errorJSON(w, http.StatusConflict, "the selected dates are no longer available")
+		return
+	}
+	if loadExistingBookingByDates(tx, r.Context(), user.ID, input.ListingID, input.CheckIn, input.CheckOut, &existingID, &existingStatus, &existingCheckIn, &existingCheckOut, &existingGuests, &existingPeriod, &existingRate, &existingUnits, &existingBase, &existingFee, &existingTotal, &existingCurrency, &existingCreated) {
+		if existingGuests != input.Guests || existingPeriod != input.PricingPeriod {
+			errorJSON(w, http.StatusConflict, "an active booking already exists for these dates with different booking details")
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load existing booking")
+			return
+		}
+		writeExisting()
+		return
+	}
+	var id string
+	err = tx.QueryRow(r.Context(), `INSERT INTO bookings(listing_id,guest_id,check_in,check_out,guests,pricing_period,rate_amount,billed_units,base_amount,service_fee_amount,total_amount,currency,idempotency_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`, input.ListingID, user.ID, checkIn, checkOut, input.Guests, quote.PricingPeriod, quote.RateAmount, quote.BilledUnits, quote.BaseAmount, quote.ServiceFeeAmount, quote.TotalAmount, quote.Currency, input.IdempotencyKey).Scan(&id)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, "could not create booking")
 		return
@@ -2616,7 +2626,86 @@ func (s *Server) bookings(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "could not save booking")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "requested"})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": "requested", "check_in": input.CheckIn, "check_out": input.CheckOut, "guests": input.Guests, "quote": quote})
+}
+
+func loadExistingBookingByDates(tx pgx.Tx, ctx context.Context, guestID, listingID, checkIn, checkOut string, id, status, storedCheckIn, storedCheckOut *string, guests *int, period *string, rate *int64, units *int, base, fee, total *int64, currency *string, createdAt *time.Time) bool {
+	return tx.QueryRow(ctx, `SELECT id,status,check_in::text,check_out::text,guests,pricing_period,rate_amount,billed_units,base_amount,service_fee_amount,total_amount,currency,created_at FROM bookings WHERE guest_id=$1 AND listing_id=$2 AND check_in=$3::date AND check_out=$4::date AND status IN ('requested','confirmed') ORDER BY created_at DESC LIMIT 1`, guestID, listingID, checkIn, checkOut).Scan(id, status, storedCheckIn, storedCheckOut, guests, period, rate, units, base, fee, total, currency, createdAt) == nil
+}
+
+func (s *Server) bookingRoute(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/bookings/"), "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] != "decision" || r.Method != http.MethodPost {
+		errorJSON(w, http.StatusNotFound, "booking route not found")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var input struct {
+		Status string `json:"status"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.Status = strings.ToLower(strings.TrimSpace(input.Status))
+	if input.Status != "confirmed" && input.Status != "declined" {
+		errorJSON(w, http.StatusBadRequest, "status must be confirmed or declined")
+		return
+	}
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not update booking")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var listingID, guestID, currentStatus, title string
+	if err := tx.QueryRow(r.Context(), `SELECT b.listing_id::text,b.guest_id::text,b.status,l.title FROM bookings b JOIN listings l ON l.id=b.listing_id WHERE b.id=$1 AND l.owner_id=$2 FOR UPDATE OF b`, parts[0], user.ID).Scan(&listingID, &guestID, &currentStatus, &title); err != nil {
+		errorJSON(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtext('umutungo_booking'),hashtext($1))`, listingID); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not lock availability")
+		return
+	}
+	if currentStatus == input.Status {
+		if err := tx.Commit(r.Context()); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not update booking")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"id": parts[0], "status": currentStatus})
+		return
+	}
+	if currentStatus != "requested" {
+		errorJSON(w, http.StatusConflict, "booking has already been decided")
+		return
+	}
+	if input.Status == "confirmed" {
+		var overlap bool
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM bookings target JOIN bookings other ON other.listing_id=target.listing_id AND other.id<>target.id AND other.status='confirmed' AND other.check_in<target.check_out AND other.check_out>target.check_in WHERE target.id=$1)`, parts[0]).Scan(&overlap); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not check booking availability")
+			return
+		}
+		if overlap {
+			errorJSON(w, http.StatusConflict, "these dates overlap another confirmed booking")
+			return
+		}
+	}
+	if _, err := tx.Exec(r.Context(), `UPDATE bookings SET status=$2 WHERE id=$1 AND status='requested'`, parts[0], input.Status); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not update booking")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'booking_decision',$2,$3)`, guestID, "Booking "+input.Status, fmt.Sprintf("Your booking request for %s was %s by the property owner.", title, input.Status)); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not notify guest")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not update booking")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": parts[0], "status": input.Status})
 }
 
 func (s *Server) reports(w http.ResponseWriter, r *http.Request) {

@@ -81,6 +81,6 @@ export default function OwnerUpgradeScreen() {
     <View style={[styles.card, { gap: 8 }]}><Text style={styles.heading}>MTN Rwanda phone number</Text><View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><TextInput style={[styles.input, { flex: 1 }]} value={phone} onChangeText={setPhone} placeholder="+250 7XX XXX XXX" placeholderTextColor={colors.muted} keyboardType="phone-pad" autoComplete="tel" /><Pressable style={[styles.secondaryButton, { paddingHorizontal: 12 }]} onPress={() => setShowMomoScanner(true)}><Text style={styles.secondaryText}>Scan QR</Text></Pressable></View></View>
     {notice ? <Text style={{ color: colors.greenDark, fontWeight: '700' }}>{notice}</Text> : null}
     {purchase ? <View style={[styles.card, { gap: 6 }]}><Text style={styles.heading}>Latest payment: {purchase.payment_status}</Text><Text style={styles.body}>{purchase.plan} · {purchase.currency} {purchase.amount.toLocaleString()}</Text><Text style={styles.muted}>Reference: {purchase.transaction_reference}</Text>{purchase.expires_at ? <Text style={styles.muted}>Expires: {new Date(purchase.expires_at).toLocaleDateString()}</Text> : null}</View> : null}
-    <MomoQrScanner visible={showMomoScanner} onClose={() => setShowMomoScanner(false)} onPhoneScanned={setPhone} />
+    <MomoQrScanner key={showMomoScanner ? 'open' : 'closed'} visible={showMomoScanner} onClose={() => setShowMomoScanner(false)} onPhoneScanned={setPhone} />
   </ScrollView>;
 }

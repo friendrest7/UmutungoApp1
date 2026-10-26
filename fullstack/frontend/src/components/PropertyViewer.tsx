@@ -113,7 +113,7 @@ function buildReceiptPdf(receipt: PaymentReceipt, propertyUrl: string) {
 }
 
 export function PropertyViewer({ language, property, onClose, initialMode = 'photos', initialImageIndex = 0, initialRequest = false, initialContact = false, embedded = false }: PropertyViewerProps) {
-  const demoPaymentsEnabled = process.env.NEXT_PUBLIC_PAYMENT_DEMO_MODE !== 'live';
+  const demoPaymentsEnabled = process.env.NODE_ENV === 'development';
   const images = property.images?.length ? property.images : [property.image];
   const isHouse = property.type.trim().toLowerCase() === 'house';
   const hasPropertyMeasurements = property.bedrooms > 0 || property.bathrooms > 0 || property.area > 0;

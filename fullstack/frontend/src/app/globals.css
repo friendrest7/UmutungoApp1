@@ -5423,7 +5423,7 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 /* Make property photos the primary focus and keep card copy compact. */
 .app-realistic .landing-property-grid .property-image {
   height: auto;
-  aspect-ratio: 1.28 / 1;
+  aspect-ratio: 1.38 / 1;
 }
 .app-realistic .landing-property-grid .property-card-body {
   padding: 12px 13px 13px;
@@ -5452,7 +5452,7 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 }
 .app-realistic .category-listing-image {
   height: auto;
-  aspect-ratio: 1.18 / 1;
+  aspect-ratio: 1.28 / 1;
 }
 .app-realistic .category-listing-copy {
   min-height: 0;
@@ -5482,6 +5482,234 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
   font-size: 9px;
 }
 @media (max-width: 600px) {
-  .app-realistic .landing-property-grid .property-image { aspect-ratio: 1.2 / 1; }
-  .app-realistic .category-listing-image { aspect-ratio: 1.12 / 1; }
+  .app-realistic .landing-property-grid .property-image { aspect-ratio: 1.3 / 1; }
+  .app-realistic .category-listing-image { aspect-ratio: 1.2 / 1; }
+}
+/* Keep RWF and the displayed amount together in property card prices. */
+.app-realistic .landing-property-grid .property-card-footer > div > strong,
+.app-realistic .category-listing-footer > div > strong {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.app-realistic :is(.view-property-button, .category-view-button) {
+  width: fit-content !important;
+  min-width: 0;
+  min-height: 32px;
+  flex: 0 0 auto;
+  gap: 0;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.app-realistic .landing-property-backdrop {
+  border-color: #eeeeee;
+  background: #ffffff;
+}
+.app-realistic .landing-property-backdrop::before {
+  display: none;
+}
+.app-realistic.theme-dark .landing-property-backdrop {
+  border-color: #222222;
+  background: #000000;
+}
+/* Photo-first listing card inspired by the supplied marketplace reference. */
+.app-realistic .landing-property-grid .property-category-badge {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  bottom: auto;
+  left: 12px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #00a84f;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 750;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .14);
+}
+.app-realistic .landing-property-grid .property-card-location-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.app-realistic .landing-property-grid .property-card-location-row p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-realistic .landing-property-grid .property-card-rating {
+  flex: 0 0 auto;
+  color: #586575;
+  font-size: 10px;
+  font-weight: 700;
+}
+.app-realistic .landing-property-grid .property-card-rating > span {
+  color: #f5a900;
+}
+.app-realistic .landing-property-grid .property-availability-tag {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 7px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e8f6ed;
+  color: #008c42;
+  font-size: 9px;
+  font-weight: 700;
+}
+.app-realistic .landing-property-grid .property-card-poster {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.app-realistic .landing-property-grid .property-card-poster > img,
+.app-realistic .landing-property-grid .property-card-poster-initial {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+}
+.app-realistic .landing-property-grid .property-card-poster > img {
+  object-fit: cover;
+}
+.app-realistic .landing-property-grid .property-card-poster-initial {
+  display: grid;
+  place-items: center;
+  background: #e8f6ed;
+  color: #008c42;
+  font-size: 11px;
+  font-weight: 800;
+}
+.app-realistic .landing-property-grid .property-card-poster > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-realistic .landing-property-grid .property-card-poster strong {
+  color: var(--ink);
+  font-weight: 650;
+}
+.app-realistic .landing-property-grid .property-card-poster .property-card-verified {
+  margin-left: 5px;
+  color: #008c42;
+  font-size: 9px;
+  font-weight: 700;
+}
+.app-realistic .landing-property-grid .property-card-footer {
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+  padding-top: 11px;
+}
+.app-realistic .landing-property-grid .property-card-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+.app-realistic .landing-property-grid .property-card-call,
+.app-realistic .landing-property-grid .view-property-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.app-realistic .landing-property-grid .property-card-call {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.app-realistic .landing-property-grid .view-property-button {
+  width: auto !important;
+  min-width: 0;
+  flex: 0 0 auto;
+  border: 1px solid #00a84f;
+  background: #00a84f;
+  color: #ffffff;
+}
+.app-realistic .landing-property-grid .view-property-button:hover {
+  border-color: #008c42;
+  background: #008c42;
+}
+@media (max-width: 600px) {
+  .app-realistic .landing-property-grid .property-card-footer { align-items: flex-start; }
+  .app-realistic .landing-property-grid .property-card-actions { flex-wrap: wrap; justify-content: flex-end; }
+}
+.app-realistic .landing-property-grid .property-image::after {
+  background: linear-gradient(180deg, transparent 72%, rgba(5, 17, 10, .12));
+}
+.app-realistic .landing-property-grid .property-image-art {
+  filter: saturate(.9) brightness(.96);
+}
+.app-realistic .landing-property-grid .property-card:hover .property-image-art {
+  filter: saturate(1) brightness(1);
+}
+.app-realistic.theme-dark .landing-property-grid .property-availability-tag {
+  background: #e8f6ed !important;
+  color: #111111 !important;
+  -webkit-text-fill-color: #111111 !important;
+}
+.app-realistic.theme-dark .landing-property-grid .property-card-poster-initial {
+  background: #e8f6ed !important;
+  color: #008c42 !important;
+  -webkit-text-fill-color: #008c42 !important;
+}
+.conversational-search-results-button {
+  align-self: flex-start;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #00a84f;
+  border-radius: 10px;
+  background: #00a84f;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.conversational-search-results-button:hover { border-color: #008c42; background: #008c42; }
+.conversational-search-results-button:focus-visible { outline: 3px solid rgba(0, 168, 79, .35); outline-offset: 2px; }
+
+/* Search result actions use the Umutungo logo green in every theme. */
+.app-realistic :is(.view-property-button, .category-view-button) {
+  border-color: #00a84f !important;
+  background: #00a84f !important;
+  color: #fff !important;
+}
+.app-realistic :is(.view-property-button, .category-view-button):hover {
+  border-color: #008c42 !important;
+  background: #008c42 !important;
+  color: #fff !important;
+}
+
+/* Compact listing cards: reduce both the image height and text spacing. */
+.app-realistic .landing-property-grid .property-image { height: 190px !important; aspect-ratio: auto !important; }
+.app-realistic .landing-property-grid .property-card-body { gap: 0 !important; padding: 8px 11px 9px !important; }
+.app-realistic .landing-property-grid .property-card-location-row { margin: 0 !important; }
+.app-realistic .landing-property-grid .property-card h3 { margin: 2px 0 !important; line-height: 1.15; }
+.app-realistic .landing-property-grid .property-availability-tag { margin-top: 2px !important; }
+.app-realistic .landing-property-grid .property-details { margin: 4px 0 0 !important; padding: 5px 0 !important; }
+.app-realistic .landing-property-grid .property-card-poster { margin-top: 4px !important; }
+.app-realistic .landing-property-grid .property-card-footer { margin-top: 4px !important; padding-top: 5px !important; }
+.app-realistic .category-listing-image { height: 180px !important; aspect-ratio: auto !important; }
+.app-realistic .category-listing-copy { min-height: 0 !important; padding: 8px 10px 9px !important; }
+.app-realistic .category-listing-copy h3 { min-height: 0 !important; margin: 2px 0 !important; line-height: 1.15; }
+.app-realistic .category-listing-footer { gap: 6px; margin-top: 4px !important; padding-top: 5px !important; }
+.app-realistic .category-listing-footer > div { gap: 2px; }
+@media (max-width: 600px) {
+  .app-realistic .landing-property-grid .property-image { height: 165px !important; }
+  .app-realistic .category-listing-image { height: 155px !important; }
 }

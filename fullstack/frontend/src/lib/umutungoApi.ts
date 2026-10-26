@@ -168,8 +168,9 @@ export async function uploadListingImage(listingId: string, file: File) {
     body: form,
   });
   const body = await response.json().catch(() => ({})) as { id?: string; type?: string; url?: string; error?: string };
-  if (!response.ok || !body.url) throw new Error(body.error ?? 'The listing photo could not be uploaded.');
-  return body;
+  const url = body.url;
+  if (!response.ok || !url) throw new Error(body.error ?? 'The listing photo could not be uploaded.');
+  return { ...body, url };
 }
 
 export async function uploadAboutVideo(file: File, title: string) {

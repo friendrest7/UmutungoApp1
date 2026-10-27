@@ -771,7 +771,7 @@ body.theme-dark .auth-modal-heading p, body.theme-dark .auth-legal { color: rgba
 .app-realistic .story-card { animation: none; }
 .app-realistic .story-card:nth-child(2) { margin-top: 0; }
 .app-realistic .story-card:hover, .app-realistic .story-card:nth-child(2):hover { transform: translateY(-4px); }
-.app-realistic .ai-chatbot { top: auto; right: 22px; bottom: 22px; transform: none; }
+.app-realistic .ai-chatbot { top: auto; right: 22px; bottom: 22px; }
 .app-realistic .ai-chatbot.is-open { top: auto; bottom: 22px; }
 .app-realistic .ai-chat-toggle { min-height: 46px; justify-content: center; padding: 12px 19px; gap: 9px; font-size: 11px; text-align: center; box-shadow: 0 9px 22px rgba(2, 162, 74, .2); }
 .app-realistic .ai-chat-toggle span { line-height: 1; }
@@ -1503,7 +1503,6 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
   right: calc(163px - 2.1cm) !important;
   bottom: calc(117px - 1.4cm) !important;
   left: auto !important;
-  transform: none !important;
 }
 
 /* Let the landing background continue behind the transparent sticky navbar. */

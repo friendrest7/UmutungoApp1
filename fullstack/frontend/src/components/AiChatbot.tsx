@@ -55,7 +55,7 @@ export function AiChatbot({ language }: { language: Language }) {
   const [isDragging, setIsDragging] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{ id: 1, sender: 'assistant', text: t(language, 'Hello! I can help you find a place in Rwanda. Ask me about renting, buying, locations, or property types.') }]);
   const chatbotRef = useRef<HTMLElement>(null);
-  const dragStartRef = useRef({ x: 0, y: 0, originX: 0, originY: 0 });
+  const dragStartRef = useRef({ x: 0, y: 0, originX: 0, originY: 0, left: 0, top: 0, right: 0, bottom: 0 });
   const dragPositionRef = useRef(dragPosition);
   const dragMovedRef = useRef(false);
 
@@ -82,19 +82,25 @@ export function AiChatbot({ language }: { language: Language }) {
       const deltaX = event.clientX - dragStartRef.current.x;
       const deltaY = event.clientY - dragStartRef.current.y;
       if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) dragMovedRef.current = true;
-      const next = { x: dragStartRef.current.originX + deltaX, y: dragStartRef.current.originY + deltaY };
-      const bounded = { x: Math.max(-window.innerWidth + 70, Math.min(window.innerWidth - 70, next.x)), y: Math.max(-window.innerHeight + 100, Math.min(window.innerHeight - 100, next.y)) };
+      const minDeltaX = -dragStartRef.current.left;
+      const maxDeltaX = window.innerWidth - dragStartRef.current.right;
+      const minDeltaY = -dragStartRef.current.top;
+      const maxDeltaY = window.innerHeight - dragStartRef.current.bottom;
+      const bounded = {
+        x: dragStartRef.current.originX + Math.max(minDeltaX, Math.min(maxDeltaX, deltaX)),
+        y: dragStartRef.current.originY + Math.max(minDeltaY, Math.min(maxDeltaY, deltaY)),
+      };
       dragPositionRef.current = bounded;
       setDragPosition(bounded);
     };
     const stop = () => {
       setIsDragging(false);
-      window.localStorage.setItem('umutungo-ai-position', JSON.stringify(dragPositionRef.current));
+      try { window.localStorage.setItem('umutungo-ai-position', JSON.stringify(dragPositionRef.current)); } catch { /* Keep the current position for this session. */ }
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); };
-  }, [isDragging, dragPosition]);
+  }, [isDragging]);
 
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent) => {
@@ -198,7 +204,8 @@ export function AiChatbot({ language }: { language: Language }) {
   const startDragging = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
     dragMovedRef.current = false;
-    dragStartRef.current = { x: event.clientX, y: event.clientY, originX: dragPosition.x, originY: dragPosition.y };
+    const rect = chatbotRef.current?.getBoundingClientRect();
+    dragStartRef.current = { x: event.clientX, y: event.clientY, originX: dragPositionRef.current.x, originY: dragPositionRef.current.y, left: rect?.left ?? 0, top: rect?.top ?? 0, right: rect?.right ?? 0, bottom: rect?.bottom ?? 0 };
     setIsDragging(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };

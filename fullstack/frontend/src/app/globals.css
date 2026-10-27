@@ -653,7 +653,6 @@ body.theme-dark .auth-modal-heading p, body.theme-dark .auth-legal { color: rgba
 .community-testimonials-heading h2 { margin: 6px 0 0; font-family: var(--brand-heading); font-size: clamp(22px, 2.5vw, 30px); line-height: 1.15; }
 .community-testimonials-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .community-testimonial { display: flex; min-width: 0; flex-direction: column; justify-content: space-between; gap: 16px; margin: 0; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: 0 8px 24px rgba(16, 35, 24, .05); }
-.community-testimonial-example { align-self: flex-start; padding: 5px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-size: 9px; font-weight: 800; }
 .community-testimonial blockquote { margin: 0; color: var(--ink); font-family: var(--brand-body); font-size: 15px; font-weight: 500; line-height: 1.6; }
 .community-testimonial figcaption { display: flex; flex-direction: column; gap: 2px; color: var(--green-dark); font-size: 11px; }
 .community-testimonial figcaption strong { color: var(--ink); font-size: 12px; }

@@ -523,25 +523,25 @@ const featuredCardTranslations: Record<Language, TranslationMap> = {
 
 const testimonialTranslations: Record<Language, TranslationMap> = {
   English: {
-    'Illustrative user stories': 'Illustrative user stories',
+    'Example stories from Rwanda': 'Example stories from Rwanda',
     'testimonial-aline': 'Being able to compare rent, location, and key details in one place helped me narrow down what would work for my family.',
     'testimonial-eric': 'I found a listing that matched my budget, then contacted the advertiser to arrange a viewing without searching through multiple groups.',
     'testimonial-claudine': 'Clear photos and neighborhood details helped us prepare better questions before we visited the property.',
   },
   French: {
-    'Illustrative user stories': 'Exemples de parcours utilisateurs',
+    'Example stories from Rwanda': 'Exemples du Rwanda',
     'testimonial-aline': 'Comparer le loyer, le quartier et les informations essentielles au même endroit m’a aidée à trouver ce qui conviendrait à ma famille.',
     'testimonial-eric': 'J’ai trouvé une annonce adaptée à mon budget, puis contacté l’annonceur pour organiser une visite sans chercher dans plusieurs groupes.',
     'testimonial-claudine': 'Les photos et les informations sur le quartier nous ont aidés à préparer de meilleures questions avant la visite.',
   },
   Kinyarwanda: {
-    'Illustrative user stories': 'Ingero z’uko abakoresha babona umutungo',
+    'Example stories from Rwanda': 'Ingero z’inkuru zo mu Rwanda',
     'testimonial-aline': 'Kugereranya ubukode, aho umutungo uherereye n’ibisobanuro by’ingenzi hamwe byamfashije kubona ibyakorera umuryango wanjye.',
     'testimonial-eric': 'Nabonye itangazo rijyanye n’ingengo y’imari yanjye, maze mvugana n’uwarishyizeho kugira ngo ntegure uko nzareba umutungo.',
     'testimonial-claudine': 'Amafoto asobanutse n’amakuru y’aho umutungo uherereye byadufashije gutegura ibibazo byiza mbere yo kuwusura.',
   },
   Swahili: {
-    'Illustrative user stories': 'Mifano ya safari za watumiaji',
+    'Example stories from Rwanda': 'Mifano ya simulizi kutoka Rwanda',
     'testimonial-aline': 'Kulinganisha kodi, eneo na maelezo muhimu sehemu moja kulinisaidia kuchagua kinachofaa familia yangu.',
     'testimonial-eric': 'Nilipata tangazo lililolingana na bajeti yangu, kisha nikawasiliana na mtangazaji kupanga kutembelea bila kutafuta kwenye makundi mengi.',
     'testimonial-claudine': 'Picha zilizo wazi na maelezo ya mtaa yalitusaidia kuandaa maswali bora kabla ya kutembelea nyumba.',

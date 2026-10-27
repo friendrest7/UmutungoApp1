@@ -44,7 +44,7 @@ function discoveryFilters(category: string, priceLabel: string) {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { colors, styles } = useTheme();
+  const { colors, styles, isDark } = useTheme();
   const { width } = useWindowDimensions();
   const { t } = useI18n();
   const { user } = useAuth();
@@ -187,7 +187,7 @@ export default function HomeScreen() {
       <Text style={styles.heading}>{user ? t('Your Umutungo workspace') : t('Join Umutungo')}</Text>
       {user ? <View style={{ flexDirection: 'row', gap: 8 }}>
         <Pressable onPress={() => router.push('/dashboard' as never)} style={[styles.button, { flex: 1 }]}><Text style={styles.buttonText}>{t('Open dashboard')}</Text></Pressable>
-        {(user.role === 'property_owner' || user.role === 'komisiyoneri' || user.role === 'admin') && <Pressable onPress={() => router.push('/listing/new')} style={[styles.secondaryButton, { flex: 1 }]}><Text style={styles.secondaryText}>{t('Post a property')}</Text></Pressable>}
+        {(user.role === 'property_owner' || user.role === 'komisiyoneri' || user.role === 'admin') && <Pressable accessibilityRole="button" onPress={() => router.push('/listing/new')} style={[styles.secondaryButton, { flex: 1 }, isDark && { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' }]}><Text style={[styles.secondaryText, isDark && { color: '#000000' }]}>{t('Post a property')}</Text></Pressable>}
       </View> : <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {([['client', 'client', 'Join as Client'], ['tenant', 'tenant', 'Join as Tenant']] as const).map(([key, role, label]) => <Pressable key={key} onPress={() => router.push({ pathname: '/auth/register', params: { role } })} style={[styles.secondaryButton, { flexGrow: 1, flexBasis: '45%' }]}><Text style={styles.secondaryText}>{t(label)}</Text></Pressable>)}
       </View>}

@@ -28,6 +28,7 @@ export type IconName =
   | 'sun'
   | 'user'
   | 'users'
+  | 'whatsapp'
   | 'video'
   | 'eye'
   | 'eyeOff'
@@ -70,6 +71,7 @@ export function Icon({ name, size = 18, strokeWidth = 1.8, filled = false }: Ico
     sun: <><circle cx="12" cy="12" r="4" fill="none" {...common} /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" fill="none" {...common} /></>,
     user: <><circle cx="12" cy="8" r="3.2" fill="none" {...common} /><path d="M5 21c.5-4 3-6 7-6s6.5 2 7 6" fill="none" {...common} /></>,
     users: <><circle cx="9" cy="8" r="3" fill="none" {...common} /><path d="M3 20c0-3.5 2.5-6 6-6s6 2.5 6 6M16 5.5a3 3 0 0 1 0 5.8M18 14c1.8.8 3 2.5 3 5" fill="none" {...common} /></>,
+    whatsapp: <><path d="M20.5 11.7a8.5 8.5 0 0 1-12.6 7.5L3 20.5l1.4-4.6a8.5 8.5 0 1 1 16.1-4.2Z" fill="none" {...common} /><path d="M8.5 8.2c.3-.7.6-.7 1-.7h.5c.2 0 .4.1.5.4l.8 1.8c.1.2.1.4-.1.6l-.6.8c-.2.2-.2.4-.1.6.5 1 1.3 1.8 2.3 2.3.2.1.4.1.6-.1l.8-1c.2-.2.4-.3.6-.2l1.8.9c.2.1.4.3.4.5 0 .3-.1 1.1-.8 1.6-.5.5-1.2.7-1.9.6-1-.1-2.3-.6-3.9-1.9-1.3-1.1-2.2-2.5-2.5-3.5-.3-.9-.1-1.8.6-2.7Z" fill="none" {...common} /></>,
     video: <><rect x="3" y="5" width="13" height="14" rx="2" fill="none" {...common} /><path d="m16 10 5-3v10l-5-3M8 9l5 3-5 3V9Z" fill="none" {...common} /></>,
     x: <><path d="m6 6 12 12M18 6 6 18" fill="none" {...common} /></>,
   };

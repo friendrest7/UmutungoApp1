@@ -117,8 +117,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const images = property.images?.length ? property.images : [property.image];
   const isHouse = property.type.trim().toLowerCase() === 'house';
   const hasPropertyMeasurements = property.bedrooms > 0 || property.bathrooms > 0 || property.area > 0;
-  const isProductListing = ['Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other assets'].includes(property.type);
-  const hasSpatialView = !isProductListing && supportsSpatialPreview(property.type);
+  const hasSpatialView = supportsSpatialPreview(property.type);
   const [activeImage, setActiveImage] = useState(() => Math.max(0, Math.min(initialImageIndex, images.length - 1)));
   const [mode, setMode] = useState<ViewerMode>(hasSpatialView ? initialMode : 'photos');
   const [tourStop, setTourStop] = useState(0);

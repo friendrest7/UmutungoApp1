@@ -171,7 +171,7 @@ input, select, textarea, button, label { font-family: var(--brand-body); }
 .ai-chat-message { max-width: 86%; padding: 10px 12px; border-radius: 13px; color: var(--ink); font-size: 10px; line-height: 1.6; }
 .ai-chat-message.assistant { align-self: flex-start; border: 1px solid var(--line); border-top-left-radius: 4px; background: var(--surface); }
 .ai-chat-message.user { align-self: flex-end; border-top-right-radius: 4px; background: var(--green-soft); color: var(--green-dark); }
-.ai-chat-listing { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 9px; width: 100%; margin-top: 9px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none; }
+.ai-chat-listing { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 9px; width: 100%; margin-top: 7px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none; }
 .ai-chat-listing img { width: 76px; height: 76px; object-fit: cover; background: var(--paper); }
 .ai-chat-listing > span { display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 3px; padding: 6px 8px 6px 0; }
 .ai-chat-listing strong, .ai-chat-listing small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

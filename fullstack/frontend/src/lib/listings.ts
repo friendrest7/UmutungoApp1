@@ -43,8 +43,7 @@ export function propertySlug(title: string) {
 
 export function supportsSpatialPreview(type: string) {
   const normalizedType = type.trim().toLowerCase().replace(/[_-]+/g, ' ');
-  if (/^(bicycle|bike|cycle)\b/.test(normalizedType)) return false;
-  return !['vehicle', 'vehicles', 'bicycle', 'bicycles', 'bike', 'bikes', 'cycle', 'cycles', 'furniture', 'appliance', 'appliances', 'equipment', 'other assets', 'car part', 'car parts'].includes(normalizedType);
+  return ['house', 'houses', 'home', 'homes', 'apartment', 'apartments', 'land', 'residential', 'residential property', 'commercial', 'commercial property', 'office', 'offices', 'hospitality', 'hotel', 'hotels'].includes(normalizedType);
 }
 
 function normalizeListingImageUrl(value: string) {

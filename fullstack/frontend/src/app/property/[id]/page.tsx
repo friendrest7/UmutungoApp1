@@ -196,6 +196,15 @@ export default function PropertyDetailPage() {
               {(property.images ?? [property.image]).map((image, index) => <button className={selectedImageIndex === index ? 'is-selected' : ''} type="button" key={`${image}-${index}`} aria-label={`Show property photo ${index + 1}`} aria-pressed={selectedImageIndex === index} onClick={() => setSelectedImageIndex(index)}><img src={image} alt="" /></button>)}
             </div>
             </>}
+            {supports3DView && <section className="viewer-tour-feedback property-detail-feedback property-detail-feedback-mobile" aria-labelledby="property-tour-feedback-title-mobile">
+              <div><strong id="property-tour-feedback-title-mobile">Are you satisfied with the 3D view to continue checkout?</strong><span>Choose what you would like to do next.</span></div>
+              <div className="viewer-tour-feedback-options">
+                <button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => { setTourSatisfaction('yes'); openPropertyRequest(); }}>Yes, I’m satisfied</button>
+                <button type="button" className={tourSatisfaction === 'no' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'no'} onClick={() => { setTourSatisfaction('no'); openDirectionsFromCurrentLocation(); }}>No, I’d like to visit</button>
+                <button className="property-contact-button" type="button" onClick={openOwnerMessages}><Icon name="bookPen" size={15} /> Message owner</button>
+              </div>
+              {tourSatisfaction === 'no' && directionsMapUrl && <><div className="property-inline-directions"><div><strong>Directions to this property</strong><button type="button" onClick={() => setDirectionsMapUrl('')} aria-label="Close directions"><Icon name="x" size={14} /></button></div><iframe src={directionsMapUrl} title={`Directions to ${property.title}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div><button className="property-detail-rent-button" type="button" onClick={openPropertyRequest}>Continue to get this property <Icon name="arrow" size={15} /></button></>}
+            </section>}
             <section className="property-detail-content" aria-label="Property information">
               <article className="property-detail-about"><span className="property-detail-section-label">Property details</span><p>{property.description?.trim() || 'Contact the property owner for more information about this listing.'}</p></article>
               {(property.amenities?.length || property.tags?.length) ? <article className="property-detail-about"><span className="property-detail-section-label">Features and accessibility</span><p>{[...(property.amenities ?? []), ...(property.tags ?? [])].join(' · ')}</p></article> : null}
@@ -217,7 +226,7 @@ export default function PropertyDetailPage() {
             <div className="property-detail-meta"><span className="property-detail-listed">{property.listed}</span><span className="property-detail-availability">{property.availableFor === 'rent' ? 'Available to rent' : property.availableFor === 'both' ? 'Available to buy or rent' : 'Available to buy'}</span></div>
             <p className="property-detail-listed">Negotiability: Ask the advertiser</p>
             {property.poster && <div className="property-detail-meta"><span>Advertiser: {property.poster.businessName || property.poster.name} ({property.poster.role}){property.poster.verified ? ' · Verified' : ''}</span></div>}
-            {supports3DView && <section className="viewer-tour-feedback property-detail-feedback" aria-labelledby="property-tour-feedback-title">
+            {supports3DView && <section className="viewer-tour-feedback property-detail-feedback property-detail-feedback-desktop" aria-labelledby="property-tour-feedback-title">
               <div><strong id="property-tour-feedback-title">Are you satisfied with the 3D view to continue checkout?</strong><span>Choose what you would like to do next.</span></div>
               <div className="viewer-tour-feedback-options">
                 <button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => { setTourSatisfaction('yes'); openPropertyRequest(); }}>Yes, I’m satisfied</button>

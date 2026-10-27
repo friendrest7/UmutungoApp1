@@ -5422,6 +5422,14 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 
 body.theme-dark .property-detail-media .property-detail-about .property-detail-section-label { background: transparent; color: #f5f7fa; }
 
+.property-detail-feedback-mobile { display: none; }
+@media (max-width: 800px) {
+  .property-detail-copy .property-detail-feedback-desktop { display: none; }
+  .property-detail-media .property-detail-feedback-mobile { display: grid; gap: 10px; margin: 12px 0 0; padding: 14px; }
+  .property-detail-feedback-mobile .viewer-tour-feedback-options { gap: 8px; }
+  .property-detail-feedback-mobile .viewer-tour-feedback-options button { min-height: 40px; }
+}
+
 /* Keep the View property action consistent on every listing card. */
 .app-realistic .category-view-button {
   width: auto;

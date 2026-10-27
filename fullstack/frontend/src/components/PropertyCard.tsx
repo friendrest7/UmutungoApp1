@@ -68,7 +68,8 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
         return <div className="property-image-slide" key={`${image}-${index}`}><Image src={displayedImage} alt={`${t(language, property.title)} ${t(language, 'property image')} ${index + 1}`} fill sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 33vw" unoptimized={displayedImage.startsWith('http')} className="property-image-art" onError={() => setImageFallbacks((current) => ({ ...current, [index]: '/properties/listing-placeholder.svg' }))} /></div>;
       })}</div>
       <Link className="property-card-photo-link" href={`${detailHref}${detailHref.includes('?') ? '&' : '?'}gallery=1`} aria-label={`${t(language, 'Open photo gallery for')} ${property.title}`} />
-      <div className="property-card-photo-labels">{property.poster?.verified && <span className="property-card-verified-badge"><Icon name="check" size={12} />{t(language, 'Verified')}</span>}<span className="property-category-badge">{t(language, property.type)}</span></div>
+      <div className="property-card-photo-labels"><span className="property-category-badge">{t(language, property.type)}</span></div>
+      {property.poster?.verified && <span className="property-card-verified-badge"><Icon name="check" size={12} />{t(language, 'Verified')}</span>}
       <button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} type="button" onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? `${t(language, 'Remove property from favorites')}: ${property.title}` : `${t(language, 'Save property')}: ${property.title}`}><Icon name="heart" size={18} filled={favorite} /></button>
     </div>
     <div className="property-card-body">

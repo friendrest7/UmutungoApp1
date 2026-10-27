@@ -5840,6 +5840,7 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 .property-card-photo-labels { position: absolute; z-index: 2; top: 12px; left: 12px; display: flex; max-width: calc(100% - 72px); flex-wrap: wrap; gap: 6px; pointer-events: none; }
 .property-card-redesign .property-category-badge, .property-card-verified-badge { position: static; display: inline-flex; min-height: 28px; align-items: center; gap: 4px; padding: 5px 10px; border: 0; border-radius: 999px; background: #ffffff; color: #111111; font-size: 10px; font-weight: 700; box-shadow: 0 2px 8px rgba(0, 0, 0, .15); }
 .property-card-verified-badge { background: var(--brand-green); color: #000000; }
+.property-card-redesign .property-card-verified-badge { position: absolute; z-index: 2; bottom: 12px; left: 12px; }
 .property-card-redesign .favorite-button { position: absolute; z-index: 3; top: 10px; right: 10px; display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid rgba(255,255,255,.8); border-radius: 50%; background: #ffffff; color: #111111; box-shadow: 0 2px 10px rgba(0,0,0,.16); }
 .property-card-redesign .favorite-button:hover { background: #f7f7f7; transform: scale(1.04); }
 .property-card-photo-count { position: absolute; z-index: 2; right: 10px; bottom: 10px; padding: 5px 9px; border-radius: 999px; background: rgba(0,0,0,.7); color: #ffffff; font-size: 10px; font-weight: 600; pointer-events: none; }

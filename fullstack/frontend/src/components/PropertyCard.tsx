@@ -26,6 +26,10 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
   const vehicle = /vehicle|car|motorcycle|truck/.test(type);
   const land = /land|plot/.test(type);
   const messageHref = `/messages?${new URLSearchParams({ listingId: property.id, propertyTitle: property.title, ownerName: property.poster?.businessName || property.poster?.name || 'Property advertiser', propertyImage: property.image, propertyLocation: property.location }).toString()}`;
+  const mapDestination = property.latitude != null && property.longitude != null
+    ? `${property.latitude},${property.longitude}`
+    : `${property.location}, Rwanda`;
+  const directionsHref = `https://www.google.com/maps/dir/?api=1&origin=Current%20Location&destination=${encodeURIComponent(mapDestination)}&travelmode=driving`;
   useEffect(() => {
     setActiveImage(0);
     setImageFallbacks({});
@@ -69,7 +73,7 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
     </div>
     <div className="property-card-body">
       <div className="property-card-title-row"><h3>{t(language, property.title)}</h3><span className={`property-availability-tag ${property.availableFor === 'rent' ? 'is-rent' : ''}`}>{property.availableFor === 'rent' ? t(language, 'For rent') : property.availableFor === 'both' ? t(language, 'For sale or rent') : property.availableFor === 'book' ? t(language, 'For booking') : t(language, 'For sale')}</span></div>
-      <div className="property-card-location-row"><p><Icon name="pin" size={15} /> <span>{t(language, property.location || 'Location available on request')}</span></p></div>
+      <div className="property-card-location-row"><a className="property-card-location-link" href={directionsHref} target="_blank" rel="noreferrer" title={t(language, 'View route and estimated travel time')} aria-label={`${t(language, 'Directions from your current location to')} ${property.location || t(language, 'Location available on request')}. ${t(language, 'Google Maps will show the route and estimated travel time.')}`}><Icon name="pin" size={15} /><span className="property-card-location-copy"><span>{t(language, property.location || 'Location available on request')}</span><small>{t(language, 'View route and travel time')}</small></span></a></div>
       {(residential || land || property.parkingSpaces || (property.area > 0 && !vehicle)) && <div className="property-details property-card-features">{residential && property.bedrooms > 0 && <span><Icon name="home" size={15} /><strong>{property.bedrooms}</strong> {t(language, 'Beds')}</span>}{residential && property.bathrooms > 0 && <span><Icon name="building" size={15} /><strong>{property.bathrooms}</strong> {t(language, 'Baths')}</span>}{property.parkingSpaces ? <span><Icon name="car" size={15} /><strong>{property.parkingSpaces}</strong> {t(language, 'Parking')}</span> : null}{property.area > 0 && !vehicle && <span><Icon name="leaf" size={15} /><strong>{property.area.toLocaleString()}</strong> m² {t(language, land ? 'Land area' : 'Area')}</span>}</div>}
       <div className="property-card-footer property-card-redesign-footer"><strong className="property-card-price">{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{t(language, property.priceNote)}</small></>}</strong><div className="property-card-actions"><Link className="view-property-button" href={detailHref}>{t(language, 'View details')}</Link><button className="property-card-contact" type="button" onClick={() => setDialog('contact')}>{contactLabel}</button><button className="property-card-share" type="button" onClick={() => void openShare()} aria-label={`${t(language, 'Share')} ${property.title}`}><Icon name="share" size={17} /></button></div></div>
     </div>

@@ -635,8 +635,8 @@ body.theme-dark .auth-modal-heading p, body.theme-dark .auth-legal { color: rgba
 .app-download-option strong { font-size: 10px; line-height: 1.2; white-space: nowrap; }
 .footer-main { display: grid; grid-template-columns: 1.7fr 1fr 1fr 1.1fr; gap: 32px; padding-top: 38px; padding-bottom: 34px; }
 .footer-brand-block p { margin-top: 18px; color: var(--muted); font-size: 11px; line-height: 1.75; }
-.footer-column { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
-.footer-column > span { margin-bottom: 7px; color: var(--green-dark); font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+.footer-column { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.footer-column > span { margin-bottom: 2px; color: var(--green-dark); font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .footer-column a { color: var(--ink); font-size: 10px; }
 .footer-social-link { display: inline-flex; align-items: center; gap: 8px; }
 .footer-social-link svg { flex: 0 0 auto; transition: transform .2s ease, filter .2s ease; }
@@ -5856,6 +5856,13 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 .property-card-redesign .property-card-location-row { margin: 0; }
 .property-card-redesign .property-card-location-row p { display: flex; min-width: 0; align-items: flex-start; gap: 5px; margin: 0; color: #343a36; font-size: 12px; line-height: 1.45; }
 .property-card-redesign .property-card-location-row p svg { flex: 0 0 auto; margin-top: 1px; }
+.property-card-location-link { display: flex; min-width: 0; min-height: 42px; align-items: flex-start; gap: 6px; color: #111111; text-decoration: none; }
+.property-card-location-link > svg { flex: 0 0 auto; margin-top: 2px; }
+.property-card-location-copy { display: grid; min-width: 0; gap: 2px; }
+.property-card-location-copy > span { color: #252a27; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.property-card-location-copy small { color: #006a38; font-size: 10px; font-weight: 600; line-height: 1.3; }
+.property-card-location-link:hover .property-card-location-copy small { text-decoration: underline; }
+.property-card-location-link:focus-visible { border-radius: 6px; outline: 3px solid rgba(0, 199, 99, .55); outline-offset: 2px; }
 .property-card-redesign .property-card-features { display: flex; min-height: 27px; flex-wrap: wrap; align-items: center; gap: 8px 13px; margin: 0; padding: 2px 0; border: 0; color: #515b54; }
 .property-card-features span { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; }
 .property-card-features strong { color: #111111; font-size: 11px; }
@@ -5865,6 +5872,7 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
 .property-card-redesign .property-card-actions { display: flex; min-width: 0; flex: 1 1 100%; align-items: stretch; gap: 7px; }
 .property-card-redesign .property-card-actions > :is(a, button) { display: inline-flex; min-width: 0; min-height: 40px; flex: 1; align-items: center; justify-content: center; padding: 7px 9px; border: 1px solid #dce4de; border-radius: 9px; background: #ffffff; color: #111111; cursor: pointer; font-family: var(--brand-body); font-size: 10px; font-weight: 600; line-height: 1.2; text-align: center; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
 .property-card-redesign .property-card-actions > .view-property-button { border-color: var(--brand-green); background: var(--brand-green); color: #000000; -webkit-text-fill-color: #000000; }
+.property-card-redesign .property-card-actions > .property-card-contact { background: #ffffff; color: #111111 !important; -webkit-text-fill-color: #111111 !important; }
 .property-card-redesign .property-card-actions > :is(a, button):hover { border-color: #005b2d; background: #f0faf4; transform: translateY(-1px); }
 .property-card-redesign .property-card-actions > .view-property-button:hover { border-color: #00aa55; background: #00aa55; }
 .property-card-redesign .property-card-actions > .property-card-share { flex: 0 0 42px; padding: 0; }

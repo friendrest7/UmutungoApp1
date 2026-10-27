@@ -64,6 +64,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
 export function usePersistentLanguage() {
   const context = useContext(LanguageContext);
-  const localLanguage = useLanguageState();
-  return context ?? localLanguage;
+  if (!context) throw new Error('usePersistentLanguage must be used inside LanguageProvider');
+  return context;
 }

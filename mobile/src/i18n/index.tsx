@@ -94,6 +94,14 @@ const workspaceTranslations: Record<Language, Record<string, string>> = {
 };
 for (const language of ['en', 'fr', 'rw', 'sw'] as const) Object.assign(translations[language], workspaceTranslations[language]);
 
+const directionsTranslations: Record<Language, Record<string, string>> = {
+  en: { 'View route and travel time': 'View route and travel time', 'Directions from your current location to': 'Directions from your current location to', 'Google Maps will show the route and estimated travel time.': 'Google Maps will show the route and estimated travel time.' },
+  fr: { 'View route and travel time': 'Voir l’itinéraire et le temps de trajet', 'Directions from your current location to': 'Itinéraire depuis votre position actuelle vers', 'Google Maps will show the route and estimated travel time.': 'Google Maps affichera l’itinéraire et le temps de trajet estimé.' },
+  rw: { 'View route and travel time': 'Reba inzira n’igihe cy’urugendo', 'Directions from your current location to': 'Inzira uhereye aho uri ubu ujya', 'Google Maps will show the route and estimated travel time.': 'Google Maps izakwereka inzira n’igihe urugendo ruzamara.' },
+  sw: { 'View route and travel time': 'Angalia njia na muda wa safari', 'Directions from your current location to': 'Maelekezo kutoka ulipo sasa hadi', 'Google Maps will show the route and estimated travel time.': 'Google Maps itaonyesha njia na muda unaokadiriwa wa safari.' },
+};
+for (const language of ['en', 'fr', 'rw', 'sw'] as const) Object.assign(translations[language], directionsTranslations[language]);
+
 export function normalizeLanguage(value?: string | null): Language { return value === 'fr' || value === 'rw' || value === 'sw' ? value : 'en'; }
 export function t(language: Language, key: string) { return translations[language][key] ?? translations.en[key] ?? key; }
 

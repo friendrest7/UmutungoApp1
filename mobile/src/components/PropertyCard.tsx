@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { Image, Linking, Modal, Pressable, Share, useWindowDimensions, View } from 'react-native';
+import { FlatList, Image, Linking, Modal, Pressable, Share, useWindowDimensions, View } from 'react-native';
 import { useEffect } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import { LocalizedText as Text } from '@/components/LocalizedText';
@@ -35,6 +35,7 @@ export function PropertyCard({ listing, onPress, cardWidth }: { listing: ApiList
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [activePhoto, setActivePhoto] = useState(0);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dialog, setDialog] = useState<'contact' | 'share' | null>(null);
@@ -87,14 +88,13 @@ export function PropertyCard({ listing, onPress, cardWidth }: { listing: ApiList
   return <View style={[styles.card, { width: cardWidth || '100%', padding: 0, overflow: 'hidden', borderRadius: 18 }]}>
     <View style={{ position: 'relative' }}>
       <Pressable accessibilityRole="button" accessibilityLabel={t('View photos for') + ' ' + listing.title} onPress={onPress}>
-        <Image source={photos[0] && !failedImages[photos[0]] ? { uri: photos[0] } : cardFallback} style={{ width: imageWidth, height: imageHeight }} resizeMode="cover" onError={() => { if (photos[0]) setFailedImages((current) => ({ ...current, [photos[0]]: true })); }} />
+        <FlatList horizontal pagingEnabled showsHorizontalScrollIndicator={false} nestedScrollEnabled style={{ height: imageHeight }} data={photos.length ? photos : ['']} keyExtractor={(photo, index) => (photo || 'fallback') + '-' + index} initialNumToRender={1} maxToRenderPerBatch={2} windowSize={2} getItemLayout={(_, index) => ({ length: imageWidth, offset: imageWidth * index, index })} onMomentumScrollEnd={(event) => setActivePhoto(Math.round(event.nativeEvent.contentOffset.x / imageWidth))} renderItem={({ item: photo }) => <Image source={photo && !failedImages[photo] ? { uri: photo } : cardFallback} style={{ width: imageWidth, height: imageHeight }} resizeMode="cover" onError={() => { if (photo) setFailedImages((current) => ({ ...current, [photo]: true })); }} />} />
       </Pressable>
       <View pointerEvents="none" style={{ position: 'absolute', top: 12, left: 12, right: 60, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         {verified && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 18, backgroundColor: colors.green, paddingHorizontal: 9, paddingVertical: 6 }}><Ionicons name="checkmark-circle" size={13} color="#000000" /><Text style={{ color: '#000000', fontSize: 10, fontWeight: '700' }}>Verified</Text></View>}
         <View style={{ borderRadius: 18, backgroundColor: '#ffffff', paddingHorizontal: 10, paddingVertical: 6 }}><Text style={{ color: '#000000', fontSize: 10, fontWeight: '600' }}>{listing.category}</Text></View>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={saved ? t('Remove from saved') : t('Save property')} accessibilityState={{ checked: saved, disabled: saving }} disabled={saving} onPress={() => void toggleSaved()} style={{ position: 'absolute', top: 10, right: 10, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: '#ffffff' }}><Ionicons name={saved ? 'heart' : 'heart-outline'} size={21} color={saved ? '#c62828' : '#000000'} /></Pressable>
-      <View style={{ position: 'absolute', right: 10, bottom: 10, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.72)', paddingHorizontal: 10, paddingVertical: 5 }}><Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '600' }}>{photos.length ? ('1/' + photos.length + ' photos') : 'No photos'}</Text></View>
     </View>
     <View style={{ padding: 14, gap: 9 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}><Text style={[styles.heading, { flex: 1, fontFamily: 'ArchivoBlack', fontSize: 17, lineHeight: 23 }]}>{listing.title}</Text><View style={{ borderRadius: 7, backgroundColor: colors.greenSoft, paddingHorizontal: 8, paddingVertical: 5 }}><Text style={{ color: colors.greenDark, fontSize: 10, fontWeight: '600' }}>{intent}</Text></View></View>

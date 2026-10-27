@@ -13,23 +13,28 @@ type PropertyCardProps = { language: Language; property: PropertyPlaceholder; fa
 
 export function PropertyCard({ language, property, favorite, onFavorite }: PropertyCardProps) {
   const images = property.images?.length ? property.images : [property.image];
+  const [activeImage, setActiveImage] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
   const [imageFallbacks, setImageFallbacks] = useState<Record<number, string>>({});
   const [dialog, setDialog] = useState<'contact' | 'share' | null>(null);
   const [copied, setCopied] = useState(false);
   const detailHref = `/property/${propertySlug(property.title)}${supportsSpatialPreview(property.type) ? '?view=3d' : ''}`;
   const listingUrl = typeof window === 'undefined' ? detailHref : `${window.location.origin}${detailHref}`;
-  const photoCount = property.photoCount ?? property.images?.length ?? 0;
   const contactLabel = property.poster?.role === 'Komisiyoneri' ? t(language, 'Contact advertiser') : t(language, 'Contact owner');
   const type = property.type.toLowerCase();
   const residential = /house|home|apartment|residential|villa|room/.test(type);
   const vehicle = /vehicle|car|motorcycle|truck/.test(type);
   const land = /land|plot/.test(type);
   const messageHref = `/messages?${new URLSearchParams({ listingId: property.id, propertyTitle: property.title, ownerName: property.poster?.businessName || property.poster?.name || 'Property advertiser', propertyImage: property.image, propertyLocation: property.location }).toString()}`;
-  const firstImage = imageFallbacks[0] ?? images[0];
-
   useEffect(() => {
+    setActiveImage(0);
     setImageFallbacks({});
   }, [property.id]);
+  useEffect(() => {
+    if (!isHovered || images.length < 2) return;
+    const timer = window.setInterval(() => setActiveImage((current) => (current + 1) % images.length), 2600);
+    return () => window.clearInterval(timer);
+  }, [isHovered, images.length]);
   useEffect(() => {
     if (!dialog) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setDialog(null); };
@@ -52,13 +57,15 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
     } catch { setDialog('share'); }
   };
 
-  return <article className="property-card property-card-redesign">
+  return <article className="property-card property-card-redesign" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
     <div className="property-image property-card-photo">
-      <Image src={firstImage} alt={`${t(language, property.title)} ${t(language, 'property image')} 1`} fill sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 33vw" unoptimized={firstImage.startsWith('http')} className="property-image-art" onError={() => setImageFallbacks((current) => ({ ...current, 0: '/properties/listing-placeholder.svg' }))} />
+      <div className="property-image-track" style={{ transform: `translateX(-${activeImage * 100}%)` }} aria-live="polite">{images.map((image, index) => {
+        const displayedImage = imageFallbacks[index] ?? image;
+        return <div className="property-image-slide" key={`${image}-${index}`}><Image src={displayedImage} alt={`${t(language, property.title)} ${t(language, 'property image')} ${index + 1}`} fill sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 33vw" unoptimized={displayedImage.startsWith('http')} className="property-image-art" onError={() => setImageFallbacks((current) => ({ ...current, [index]: '/properties/listing-placeholder.svg' }))} /></div>;
+      })}</div>
       <Link className="property-card-photo-link" href={`${detailHref}${detailHref.includes('?') ? '&' : '?'}gallery=1`} aria-label={`${t(language, 'Open photo gallery for')} ${property.title}`} />
       <div className="property-card-photo-labels">{property.poster?.verified && <span className="property-card-verified-badge"><Icon name="check" size={12} />{t(language, 'Verified')}</span>}<span className="property-category-badge">{t(language, property.type)}</span></div>
       <button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} type="button" onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? `${t(language, 'Remove property from favorites')}: ${property.title}` : `${t(language, 'Save property')}: ${property.title}`}><Icon name="heart" size={18} filled={favorite} /></button>
-      <span className="property-card-photo-count">{photoCount ? `1/${photoCount} ${t(language, 'photos')}` : t(language, 'No photos')}</span>
     </div>
     <div className="property-card-body">
       <div className="property-card-title-row"><h3>{t(language, property.title)}</h3><span className={`property-availability-tag ${property.availableFor === 'rent' ? 'is-rent' : ''}`}>{property.availableFor === 'rent' ? t(language, 'For rent') : property.availableFor === 'both' ? t(language, 'For sale or rent') : property.availableFor === 'book' ? t(language, 'For booking') : t(language, 'For sale')}</span></div>

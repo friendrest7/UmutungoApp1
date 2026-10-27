@@ -51,12 +51,13 @@ export function AiChatbot({ language }: { language: Language }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [dragPosition, setDragPosition] = useState<{ left: number; top: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{ id: 1, sender: 'assistant', text: t(language, 'Hello! I can help you find a place in Rwanda. Ask me about renting, buying, locations, or property types.') }]);
   const chatbotRef = useRef<HTMLElement>(null);
-  const dragStartRef = useRef({ x: 0, y: 0, originX: 0, originY: 0, left: 0, top: 0, right: 0, bottom: 0 });
+  const dragStartRef = useRef({ pointerId: -1, x: 0, y: 0, left: 0, top: 0, width: 0, height: 0 });
   const dragPositionRef = useRef(dragPosition);
+  const keepOnScreenRef = useRef<() => void>(() => {});
   const dragMovedRef = useRef(false);
 
   useEffect(() => {
@@ -67,8 +68,8 @@ export function AiChatbot({ language }: { language: Language }) {
 
   useEffect(() => {
     try {
-      const stored = JSON.parse(window.localStorage.getItem('umutungo-ai-position') ?? 'null') as { x?: number; y?: number } | null;
-      if (stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)) setDragPosition({ x: stored.x as number, y: stored.y as number });
+      const stored = JSON.parse(window.localStorage.getItem('umutungo-ai-position-v2') ?? 'null') as { left?: number; top?: number } | null;
+      if (stored && Number.isFinite(stored.left) && Number.isFinite(stored.top)) setDragPosition({ left: stored.left as number, top: stored.top as number });
     } catch { /* use the default position */ }
   }, []);
 
@@ -76,30 +77,58 @@ export function AiChatbot({ language }: { language: Language }) {
     dragPositionRef.current = dragPosition;
   }, [dragPosition]);
 
+  const keepOnScreen = () => {
+    const target = chatbotRef.current?.querySelector<HTMLElement>(open ? '.ai-chat-panel' : '.ai-chat-toggle');
+    const rect = target?.getBoundingClientRect();
+    if (!rect) return;
+    setDragPosition((current) => {
+      if (!current) return current;
+      const left = Math.max(8, Math.min(window.innerWidth - rect.width - 8, rect.left));
+      const top = Math.max(8, Math.min(window.innerHeight - rect.height - 8, rect.top));
+      const next = { left: current.left + left - rect.left, top: current.top + top - rect.top };
+      if (Math.abs(next.left - current.left) < 0.5 && Math.abs(next.top - current.top) < 0.5) return current;
+      dragPositionRef.current = next;
+      return next;
+    });
+  };
+  keepOnScreenRef.current = keepOnScreen;
+
+  useEffect(() => {
+    const onResize = () => keepOnScreenRef.current();
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => keepOnScreenRef.current());
+    return () => window.cancelAnimationFrame(frame);
+  }, [dragPosition, open]);
+
   useEffect(() => {
     if (!isDragging) return;
     const move = (event: PointerEvent) => {
+      if (event.pointerId !== dragStartRef.current.pointerId) return;
       const deltaX = event.clientX - dragStartRef.current.x;
       const deltaY = event.clientY - dragStartRef.current.y;
       if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) dragMovedRef.current = true;
-      const minDeltaX = -dragStartRef.current.left;
-      const maxDeltaX = window.innerWidth - dragStartRef.current.right;
-      const minDeltaY = -dragStartRef.current.top;
-      const maxDeltaY = window.innerHeight - dragStartRef.current.bottom;
       const bounded = {
-        x: dragStartRef.current.originX + Math.max(minDeltaX, Math.min(maxDeltaX, deltaX)),
-        y: dragStartRef.current.originY + Math.max(minDeltaY, Math.min(maxDeltaY, deltaY)),
+        left: Math.max(8, Math.min(window.innerWidth - dragStartRef.current.width - 8, dragStartRef.current.left + deltaX)),
+        top: Math.max(8, Math.min(window.innerHeight - dragStartRef.current.height - 8, dragStartRef.current.top + deltaY)),
       };
       dragPositionRef.current = bounded;
       setDragPosition(bounded);
     };
-    const stop = () => {
+    const stop = (event: PointerEvent) => {
+      if (event.pointerId !== dragStartRef.current.pointerId) return;
       setIsDragging(false);
-      try { window.localStorage.setItem('umutungo-ai-position', JSON.stringify(dragPositionRef.current)); } catch { /* Keep the current position for this session. */ }
+      dragStartRef.current.pointerId = -1;
+      try { window.localStorage.setItem('umutungo-ai-position-v2', JSON.stringify(dragPositionRef.current)); } catch { /* Keep the current position for this session. */ }
     };
-    window.addEventListener('pointermove', move);
+    window.addEventListener('pointermove', move, { passive: false });
     window.addEventListener('pointerup', stop);
-    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); };
+    window.addEventListener('pointercancel', stop);
+    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop); };
   }, [isDragging]);
 
   useEffect(() => {
@@ -205,13 +234,15 @@ export function AiChatbot({ language }: { language: Language }) {
     if (event.button !== 0) return;
     dragMovedRef.current = false;
     const rect = chatbotRef.current?.getBoundingClientRect();
-    dragStartRef.current = { x: event.clientX, y: event.clientY, originX: dragPositionRef.current.x, originY: dragPositionRef.current.y, left: rect?.left ?? 0, top: rect?.top ?? 0, right: rect?.right ?? 0, bottom: rect?.bottom ?? 0 };
+    if (!rect) return;
+    dragPositionRef.current = { left: rect.left, top: rect.top };
+    setDragPosition(dragPositionRef.current);
+    dragStartRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, width: rect.width, height: rect.height };
     setIsDragging(true);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
-  return <aside ref={chatbotRef} className={`ai-chatbot ${open ? 'is-open' : ''} ${isDragging ? 'is-dragging' : ''}`} style={{ transform: `translate3d(${dragPosition.x}px, ${dragPosition.y}px, 0)` }} aria-label={t(language, 'Umutungo help')}>
-    {open && <div className="ai-chat-panel"><div className="ai-chat-header" onPointerDown={startDragging}><div><strong>{t(language, 'Umutungo Assistant')}</strong><small>Drag to move</small></div><button type="button" aria-label={t(language, 'Close chat')} onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)}><Icon name="x" size={17} /></button></div><div className="ai-chat-messages" aria-live="polite">{messages.map((message) => <div className={`ai-chat-message ${message.sender}`} key={message.id}><span>{message.text}</span>{message.listings?.map((item) => { const image = item.images?.[0] ?? item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0]?.url ?? '/properties/listing-placeholder.svg'; const location = [item.sector, item.district, item.province].filter(Boolean).join(', '); return <Link className="ai-chat-listing" href={`/property/${propertySlug(item.title)}${supportsSpatialPreview(item.category) ? '?view=3d' : ''}`} key={item.id}><img src={image} alt={item.title} /><span><strong>{item.title}</strong><small>{location}</small><b>{item.currency ?? 'RWF'} {item.price.toLocaleString()}</b></span></Link>; })}</div>)}{isSending && <div className="ai-chat-status" role="status">{t(language, 'Thinking...')}</div>}</div><form className="ai-chat-form" onSubmit={sendMessage}><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t(language, 'Ask Umutungo...')} aria-label={t(language, 'Ask Umutungo')} disabled={isSending} /><button type="submit" aria-label={t(language, 'Send message')} disabled={isSending || !value.trim()}><Icon name="arrow" size={15} /></button></form></div>}
-    {!open && <button className="ai-chat-toggle" type="button" onPointerDown={startDragging} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { if (dragMovedRef.current) { event.preventDefault(); dragMovedRef.current = false; return; } setOpen(true); }} aria-expanded={false} aria-label={t(language, 'Open chat')}><Icon name="sparkles" size={17} /><span>{t(language, 'Need help?')}</span></button>}
+  return <aside ref={chatbotRef} className={`ai-chatbot ${open ? 'is-open' : ''} ${isDragging ? 'is-dragging' : ''}`} style={dragPosition ? { left: dragPosition.left, top: dragPosition.top, right: 'auto', bottom: 'auto' } : undefined} aria-label={t(language, 'Umutungo help')}>
+    {open && <div className="ai-chat-panel"><div className="ai-chat-header" onPointerDown={startDragging} title={t(language, 'Drag to move')}><div><strong>{t(language, 'Umutungo Assistant')}</strong><small>{t(language, 'Drag to move')}</small></div><button type="button" aria-label={t(language, 'Close chat')} onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)}><Icon name="x" size={17} /></button></div><div className="ai-chat-messages" aria-live="polite">{messages.map((message) => <div className={`ai-chat-message ${message.sender}`} key={message.id}><span>{message.text}</span>{message.listings?.map((item) => { const image = item.images?.[0] ?? item.media?.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0]?.url ?? '/properties/listing-placeholder.svg'; const location = [item.sector, item.district, item.province].filter(Boolean).join(', '); return <Link className="ai-chat-listing" href={`/property/${propertySlug(item.title)}${supportsSpatialPreview(item.category) ? '?view=3d' : ''}`} key={item.id}><img src={image} alt={item.title} /><span><strong>{item.title}</strong><small>{location}</small><b>{item.currency ?? 'RWF'} {item.price.toLocaleString()}</b></span></Link>; })}</div>)}{isSending && <div className="ai-chat-status" role="status">{t(language, 'Thinking...')}</div>}</div><form className="ai-chat-form" onSubmit={sendMessage}><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t(language, 'Ask Umutungo...')} aria-label={t(language, 'Ask Umutungo')} disabled={isSending} /><button type="submit" aria-label={t(language, 'Send message')} disabled={isSending || !value.trim()}><Icon name="arrow" size={15} /></button></form></div>}
+    {!open && <button className="ai-chat-toggle" type="button" onPointerDown={startDragging} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { if (dragMovedRef.current) { event.preventDefault(); dragMovedRef.current = false; return; } setOpen(true); }} aria-expanded={false} aria-label={t(language, 'Open chat')} title={t(language, 'Drag to move')}><Icon name="sparkles" size={17} /><span>{t(language, 'Need help?')}</span></button>}
   </aside>;
 }

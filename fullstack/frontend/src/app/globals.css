@@ -1499,10 +1499,6 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 .category-experience + .ai-chatbot {
   position: fixed !important;
   z-index: 200 !important;
-  top: auto !important;
-  right: calc(163px - 2.1cm) !important;
-  bottom: calc(117px - 1.4cm) !important;
-  left: auto !important;
 }
 
 /* Let the landing background continue behind the transparent sticky navbar. */

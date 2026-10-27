@@ -5909,3 +5909,36 @@ body.theme-dark .property-detail-media .property-detail-about .property-detail-s
   .app-realistic .contact-interface-grid > div:first-child .contact-interface-copy { font-size: 16px; line-height: 1.65; }
   .app-realistic .contact-interface-grid > div:first-child .contact-email { font-size: 15px; }
 }
+
+/* Align the mobile hero search and join actions with the headline inset. */
+@media (max-width: 640px) {
+  .app-realistic .landing-conversational-search {
+    width: calc(100% - .5cm);
+    margin: 0 0 10px .5cm;
+  }
+  .app-realistic .hero-role-join {
+    display: grid;
+    width: calc(100% - .5cm);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 12px 0 0 .5cm;
+  }
+  .app-realistic .hero-role-join .button {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 8px;
+    font-size: 11px;
+    line-height: 1.25;
+    text-align: center;
+  }
+  .app-realistic .hero-role-join .hero-landlord-join {
+    width: min(220px, 100%);
+    min-height: 48px;
+    grid-column: 1 / -1;
+    justify-self: center;
+    align-self: stretch;
+    margin: 0;
+    padding: 8px 14px;
+  }
+}

@@ -636,7 +636,9 @@ body.theme-dark .auth-modal-heading p, body.theme-dark .auth-legal { color: rgba
 .footer-main { display: grid; grid-template-columns: 1.7fr 1fr 1fr 1.1fr; gap: 32px; padding-top: 38px; padding-bottom: 34px; }
 .footer-brand-block p { margin-top: 18px; color: var(--muted); font-size: 11px; line-height: 1.75; }
 .footer-column { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
-.footer-column > span { margin-bottom: 2px; color: var(--green-dark); font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.footer-column > span, .footer-column-heading { margin-bottom: 2px; color: var(--green-dark); font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.footer-column-heading { text-decoration: none; }
+.footer-column-heading:hover { color: var(--green); }
 .footer-column a { color: var(--ink); font-size: 10px; }
 .footer-social-link { display: inline-flex; align-items: center; gap: 8px; }
 .footer-social-link svg { flex: 0 0 auto; transition: transform .2s ease, filter .2s ease; }

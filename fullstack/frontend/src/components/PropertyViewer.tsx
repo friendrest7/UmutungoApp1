@@ -9,7 +9,7 @@ import { PropertyPlaceholder } from './PropertyCard';
 import { AuthModal } from './AuthModal';
 import { umutungoApi } from '../lib/umutungoApi';
 import { dashboardPathForAccountRole } from '../lib/accountRouting';
-import { propertySlug } from '../lib/listings';
+import { propertySlug, supportsSpatialPreview } from '../lib/listings';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
 type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; initialImageIndex?: number; initialRequest?: boolean; initialContact?: boolean; embedded?: boolean };
@@ -118,7 +118,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const isHouse = property.type.trim().toLowerCase() === 'house';
   const hasPropertyMeasurements = property.bedrooms > 0 || property.bathrooms > 0 || property.area > 0;
   const isProductListing = ['Vehicles', 'Furniture', 'Appliances', 'Equipment', 'Other assets'].includes(property.type);
-  const hasSpatialView = !isProductListing && !['vehicle', 'furniture', 'appliance', 'equipment'].includes(property.type.trim().toLowerCase());
+  const hasSpatialView = !isProductListing && supportsSpatialPreview(property.type);
   const [activeImage, setActiveImage] = useState(() => Math.max(0, Math.min(initialImageIndex, images.length - 1)));
   const [mode, setMode] = useState<ViewerMode>(hasSpatialView ? initialMode : 'photos');
   const [tourStop, setTourStop] = useState(0);

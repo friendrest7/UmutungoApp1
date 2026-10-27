@@ -40,7 +40,7 @@ export function Footer({ language, darkMode = false }: { language: Language; dar
   return (
     <footer className="site-footer" id="footer-contact">
       <section className="community-testimonials container" aria-labelledby="community-testimonials-title">
-        <div className="community-testimonials-heading"><h2 id="community-testimonials-title">{t(language, 'Example stories from Rwanda')}</h2></div>
+        <div className="community-testimonials-heading"><h2 id="community-testimonials-title">{t(language, 'Witnesses')}</h2></div>
         <div className="community-testimonials-grid">
           {testimonials.map((item) => <figure className="community-testimonial" key={item.name}><blockquote>{item.quote}</blockquote><figcaption><strong>{item.name}</strong><span>{item.location}, Rwanda</span></figcaption></figure>)}
           {submittedStories.map((item) => <figure className="community-testimonial" key={item.id}><blockquote>{item.body}</blockquote><figcaption><strong>{item.name}</strong><span>Umutungo community</span></figcaption></figure>)}

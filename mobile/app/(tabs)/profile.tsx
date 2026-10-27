@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { updateProfile } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
@@ -10,12 +11,20 @@ import { languageOptions, normalizeLanguage, useI18n } from '@/i18n';
 function SettingsCard() {
   const { colors, styles, mode, setMode } = useTheme();
   const { language, setLanguage, t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
   const modes: ThemeMode[] = ['system', 'light', 'dark'];
-  return <View style={[styles.card, { gap: 10 }]}>
-    <Text style={styles.heading}>{t('Theme')}</Text>
-    <View style={{ flexDirection: 'row', gap: 8 }}>{modes.map((item) => <Pressable key={item} style={[item === mode ? styles.button : styles.secondaryButton, { flex: 1 }]} onPress={() => void setMode(item)}><Text style={item === mode ? styles.buttonText : styles.secondaryText}>{t(item[0].toUpperCase() + item.slice(1))}</Text></Pressable>)}</View>
-    <Text style={styles.heading}>{t('Language')}</Text>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{languageOptions.map((item) => <Pressable key={item.code} style={[item.code === language ? styles.button : styles.secondaryButton, { flexGrow: 1, flexBasis: '45%' }]} onPress={() => void setLanguage(item.code)}><Text style={item.code === language ? styles.buttonText : styles.secondaryText}>{item.label}</Text></Pressable>)}</View>
+  const selectedLanguage = languageOptions.find((item) => item.code === language)?.label ?? language;
+  return <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded((current) => !current)} style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
+      <View style={{ flex: 1, gap: 3 }}><Text style={styles.heading}>{t('Theme')} · {t('Language')}</Text><Text style={styles.muted}>{t(mode[0].toUpperCase() + mode.slice(1))} · {selectedLanguage}</Text></View>
+      <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.ink} />
+    </Pressable>
+    {expanded && <View style={{ gap: 10, paddingHorizontal: 14, paddingBottom: 14 }}>
+      <Text style={styles.label}>{t('Theme')}</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>{modes.map((item) => <Pressable key={item} style={[item === mode ? styles.button : styles.secondaryButton, { flex: 1 }]} onPress={() => void setMode(item)}><Text style={item === mode ? styles.buttonText : styles.secondaryText}>{t(item[0].toUpperCase() + item.slice(1))}</Text></Pressable>)}</View>
+      <Text style={styles.label}>{t('Language')}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{languageOptions.map((item) => <Pressable key={item.code} style={[item.code === language ? styles.button : styles.secondaryButton, { flexGrow: 1, flexBasis: '45%' }]} onPress={() => void setLanguage(item.code)}><Text style={item.code === language ? styles.buttonText : styles.secondaryText}>{item.label}</Text></Pressable>)}</View>
+    </View>}
   </View>;
 }
 
@@ -33,7 +42,7 @@ export default function ProfileScreen() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  if (!user) return <ScrollView style={styles.screen} contentContainerStyle={styles.safeContent}><Text style={styles.title}>{t('Your profile')}</Text><Text style={styles.body}>{t('Sign in to manage your account, saved properties, messages, and listings.')}</Text><SettingsCard /><Pressable style={styles.button} onPress={() => router.push('/auth/sign-in')}><Text style={styles.buttonText}>{t('Sign in')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => router.push('/auth/register')}><Text style={styles.secondaryText}>{t('Create account')}</Text></Pressable></ScrollView>;
+  if (!user) return <ScrollView style={styles.screen} contentContainerStyle={styles.safeContent}><Text style={styles.title}>{t('Your profile')}</Text><Text style={styles.body}>{t('Sign in to manage your account, saved properties, messages, and listings.')}</Text><SettingsCard /><Pressable style={styles.button} onPress={() => router.push('/auth/sign-in')}><Text style={styles.buttonText}>{t('Sign in')}</Text></Pressable><View style={[styles.card, { gap: 10, padding: 14 }]}><Text style={styles.heading}>{t('New to Umutungo?')}</Text><Text style={styles.muted}>{t('Create an account to save properties, message owners, and manage your listings.')}</Text><Pressable accessibilityRole="button" style={[styles.button, { minHeight: 52, flexDirection: 'row', gap: 9, borderRadius: 14 }]} onPress={() => router.push('/auth/register')}><Ionicons name="person-add-outline" size={19} color="#000000" /><Text style={styles.buttonText}>{t('Create account')}</Text></Pressable></View></ScrollView>;
 
   const canManage = user.role === 'property_owner' || user.role === 'komisiyoneri' || user.role === 'admin';
   const save = async () => {

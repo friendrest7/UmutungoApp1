@@ -75,6 +75,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/owner/upgrades/", s.ownerUpgradeRoute)
 	mux.HandleFunc("/api/v1/messages", s.messages)
 	mux.HandleFunc("/api/v1/reviews", s.reviews)
+	mux.HandleFunc("/api/v1/testimonials", s.testimonials)
 	mux.HandleFunc("/api/v1/bookings", s.bookings)
 	mux.HandleFunc("/api/v1/bookings/", s.bookingRoute)
 	mux.HandleFunc("/api/v1/reports", s.reports)
@@ -2458,6 +2459,55 @@ func (s *Server) reviews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": "published", "rating": input.Rating})
+}
+
+func (s *Server) testimonials(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := s.db.Query(r.Context(), `SELECT t.id,u.name,t.body,t.created_at FROM testimonials t JOIN users u ON u.id=t.user_id WHERE t.status='approved' ORDER BY t.created_at DESC LIMIT 12`)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load testimonials")
+			return
+		}
+		defer rows.Close()
+		items := make([]map[string]any, 0)
+		for rows.Next() {
+			var id, name, body string
+			var createdAt time.Time
+			if err := rows.Scan(&id, &name, &body, &createdAt); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not load testimonials")
+				return
+			}
+			items = append(items, map[string]any{"id": id, "name": name, "body": body, "created_at": createdAt})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	case http.MethodPost:
+		user, ok := s.authUser(r)
+		if !ok {
+			errorJSON(w, http.StatusUnauthorized, "sign in to share your story")
+			return
+		}
+		var input struct {
+			Body string `json:"body"`
+		}
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		body := strings.TrimSpace(input.Body)
+		if len([]rune(body)) < 20 || len([]rune(body)) > 1000 {
+			errorJSON(w, http.StatusBadRequest, "your story must be between 20 and 1000 characters")
+			return
+		}
+		var id string
+		if err := s.db.QueryRow(r.Context(), `INSERT INTO testimonials(user_id,body,status) VALUES($1,$2,'pending') RETURNING id`, user.ID, body).Scan(&id); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not submit your story")
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "pending"})
+	default:
+		w.Header().Set("Allow", "GET, POST")
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET or POST /api/v1/testimonials")
+	}
 }
 
 func (s *Server) listReviews(w http.ResponseWriter, r *http.Request, listingID string) {

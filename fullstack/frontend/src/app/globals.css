@@ -657,6 +657,18 @@ body.theme-dark .auth-modal-heading p, body.theme-dark .auth-legal { color: rgba
 .community-testimonial figcaption { display: flex; flex-direction: column; gap: 2px; color: var(--green-dark); font-size: 11px; }
 .community-testimonial figcaption strong { color: var(--ink); font-size: 12px; }
 .community-testimonial figcaption span { color: var(--muted); font-size: 10px; }
+.community-testimonial-submit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, .8fr); align-items: start; gap: 24px; padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); }
+.community-testimonial-submit h3 { margin: 0 0 6px; color: var(--ink); font-size: 17px; }
+.community-testimonial-submit p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.community-testimonial-submit form { display: grid; gap: 8px; }
+.community-testimonial-submit label { color: var(--ink); font-size: 12px; font-weight: 700; }
+.community-testimonial-submit textarea { width: 100%; resize: vertical; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); font: inherit; font-size: 13px; line-height: 1.5; }
+.community-testimonial-submit textarea:focus-visible, .community-testimonial-submit button:focus-visible { outline: 3px solid #00C763; outline-offset: 2px; }
+.testimonial-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; }
+.testimonial-form-footer button, .testimonial-sign-in { min-height: 42px; justify-self: start; padding: 0 16px; border: 0; border-radius: 999px; background: #00C763; color: #000; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.testimonial-form-footer button:disabled { opacity: .55; cursor: not-allowed; }
+.community-testimonial-submit .testimonial-form-status { color: var(--green-dark); font-size: 12px; }
+.community-testimonial-submit .testimonial-form-error { color: #b42318; font-size: 12px; }
 
 @media (max-width: 990px) {
   .container { width: min(100% - 42px, 700px); }
@@ -672,6 +684,7 @@ body.theme-dark .auth-modal-heading p, body.theme-dark .auth-legal { color: rgba
   .community-testimonials-grid { grid-template-columns: 1fr; gap: 10px; }
   .community-testimonial { padding: 16px; }
   .community-testimonial blockquote { font-size: 14px; }
+  .community-testimonial-submit { grid-template-columns: 1fr; gap: 14px; padding: 16px; }
 }
 @media (max-width: 780px) {
   .ai-chatbot, .ai-chatbot.is-open { top: auto; right: 15px; bottom: 90px; }
@@ -1466,7 +1479,7 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 
 /* Dark mode keeps the green brand accent on a deep navy layout. */
 .app.theme-dark h1 em, .app.theme-dark h2 em, .app.theme-dark .section-property h2 em, .app.theme-dark .category-section h2 em, .app.theme-dark .stories-section h2 em { color: #9fe1bd; }
-.app.theme-dark .listing-intent, .app.theme-dark .listing-intent.for-sale, .app.theme-dark .listing-intent.for-rent { background: #103b23; color: #72d69f; }
+.app.theme-dark .listing-intent, .app.theme-dark .listing-intent.for-sale, .app.theme-dark .listing-intent.for-rent { background: #00C763; color: #000000; }
 .app.theme-dark .post-segmented button.is-selected { color: #00C763; }
 .app.theme-dark .auth-submit { border-color: #00C763; background: #00C763; }
 .app.theme-dark .auth-submit:hover { border-color: #00C763; background: #00C763; }

@@ -24,7 +24,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",
-        "backgroundColor": "#00a84f"
+        "backgroundColor": "#00C763"
       },
       "permissions": [
         "android.permission.POST_NOTIFICATIONS"
@@ -42,7 +42,8 @@
           "recordAudioAndroid": false
         }
       ],
-      "./plugins/withAndroidNativeRuntime"
+      "./plugins/withAndroidNativeRuntime",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

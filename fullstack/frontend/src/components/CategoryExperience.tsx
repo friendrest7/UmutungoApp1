@@ -7,16 +7,17 @@ import { Icon } from './Icons';
 import { InterfacePreferences } from './InterfacePreferences';
 import { Navbar } from './Navbar';
 import { PropertySearch } from './PropertySearch';
+import { PropertyCard, type PropertyPlaceholder } from './PropertyCard';
 import { Language, t } from '../data/translations';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 import { getDistrictNames } from '../data/rwandaLocations';
 import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
-import { fallbackListingImages, listingImages, propertySlug, supportsSpatialPreview, type ApiListing } from '../lib/listings';
+import { fallbackListingImages, listingImages, type ApiListing } from '../lib/listings';
 import { readCachedApiListings, writeCachedApiListings } from '../lib/listingCache';
 import { isLocalDevelopmentHost, readLocalPropertyListings } from '../lib/localListings';
 
-type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; categoryName?: string; categorySlug?: string; bedrooms?: number };
+type Listing = { id: string; title: string; location: string; price: string; intent: 'For rent' | 'For sale' | 'For sale or rent' | 'For lease' | 'For sale or lease' | 'Book'; detail: string; image: string; images?: string[]; listed?: string; verified?: boolean; ownerName?: string; ownerId?: string; ownerPhone?: string; ownerRole?: string; categoryName?: string; categorySlug?: string; bedrooms?: number; bathrooms?: number; parkingSpaces?: number; area?: number; amenities?: string[]; tags?: string[] };
 type CategoryConfig = { name: string; eyebrow: string; description: string; cover: string; accent: string; filters: string[] };
 
 
@@ -103,6 +104,12 @@ const mapLocalListings = (): Listing[] => readLocalPropertyListings().map((item)
     categorySlug,
     ownerName: item.poster?.businessName || item.poster?.name,
     bedrooms: item.bedrooms,
+    bathrooms: item.bathrooms,
+    area: item.area,
+    parkingSpaces: item.parkingSpaces,
+    ownerId: item.poster?.id,
+    ownerPhone: item.poster?.phone,
+    ownerRole: item.poster?.role,
   };
 });
 
@@ -111,14 +118,28 @@ const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Lis
   const location = [item.sector, item.district, item.province].filter(Boolean).join(' Â· ');
   const bedroomCount = Number(item.bedrooms ?? item.measurements?.bedrooms ?? 0);
   const bathroomCount = Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0);
-  const areaSize = Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0);
+  const areaSize = Number(item.area ?? item.measurements?.building_size ?? item.measurements?.land_size ?? item.measurements?.plot_size ?? 0);
   const propertyFacts = [bedroomCount ? `${bedroomCount} bedrooms` : '', bathroomCount ? `${bathroomCount} bathrooms` : '', areaSize ? `${areaSize} m²` : ''].filter(Boolean);
   const detail = propertyFacts.join(' · ');
   const images = listingImages(item);
-  const cardImages = images.length ? images : fallbackListingImages(item);
-  const image = cardImages[0] ?? '/properties/listing-placeholder.svg';
-  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : ''}`, intent, detail, image, item.owner?.verified ?? false), images: cardImages, bedrooms: bedroomCount, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
+  const image = images[0] ?? fallbackListingImages(item)[0] ?? '/properties/listing-placeholder.svg';
+  return { ...listing(item.id, item.title, location, `${item.currency || 'RWF'} ${item.price.toLocaleString()}${intent === 'For rent' ? ' / month' : intent === 'Book' ? ' / night' : ''}`, intent, detail, image, item.owner?.verified ?? false), images, bedrooms: bedroomCount, bathrooms: bathroomCount, area: areaSize, parkingSpaces: Number(item.measurements?.parking_spaces ?? item.measurements?.parking ?? 0), ownerId: item.owner?.id, ownerPhone: item.owner?.phone, ownerRole: item.owner?.role, amenities: item.amenities, tags: item.tags, listed: item.created_at ? `Listed on ${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(item.created_at))}` : 'Date unavailable' };
 };
+
+function listingToCard(item: Listing): PropertyPlaceholder {
+  return {
+    id: item.id, title: item.title, type: item.categoryName ?? item.categorySlug ?? 'Property', location: item.location,
+    price: item.price, priceNote: '', bedrooms: item.bedrooms ?? 0, bathrooms: item.bathrooms ?? 0,
+    parkingSpaces: item.parkingSpaces, area: item.area ?? 0, accent: '#00C763', image: item.image,
+    images: item.images, photoCount: item.images?.length ?? 0, listed: item.listed ?? '', amenities: item.amenities, tags: item.tags,
+    availableFor: item.intent === 'For rent' ? 'rent' : item.intent === 'Book' ? 'book' : item.intent.includes('or') ? 'both' : 'sale',
+    poster: item.ownerName ? {
+      id: item.ownerId, name: item.ownerName, phone: item.ownerPhone,
+      role: item.ownerRole === 'komisiyoneri' ? 'Komisiyoneri' : item.ownerRole === 'property_owner' ? 'Property Owner' : 'Landlord',
+      verified: item.verified,
+    } : undefined,
+  };
+}
 
 export function CategoryExperience({ slug, initialQuery = '', initialLocation = '', initialDistrict = '', initialSector = '', initialIntent = '', initialPriceRange = '', initialMinBedrooms = 0 }: { slug: string; initialQuery?: string; initialLocation?: string; initialDistrict?: string; initialSector?: string; initialIntent?: string; initialPriceRange?: string; initialMinBedrooms?: number }) {
   const { language, changeLanguage: setLanguage } = usePersistentLanguage();
@@ -142,8 +163,6 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
   const [listingsLoading, setListingsLoading] = useState(true);
   const [visibleListingCount, setVisibleListingCount] = useState(12);
   const listingLoadMoreRef = useRef<HTMLDivElement>(null);
-  const [hoveredGalleryId, setHoveredGalleryId] = useState<string | null>(null);
-  const [galleryIndexes, setGalleryIndexes] = useState<Record<string, number>>({});
   const changeLanguage = (nextLanguage: Language) => {
     setLanguage(nextLanguage);
   };
@@ -274,13 +293,6 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
     observer.observe(target);
     return () => observer.disconnect();
   }, [listings.length, visibleListingCount]);
-  useEffect(() => {
-    const item = listings.find((listingItem) => listingItem.id === hoveredGalleryId);
-    const imageCount = item?.images?.length ?? 0;
-    if (!hoveredGalleryId || imageCount < 2) return;
-    const timer = window.setInterval(() => setGalleryIndexes((current) => ({ ...current, [hoveredGalleryId]: ((current[hoveredGalleryId] ?? 1) + 1) % imageCount })), 2200);
-    return () => window.clearInterval(timer);
-  }, [hoveredGalleryId, listings]);
   const toggleListingFavorite = (item: Listing) => {
     const wasSaved = saved.includes(item.id);
     const favorite: FavoriteItem = { property_id: item.id, title: item.title, type: category.name, location: item.location.replace(/\s*Â·\s*/g, ' - '), price: item.price, image: item.image };
@@ -306,18 +318,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
       </div>
       {listingsLoading ? <div className="category-listing-grid category-listing-skeleton-grid" role="status" aria-label={t(language, 'Loading listings…')}>{Array.from({ length: 8 }, (_, index) => <article className="category-listing-skeleton" key={index}><span /><div><i /><i /><i /><b /></div></article>)}</div> : listings.length ? <>
         <div className="owner-listing-heading"><h2>Property listings</h2><p>Listings posted directly to Umutungo.</p></div>
-        <div className="category-listing-grid">{visibleListings.map((item) => <article className="category-listing-card" key={item.id}>
-          <div className="category-listing-image" onMouseEnter={() => { setHoveredGalleryId(item.id); setGalleryIndexes((current) => ({ ...current, [item.id]: 1 })); }} onMouseLeave={() => { setHoveredGalleryId(null); setGalleryIndexes((current) => ({ ...current, [item.id]: 0 })); }} onFocus={() => { setHoveredGalleryId(item.id); setGalleryIndexes((current) => ({ ...current, [item.id]: 1 })); }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { setHoveredGalleryId(null); setGalleryIndexes((current) => ({ ...current, [item.id]: 0 })); } }}>
-            <div className="category-listing-image-track" style={{ transform: `translateX(-${(galleryIndexes[item.id] ?? 0) * 100}%)` }}>{(item.images?.length ? item.images : [item.image]).map((image, imageIndex) => <span className="category-listing-image-slide" key={`${image}-${imageIndex}`} style={{ backgroundImage: `linear-gradient(180deg, transparent 45%, rgba(5, 15, 10, .64)), url("${image.replace(/["\\]/g, '')}")` }} />)}</div>
-            <span className={`listing-intent category-card-status ${item.intent === 'For sale' ? 'for-sale' : item.intent === 'For rent' ? 'for-rent' : ''}`}>{item.intent}</span>
-            <button className={`category-save ${saved.includes(item.id) ? 'saved' : ''}`} type="button" aria-label={`Save ${item.title}`} onClick={() => toggleListingFavorite(item)}><Icon name="heart" size={16} filled={saved.includes(item.id)} /></button>
-            {item.verified && <span className="category-verified"><Icon name="check" size={12} /> Verified</span>}
-          </div>
-          <div className="category-listing-copy"><div className="category-listing-meta"><span>{item.categoryName ?? 'UMUTUNGO LISTING'}</span>{item.listed && <span>{item.listed}</span>}</div>
-            <h3>{item.title}</h3><p><Icon name="pin" size={13} /> {item.location}</p>
-            <div className="category-listing-footer"><div><strong>{item.price}</strong>{item.detail && <small>{item.detail}</small>}</div><Link className="view-property-button category-view-button" href={`/property/${propertySlug(item.title)}${supportsSpatialPreview(item.categoryName ?? item.categorySlug ?? '') ? '?view=3d' : ''}`}>View property</Link></div>
-          </div>
-        </article>)}</div>
+        <div className="category-listing-grid">{visibleListings.map((item) => <PropertyCard key={item.id} language={language} property={listingToCard(item)} favorite={saved.includes(item.id)} onFavorite={() => toggleListingFavorite(item)} />)}</div>
         {visibleListingCount < listings.length && <div ref={listingLoadMoreRef} className="category-listing-scroll-sentinel" aria-hidden="true" />}
       </> : <div className="category-empty"><h3>{t(language, listingLoadError ? 'Listings could not load right now' : 'No listings match that search')}</h3><p>{t(language, listingLoadError ? 'Please try again in a moment.' : 'Try another neighbourhood, property type, or clear the filter.')}</p>{listingLoadError ? <button type="button" onClick={() => window.location.reload()}>{t(language, 'Try again')}</button> : (query || initialLocation || initialDistrict || initialSector || initialIntent || initialPriceRange) && <button type="button" onClick={() => window.location.assign(`/categories/${slug}`)}>{t(language, 'Clear search')}</button>}</div>}
     </section>

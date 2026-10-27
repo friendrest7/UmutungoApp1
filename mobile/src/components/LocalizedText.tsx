@@ -14,6 +14,6 @@ function translateChildren(children: React.ReactNode, translate: (value: string)
 
 export function LocalizedText({ children, ...props }: TextProps) {
   const { t } = useI18n();
-  const sansSerif = Platform.select({ ios: 'System', android: 'sans-serif', default: 'sans-serif' });
+  const sansSerif = Platform.select({ ios: 'Lexend', android: 'Lexend', default: 'Lexend' });
   return <NativeText {...props} style={[{ fontFamily: sansSerif }, props.style]}>{translateChildren(children, t)}</NativeText>;
 }

@@ -19,7 +19,7 @@ export type ListingMedia = { type: 'photo' | 'video' | 'tour_3d' | string; url: 
 
 export type ApiListing = {
   id: string;
-  owner: { id: string; name: string; role: UserRole | string; phone?: string };
+  owner: { id: string; name: string; role: UserRole | string; phone?: string; verified?: boolean; business_name?: string; photo_url?: string };
   category: string;
   transaction_type: string;
   title: string;
@@ -40,6 +40,7 @@ export type ApiListing = {
   images?: string[];
   created_at: string;
   expires_at?: string;
+  measurements?: { bedrooms?: number; bathrooms?: number; building_size?: number; land_size?: number; parking_spaces?: number; parking?: number; [key: string]: unknown };
 };
 
 export type FavoriteItem = {

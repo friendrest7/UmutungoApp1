@@ -26,6 +26,8 @@ export type ApiListing = {
   bathrooms?: number;
   area?: number;
   measurements?: Record<string, unknown>;
+  amenities?: string[];
+  tags?: string[];
 };
 
 export function listedOn(value?: string | null) {
@@ -119,21 +121,26 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     id: item.id,
     title: item.title,
     type,
-    location: [item.sector, item.district, item.province].filter(Boolean).join(' - ') || 'Rwanda',
+    location: [item.village, item.cell, item.sector, item.district, item.province].filter(Boolean).join(', ') || 'Rwanda',
     latitude: item.latitude,
     longitude: item.longitude,
     price: `${item.currency ?? 'RWF'} ${Number(item.price).toLocaleString()}`,
     priceNote: both ? ' for sale or rent' : book ? '/ night' : rent ? '/ month' : '',
     bedrooms: Number(item.bedrooms ?? item.measurements?.bedrooms ?? 0),
     bathrooms: Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0),
-    area: Number(item.area ?? item.measurements?.building_size ?? item.measurements?.plot_size ?? 0),
-    accent: '#00a84f',
+    parkingSpaces: Number(item.measurements?.parking_spaces ?? item.measurements?.parking ?? 0),
+    area: Number(item.area ?? item.measurements?.building_size ?? item.measurements?.land_size ?? item.measurements?.plot_size ?? 0),
+    accent: '#00C763',
     image: images[0] ?? fallbackListingImage(item),
     images: images.length ? images : [fallbackListingImage(item)],
+    photoCount: images.length,
+    amenities: item.amenities ?? [],
+    tags: item.tags ?? [],
     listed: listingDate,
     availableFor: both ? 'both' : rent ? 'rent' : 'sale',
     description: item.description,
     poster: {
+      id: item.owner?.id,
       name: item.owner?.name ?? 'Property owner',
       businessName: item.owner?.business_name,
       photoUrl: item.owner?.photo_url,

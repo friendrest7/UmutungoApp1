@@ -1028,12 +1028,12 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 	}
 	args := []any{search, q.Get("province"), q.Get("district"), q.Get("sector"), q.Get("category"), q.Get("transaction_type"), limit + 1, offset, minPrice, maxPrice, minBedrooms}
 	rows, err := s.db.Query(r.Context(), `
-		SELECT l.id, l.owner_id, u.name, u.role, l.category, l.transaction_type,
+		SELECT l.id, l.owner_id, u.name, u.role, u.verified_at, u.phone, l.category, l.transaction_type,
 		l.title, l.description, l.price, l.currency, l.province, l.district, l.sector,
 		COALESCE(l.cell,''), COALESCE(l.village,''), l.latitude, l.longitude, l.status,
 		l.tags, l.amenities, l.created_at, l.publish_at
 		, COALESCE((SELECT json_agg(json_build_object('type', lm.media_type, 'url', lm.url) ORDER BY lm.sort_order, lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id), '[]'::json) AS media
-		, COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) AS measurements
+		, COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) AS measurements
 		FROM listings l JOIN users u ON u.id=l.owner_id
 		WHERE l.deleted_at IS NULL AND l.status='published'
 		AND ($1='' OR l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%'
@@ -1053,7 +1053,8 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	items := make([]map[string]any, 0)
 	for rows.Next() {
-		var id, ownerID, ownerName, ownerRole, category, transactionType, title, description string
+		var id, ownerID, ownerName, ownerRole, ownerPhone, category, transactionType, title, description string
+		var ownerVerifiedAt *time.Time
 		var price float64
 		var currency, province, district, sector, cell, village, status string
 		var latitude, longitude *float64
@@ -1061,7 +1062,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		var media, measurements []byte
 		var createdAt time.Time
 		var publishAt *time.Time
-		if err := rows.Scan(&id, &ownerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &publishAt, &media, &measurements); err != nil {
+		if err := rows.Scan(&id, &ownerID, &ownerName, &ownerRole, &ownerVerifiedAt, &ownerPhone, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &publishAt, &media, &measurements); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not read listings")
 			return
 		}
@@ -1073,8 +1074,12 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 				images = append(images, imageURL)
 			}
 		}
+		owner := map[string]any{"id": ownerID, "name": ownerName, "role": ownerRole, "verified": ownerVerifiedAt != nil}
+		if ownerVerifiedAt != nil {
+			owner["phone"] = ownerPhone
+		}
 		items = append(items, map[string]any{
-			"id": id, "owner": map[string]string{"id": ownerID, "name": ownerName, "role": ownerRole},
+			"id": id, "owner": owner,
 			"category": category, "transaction_type": transactionType, "title": title, "description": description,
 			"price": price, "currency": currency, "province": province, "district": district, "sector": sector,
 			"cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status,
@@ -1596,7 +1601,7 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 	var publishAt *time.Time
 	var ownerVerifiedAt *time.Time
 	var measurements []byte
-	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,COALESCE(bp.business_name,''),COALESCE(pr.photo_url,''),COALESCE(u.phone,''),u.verified_at,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.publish_at,l.expires_at,COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) FROM listings l JOIN users u ON u.id=l.owner_id LEFT JOIN business_profiles bp ON bp.user_id=u.id LEFT JOIN profiles pr ON pr.user_id=u.id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
+	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,COALESCE(bp.business_name,''),COALESCE(pr.photo_url,''),COALESCE(u.phone,''),u.verified_at,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.publish_at,l.expires_at,COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) FROM listings l JOIN users u ON u.id=l.owner_id LEFT JOIN business_profiles bp ON bp.user_id=u.id LEFT JOIN profiles pr ON pr.user_id=u.id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
 		Scan(&ownerID, &ownerName, &ownerRole, &businessName, &photoURL, &ownerPhone, &ownerVerifiedAt, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &publishAt, &expiresAt, &measurements)
 	if err != nil {
 		if err == pgx.ErrNoRows {

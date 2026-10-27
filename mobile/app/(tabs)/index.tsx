@@ -151,10 +151,10 @@ export default function HomeScreen() {
         </View>
         <View style={{ flexDirection: 'row', gap: 9 }}>
           <Pressable onPress={() => goToSearch({ transaction_type: 'rent_out' })} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255, 255, 255,0.42)', backgroundColor: 'rgba(255, 255, 255,0.13)' }}>
-            <Ionicons name="key-outline" size={14} color="#ffffff" /><Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>{t('Rent a place')}</Text>
+            <Ionicons name="key-outline" size={14} color="#000000" /><Text style={{ color: '#000000', fontSize: 11, fontWeight: '700' }}>{t('Rent a place')}</Text>
           </Pressable>
           <Pressable onPress={() => goToSearch({ transaction_type: 'sell' })} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255, 255, 255,0.42)', backgroundColor: 'rgba(255, 255, 255,0.13)' }}>
-            <Ionicons name="home-outline" size={14} color="#ffffff" /><Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>{t('Buy a place')}</Text>
+            <Ionicons name="home-outline" size={14} color="#000000" /><Text style={{ color: '#000000', fontSize: 11, fontWeight: '700' }}>{t('Buy a place')}</Text>
           </Pressable>
         </View>
       </View>

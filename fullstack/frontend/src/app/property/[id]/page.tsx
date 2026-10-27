@@ -87,12 +87,14 @@ export default function PropertyDetailPage() {
   const [viewerMode, setViewerMode] = useState<'photos' | 'tour' | 'plan' | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [requestOpen, setRequestOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [tourSatisfaction, setTourSatisfaction] = useState<'yes' | 'no' | null>(null);
   const [directionsMapUrl, setDirectionsMapUrl] = useState('');
   const supports3DView = supportsSpatialPreview(property?.type ?? '');
 
   useEffect(() => {
     const open3d = new URLSearchParams(window.location.search).get('view') === '3d';
+    const openGallery = new URLSearchParams(window.location.search).get('gallery') === '1';
     const id = decodeURIComponent(params.id ?? '');
     const isListingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     setProperty(null);
@@ -101,6 +103,7 @@ export default function PropertyDetailPage() {
       if (localProperty) {
         setProperty(localProperty);
         if (open3d && supportsSpatialPreview(localProperty.type)) setViewerMode('tour');
+        if (openGallery) setGalleryOpen(true);
       }
       setLoading(false);
       return;
@@ -114,12 +117,14 @@ export default function PropertyDetailPage() {
           const mappedProperty = toProperty(result as SharedApiListing);
           setProperty(mappedProperty);
           if (open3d && supportsSpatialPreview(mappedProperty.type)) setViewerMode('tour');
+          if (openGallery) setGalleryOpen(true);
           return;
         }
         const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id) : undefined;
         if (localProperty) {
           setProperty(localProperty);
           if (open3d && supportsSpatialPreview(localProperty.type)) setViewerMode('tour');
+          if (openGallery) setGalleryOpen(true);
         }
       })
       .catch(() => {
@@ -127,6 +132,7 @@ export default function PropertyDetailPage() {
         if (localProperty) {
           setProperty(localProperty);
           if (open3d && supportsSpatialPreview(localProperty.type)) setViewerMode('tour');
+          if (openGallery) setGalleryOpen(true);
         }
       })
       .finally(() => setLoading(false));
@@ -192,11 +198,13 @@ export default function PropertyDetailPage() {
             </>}
             <section className="property-detail-content" aria-label="Property information">
               <article className="property-detail-about"><span className="property-detail-section-label">Property details</span><p>{property.description?.trim() || 'Contact the property owner for more information about this listing.'}</p></article>
+              {(property.amenities?.length || property.tags?.length) ? <article className="property-detail-about"><span className="property-detail-section-label">Features and accessibility</span><p>{[...(property.amenities ?? []), ...(property.tags ?? [])].join(' · ')}</p></article> : null}
             </section>
           </div>
           <article className="property-detail-copy">
             {property.type.trim().toLowerCase() !== 'other' && <span className="property-detail-type">{property.type}</span>}
             <h1>{property.title}</h1>
+            <p className="property-detail-listed">Property ID: {property.id}</p>
             <p className="property-detail-location">{property.location}</p>
             <strong className="property-detail-price">{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{property.priceNote}</small></>}</strong>
             <div className="property-detail-actions">
@@ -207,6 +215,8 @@ export default function PropertyDetailPage() {
               {property.area > 0 && <span><b>{property.area}</b> m²</span>}
             </div>}
             <div className="property-detail-meta"><span className="property-detail-listed">{property.listed}</span><span className="property-detail-availability">{property.availableFor === 'rent' ? 'Available to rent' : property.availableFor === 'both' ? 'Available to buy or rent' : 'Available to buy'}</span></div>
+            <p className="property-detail-listed">Negotiability: Ask the advertiser</p>
+            {property.poster && <div className="property-detail-meta"><span>Advertiser: {property.poster.businessName || property.poster.name} ({property.poster.role}){property.poster.verified ? ' · Verified' : ''}</span></div>}
             {supports3DView && <section className="viewer-tour-feedback property-detail-feedback" aria-labelledby="property-tour-feedback-title">
               <div><strong id="property-tour-feedback-title">Are you satisfied with the 3D view to continue checkout?</strong><span>Choose what you would like to do next.</span></div>
               <div className="viewer-tour-feedback-options">
@@ -229,6 +239,7 @@ export default function PropertyDetailPage() {
           onClose={() => setRequestOpen(false)}
         />
       )}
+      {galleryOpen && <PropertyViewer language="English" property={property} initialMode="photos" initialImageIndex={selectedImageIndex} onClose={() => setGalleryOpen(false)} />}
     </>
   );
 }

@@ -23,6 +23,7 @@ export type IconName =
   | 'moon'
   | 'pin'
   | 'search'
+  | 'share'
   | 'sparkles'
   | 'sun'
   | 'user'
@@ -64,6 +65,7 @@ export function Icon({ name, size = 18, strokeWidth = 1.8, filled = false }: Ico
     moon: <path d="M20.7 15.1A8.6 8.6 0 0 1 8.9 3.3 8.6 8.6 0 1 0 20.7 15.1Z" fill={filled ? 'currentColor' : 'none'} {...common} />,
     pin: <><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" fill="none" {...common} /><circle cx="12" cy="10" r="2" fill="none" {...common} /></>,
     search: <><circle cx="10.8" cy="10.8" r="6.8" fill="none" {...common} /><path d="m16 16 5 5" fill="none" {...common} /></>,
+    share: <><circle cx="18" cy="5" r="2.5" fill="none" {...common} /><circle cx="6" cy="12" r="2.5" fill="none" {...common} /><circle cx="18" cy="19" r="2.5" fill="none" {...common} /><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5" fill="none" {...common} /></>,
     sparkles: <><path d="m12 3-1.7 5.3L5 10l5.3 1.7L12 17l1.7-5.3L19 10l-5.3-1.7L12 3Z" fill="none" {...common} /><path d="m19 16-.8 2.2L16 19l2.2.8L19 22l.8-2.2L22 19l-2.2-.8L19 16Z" fill="none" {...common} /></>,
     sun: <><circle cx="12" cy="12" r="4" fill="none" {...common} /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" fill="none" {...common} /></>,
     user: <><circle cx="12" cy="8" r="3.2" fill="none" {...common} /><path d="M5 21c.5-4 3-6 7-6s6.5 2 7 6" fill="none" {...common} /></>,

@@ -4,6 +4,9 @@ import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { useFonts } from 'expo-font';
+import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
+import { Lexend_400Regular, Lexend_500Medium, Lexend_600SemiBold, Lexend_700Bold } from '@expo-google-fonts/lexend';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { AuthProvider } from '@/auth/AuthContext';
 import { syncOfflineChanges } from '@/api/client';
@@ -13,6 +16,7 @@ import { LocalizationProvider } from '@/i18n';
 
 function AppShell() {
   const { isDark, colors } = useTheme();
+  const [fontsLoaded] = useFonts({ ArchivoBlack: ArchivoBlack_400Regular, Lexend: Lexend_400Regular, LexendMedium: Lexend_500Medium, LexendSemiBold: Lexend_600SemiBold, LexendBold: Lexend_700Bold });
   const { t } = useI18n();
   const [offline, setOffline] = useState(false);
   useEffect(() => NetInfo.addEventListener((state) => {
@@ -29,7 +33,7 @@ function AppShell() {
             name: 'Umutungo updates',
             importance: Notifications.AndroidImportance.DEFAULT,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#00a84f',
+            lightColor: '#00C763',
           });
         }
         const permission = await Notifications.getPermissionsAsync();
@@ -40,6 +44,7 @@ function AppShell() {
     };
     void prepareNotifications();
   }, []);
+  if (!fontsLoaded) return null;
   return <><StatusBar style={isDark ? 'light' : 'dark'} />{offline && <View accessibilityRole="alert" style={{ paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#8a5a00' }}><Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{t('Offline mode · showing saved properties. Changes to favorites will sync when you reconnect.')}</Text></View>}<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }} /></>;
 }
 

@@ -196,9 +196,13 @@ export default function PropertyDetailScreen() {
     <View style={{ gap: 7 }}>
       <Text style={styles.brand}>{listing.category} · {listing.transaction_type}</Text>
       <Text style={[styles.title, { fontSize: 15, lineHeight: 20 }]}>{listing.title}</Text>
+      <Text style={styles.muted}>Property ID: {listing.id}</Text>
       <Text style={styles.body}>{listingLocation(listing)}</Text>
       <Text style={{ color: colors.greenDark, fontSize: 21, fontWeight: '900' }}>{formatPrice(listing)}</Text>
+      <Text style={styles.muted}>Negotiability: Ask the advertiser</Text>
+      <Text style={styles.muted}>{listing.owner.business_name || listing.owner.name}{listing.owner.verified ? ' · Verified advertiser' : ''}</Text>
       <Text style={styles.body}>{listing.description || t('No description supplied by the owner.')}</Text>
+      {!!(listing.amenities?.length || listing.tags?.length) && <View style={{ gap: 4, paddingTop: 4 }}><Text style={styles.label}>Features and accessibility</Text><Text style={styles.body}>{[...(listing.amenities ?? []), ...(listing.tags ?? [])].join(' · ')}</Text></View>}
     </View>
     {isHouse && listing.media?.some((item) => item.type === 'tour_3d' && item.url) && <Pressable style={styles.secondaryButton} onPress={() => { const tour = listing.media?.find((item) => item.type === 'tour_3d' && item.url); if (tour?.url) void Linking.openURL(tour.url); }}><Text style={styles.secondaryText}>Open 3D property tour</Text></Pressable>}
     {(listing.transaction_type === 'sell' || listing.transaction_type === 'rent_out') && user?.id !== listing.owner.id && <View style={[styles.card, { gap: 10 }]}><Text style={styles.heading}>Pay with MTN MoMo</Text><Text style={styles.body}>Amount: {formatPrice(listing)}. The server uses the published listing price.</Text><View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><TextInput style={[styles.input, { flex: 1 }]} value={paymentPhone} onChangeText={setPaymentPhone} placeholder="MTN Rwanda number (e.g. 078...)" placeholderTextColor={colors.muted} keyboardType="phone-pad" autoComplete="tel" /><Pressable style={[styles.secondaryButton, { paddingHorizontal: 12 }]} onPress={() => setShowMomoScanner(true)}><Text style={styles.secondaryText}>Scan QR</Text></Pressable></View><Pressable style={styles.button} disabled={busy} onPress={() => void payWithMomo()}><Text style={styles.buttonText}>{busy ? 'Waiting for MTN…' : 'Request MoMo payment'}</Text></Pressable>{paymentNotice && <Text style={{ color: colors.greenDark, fontWeight: '700' }}>{paymentNotice}</Text>}{paymentError && <Text style={styles.error}>{paymentError}</Text>}</View>}

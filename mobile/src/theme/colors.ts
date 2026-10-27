@@ -1,13 +1,18 @@
 export type ColorPalette = typeof lightColors;
 
+export const brandColors = {
+  primary: '#00C763', black: '#000000', white: '#FFFFFF',
+  headingFont: 'ArchivoBlack', bodyFont: 'Lexend',
+} as const;
+
 export const lightColors = {
-  green: '#00a84f', greenDark: '#008c42', greenSoft: '#e8f6ed', ink: '#111111',
-  muted: '#66756b', line: '#dce7e1', paper: '#ffffff', canvas: '#f7faf8', amber: '#b87516', danger: '#b3261e',
+  green: brandColors.primary, greenDark: '#005b2d', greenSoft: '#e6f8ef', ink: '#111111',
+  muted: '#58645c', line: '#dce7e1', paper: brandColors.white, canvas: '#f7faf8', amber: '#b87516', danger: '#b3261e',
 };
 
 export const darkColors: ColorPalette = {
-  green: '#00a84f', greenDark: '#5bd18b', greenSoft: '#143724', ink: '#f2faf6',
-  muted: '#b1c3b7', line: '#385244', paper: '#15231b', canvas: '#0c1510', amber: '#f1bd62', danger: '#ff9189',
+  green: brandColors.primary, greenDark: '#5bd18b', greenSoft: '#143724', ink: '#f2faf6',
+  muted: '#b1c3b7', line: '#385244', paper: '#FFFFFF', canvas: '#0c1510', amber: '#f1bd62', danger: '#ff9189',
 };
 
 // Legacy inline styles read this object directly; ThemeProvider updates it before children render.

@@ -5,6 +5,13 @@ import { Logo } from './Logo';
 export function Footer({ language, darkMode = false }: { language: Language; darkMode?: boolean }) {
   return (
     <footer className="site-footer" id="footer-contact">
+      <section className="community-testimonials container" aria-labelledby="community-testimonials-title">
+        <div className="community-testimonials-heading"><span>{t(language, 'from early reviewers')}</span><h2 id="community-testimonials-title">{t(language, 'Recent reviews')}</h2></div>
+        <div className="community-testimonials-grid">
+          <figure className="community-testimonial"><blockquote>{t(language, 'The search felt calmer because I could compare the important details in one place.')}</blockquote><figcaption>{t(language, 'from early reviewers')}</figcaption></figure>
+          <figure className="community-testimonial"><blockquote>{t(language, 'The location information helped our family narrow down the right neighbourhood.')}</blockquote><figcaption>{t(language, 'from early reviewers')}</figcaption></figure>
+        </div>
+      </section>
       <div className="container app-download" id="app-download">
         <div className="app-download-copy"><h2>{t(language, 'Get the Umutungo app')}</h2><p>{t(language, 'Keep your property search close.')}</p></div>
         <div className="app-download-options" aria-label={t(language, 'Mobile app downloads')}>

@@ -648,6 +648,14 @@ body.theme-dark .auth-modal-heading p, body.theme-dark .auth-legal { color: rgba
 .footer-bottom { display: flex; align-items: center; justify-content: space-between; padding-top: 15px; padding-bottom: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
 .footer-bottom span:last-child { display: flex; gap: 23px; }
 
+.community-testimonials { display: grid; gap: 18px; padding-top: 44px; padding-bottom: 34px; border-bottom: 1px solid var(--line); }
+.community-testimonials-heading > span { color: var(--green-dark); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.community-testimonials-heading h2 { margin: 6px 0 0; font-family: var(--brand-heading); font-size: clamp(22px, 2.5vw, 30px); line-height: 1.15; }
+.community-testimonials-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.community-testimonial { display: flex; min-width: 0; flex-direction: column; justify-content: space-between; gap: 16px; margin: 0; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: 0 8px 24px rgba(16, 35, 24, .05); }
+.community-testimonial blockquote { margin: 0; color: var(--ink); font-family: var(--brand-body); font-size: 15px; font-weight: 500; line-height: 1.6; }
+.community-testimonial figcaption { color: var(--green-dark); font-size: 11px; font-weight: 700; }
+
 @media (max-width: 990px) {
   .container { width: min(100% - 42px, 700px); }
   .property-search { width: 100%; grid-template-columns: 1.1fr 1fr 1fr; }
@@ -655,6 +663,13 @@ body.theme-dark .auth-modal-heading p, body.theme-dark .auth-legal { color: rgba
   .search-label { grid-column: 1 / -1; padding-left: 0; }
   .search-submit { width: 100%; }
   .rwanda-grid { gap: 45px; }
+}
+
+@media (max-width: 620px) {
+  .community-testimonials { gap: 14px; padding-top: 32px; padding-bottom: 26px; }
+  .community-testimonials-grid { grid-template-columns: 1fr; gap: 10px; }
+  .community-testimonial { padding: 16px; }
+  .community-testimonial blockquote { font-size: 14px; }
 }
 @media (max-width: 780px) {
   .ai-chatbot, .ai-chatbot.is-open { top: auto; right: 15px; bottom: 90px; }

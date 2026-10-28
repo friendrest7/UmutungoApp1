@@ -91,6 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/favorites/", s.favoriteRoute)
 	mux.HandleFunc("/api/v1/owner/dashboard", s.ownerDashboard)
 	mux.HandleFunc("/api/v1/owner/listings", s.ownerListings)
+	mux.HandleFunc("/api/v1/subscription", s.subscriptionLevel)
 	mux.HandleFunc("/api/v1/tenant/dashboard", s.tenantDashboard)
 	mux.HandleFunc("/api/v1/maintenance", s.maintenance)
 	return s.middleware(mux)
@@ -3480,6 +3481,34 @@ func (s *Server) tenantDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"properties": properties, "applications": applications, "payments": payments, "messages": messages, "reviews": reviews})
+}
+
+func (s *Server) subscriptionLevel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		errorJSON(w, http.StatusMethodNotAllowed, "use GET /api/v1/subscription")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role == "admin" {
+		errorJSON(w, http.StatusForbidden, "administrator accounts do not use member plans")
+		return
+	}
+	var tier string
+	var startsAt, endsAt *time.Time
+	err := s.db.QueryRow(r.Context(), `SELECT tier,starts_at,ends_at FROM subscriptions WHERE user_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at > NOW()) ORDER BY created_at DESC LIMIT 1`, user.ID).Scan(&tier, &startsAt, &endsAt)
+	if err == pgx.ErrNoRows {
+		writeJSON(w, http.StatusOK, map[string]any{"tier": "free", "status": "active"})
+		return
+	}
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not load your plan level")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tier": tier, "status": "active", "starts_at": startsAt, "ends_at": endsAt})
 }
 
 func (s *Server) maintenance(w http.ResponseWriter, r *http.Request) {

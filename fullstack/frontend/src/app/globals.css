@@ -1134,6 +1134,15 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 .role-dashboard-welcome .role-dashboard-eyebrow:empty { display: none; }
 .role-dashboard-welcome h2 { max-width: 590px; margin: 11px 0 13px; font-family: var(--brand-body); font-size: clamp(28px, 3.7vw, 49px); font-weight: 500; letter-spacing: -.06em; line-height: 1.02; }
 .role-dashboard-welcome p:last-child { max-width: 480px; margin: 0; color: var(--dashboard-muted); font-size: 12px; line-height: 1.7; }
+.dashboard-plan-level-card { display: grid; gap: 8px; margin: -16px 0 28px; padding: 15px 18px; border: 1px solid var(--dashboard-line); border-left: 3px solid #718078; border-radius: 10px; background: var(--dashboard-surface); }
+.dashboard-plan-level-card.is-silver { border-left-color: #87939a; }
+.dashboard-plan-level-card.is-gold { border-left-color: #c69b42; }
+.dashboard-plan-level-card.is-platinum { border-left-color: #6b8da3; }
+.dashboard-plan-level-heading { display: flex; align-items: center; gap: 10px; }
+.dashboard-plan-level-heading h3 { margin: 0; font-family: var(--brand-body); font-size: 20px; text-transform: capitalize; }
+.dashboard-plan-level-heading > span { padding: 4px 7px; border-radius: 99px; background: var(--dashboard-soft); color: var(--dashboard-muted); font-size: 8px; font-weight: 900; letter-spacing: .1em; }
+.dashboard-plan-level-card p { max-width: 650px; margin: 0; color: var(--dashboard-muted); font-size: 11px; line-height: 1.6; }
+.dashboard-plan-level-card > small { color: var(--dashboard-muted); font-size: 9px; }
 .role-dashboard-primary { display: inline-flex; min-height: 42px; align-items: center; gap: 9px; padding: 0 16px; border: 1px solid #00C763; border-radius: 999px; background: #00C763; color: #ffffff; cursor: pointer; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .role-dashboard-primary:hover { background: #00C763; }
 .role-dashboard-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }

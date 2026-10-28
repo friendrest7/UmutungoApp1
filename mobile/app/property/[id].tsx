@@ -197,12 +197,12 @@ export default function PropertyDetailScreen() {
     <View style={{ gap: 7 }}>
       <Text style={styles.brand}>{listing.category} · {listing.transaction_type}</Text>
       <Text style={[styles.title, { fontSize: 15, lineHeight: 20 }]}>{listing.title}</Text>
-      <Text style={styles.muted}>Property ID: {listing.id}</Text>
       <Text style={styles.body}>{listingLocation(listing)}</Text>
       <Text style={{ color: colors.greenDark, fontSize: 21, fontWeight: '900' }}>{formatPrice(listing)}</Text>
-      <Text style={styles.muted}>Negotiability: Ask the advertiser</Text>
+      <View style={{ gap: 7, marginTop: -11 }}>
       <Text style={styles.muted}>{listing.owner.business_name || listing.owner.name}{listing.owner.verified ? ' · Verified advertiser' : ''}</Text>
       <Text style={styles.body}>{listing.description || t('No description supplied by the owner.')}</Text>
+      </View>
       {!!(listing.amenities?.length || listing.tags?.length) && <View style={{ gap: 4, paddingTop: 4 }}><Text style={styles.label}>Features and accessibility</Text><Text style={styles.body}>{[...(listing.amenities ?? []), ...(listing.tags ?? [])].join(' · ')}</Text></View>}
     </View>
     {isHouse && listing.media?.some((item) => item.type === 'tour_3d' && item.url) && <Pressable style={styles.secondaryButton} onPress={() => { const tour = listing.media?.find((item) => item.type === 'tour_3d' && item.url); if (tour?.url) void Linking.openURL(tour.url); }}><Text style={styles.secondaryText}>Open 3D property tour</Text></Pressable>}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { umutungoApi } from '../lib/umutungoApi';
 
 type PlanName = 'silver' | 'gold' | 'platinum' | 'diamond';
@@ -17,6 +18,7 @@ const plans: Array<{ id: PlanName; label: string; detail: string }> = [
 const localDate = (value?: string | null) => value ? new Date(value).toLocaleString() : 'No expiry';
 
 export function OwnerUpgrade() {
+  const router = useRouter();
   const [data, setData] = useState<UpgradeResponse | null>(null);
   const [listings, setListings] = useState<OwnerListing[]>([]);
   const [selected, setSelected] = useState<PlanName>('silver');
@@ -73,8 +75,10 @@ export function OwnerUpgrade() {
       });
       if (!result) throw new Error('Sign in as a Property Owner before starting an upgrade.');
       setPurchase(result);
-      if (result.is_demo) setMessage('Demo plan activated at no charge. No payment was made.');
-      else if (result.status === 'failed' || result.payment_status === 'failed') {
+      if (result.is_demo) {
+        router.replace('/property-owner?section=Advertise%20property');
+        return;
+      } else if (result.status === 'failed' || result.payment_status === 'failed') {
         window.localStorage.removeItem(storageKey);
         setMessage('MTN could not start this payment. Check your number and balance, then try again.');
       } else if (result.payment_status === 'successful' || result.status === 'active') setMessage('MTN confirmed your payment and the plan is active.');
@@ -103,13 +107,13 @@ export function OwnerUpgrade() {
       </button>)}
     </section>
     <section className="owner-upgrade-checkout">
-      <h2>{selected === 'diamond' ? 'Diamond land promotion' : 'One-time plan payment'}</h2>
-      {isDemoAccount ? <p>Demo account: activate this plan without payment.</p> : <p>Payment method: MTN MoMo</p>}
+      <h2>{selected === 'diamond' ? 'Diamond land promotion' : isDemoAccount ? 'Activate Owner plan' : 'One-time plan payment'}</h2>
+      {isDemoAccount ? <p>Activate premium tools for your property workspace.</p> : <p>Payment method: MTN MoMo</p>}
       {requiresLandSelection && <label>Published land listing<select value={selectedListing} onChange={(event) => setSelectedListing(event.target.value)} required><option value="">Choose a land listing</option>{diamondListings.map((listing) => <option key={listing.id} value={listing.id}>{listing.title}</option>)}</select>{diamondListings.length === 0 && <small>Diamond is for published land listings that are available for sale. Publish a land listing first.</small>}</label>}
       {!isDemoAccount && selected !== 'diamond' && <label>MTN Rwanda number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>}
       {!isDemoAccount && <p>{selected === 'diamond' ? 'This one-time payment promotes the selected land listing without a monthly or annual renewal.' : 'After you pay, check this number for the MTN MoMo approval prompt. Review the amount and enter your PIN in the official MTN prompt. Do not enter your PIN on Umutungo.'}</p>}
-      <button type="button" disabled={busy || !data || !canSubmit || (requiresLandSelection && !selectedListing) || hasPendingPurchase} onClick={() => void startUpgrade()}>{busy ? 'Processing…' : isDemoAccount ? `Activate ${plans.find((plan) => plan.id === selected)?.label} demo plan` : `Pay RWF ${selectedPrice.toLocaleString()} with MTN MoMo`}</button>
+      <button type="button" disabled={busy || !data || !canSubmit || (requiresLandSelection && !selectedListing) || hasPendingPurchase} onClick={() => void startUpgrade()}>{busy ? 'Processing…' : isDemoAccount ? `Activate ${plans.find((plan) => plan.id === selected)?.label} plan` : `Pay RWF ${selectedPrice.toLocaleString()} with MTN MoMo`}</button>
     </section>
-    {purchase && <section className={`owner-upgrade-receipt is-${purchase.payment_status}`} aria-live="polite"><h2>{purchase.is_demo ? 'Demo plan active' : `Payment ${purchase.payment_status}`}</h2><p>Plan: {purchase.plan}</p><p>Amount: {purchase.currency} {purchase.amount.toLocaleString()}</p>{purchase.is_demo && <p>No payment was made for this demo activation.</p>}{purchase.listing_id && <p>Land listing: {diamondListings.find((listing) => listing.id === purchase.listing_id)?.title ?? purchase.listing_id}</p>}<p>Reference: {purchase.transaction_reference}</p>{purchase.receipt_number && <p>Receipt: {purchase.receipt_number}</p>}<p>Purchase date: {localDate(purchase.purchased_at)}</p><p>Activated: {localDate(purchase.activated_at)}</p><p>Expires: {localDate(purchase.expires_at)}</p>{purchase.payment_status === 'pending' && <p>On your phone, open the MTN MoMo prompt, check the amount, and enter your PIN there. This page checks MTN for confirmation every few seconds. Your plan activates only after MTN confirms payment.</p>}{purchase.payment_status === 'failed' && <p>The plan is not active. Check your number or balance, then start a new payment request.</p>}</section>}
+    {purchase && !purchase.is_demo && <section className={`owner-upgrade-receipt is-${purchase.payment_status}`} aria-live="polite"><h2>Payment {purchase.payment_status}</h2><p>Plan: {purchase.plan}</p><p>Amount: {purchase.currency} {purchase.amount.toLocaleString()}</p>{purchase.listing_id && <p>Land listing: {diamondListings.find((listing) => listing.id === purchase.listing_id)?.title ?? purchase.listing_id}</p>}<p>Reference: {purchase.transaction_reference}</p>{purchase.receipt_number && <p>Receipt: {purchase.receipt_number}</p>}<p>Purchase date: {localDate(purchase.purchased_at)}</p><p>Activated: {localDate(purchase.activated_at)}</p><p>Expires: {localDate(purchase.expires_at)}</p>{purchase.payment_status === 'pending' && <p>On your phone, open the MTN MoMo prompt, check the amount, and enter your PIN there. This page checks MTN for confirmation every few seconds. Your plan activates only after MTN confirms payment.</p>}{purchase.payment_status === 'failed' && <p>The plan is not active. Check your number or balance, then start a new payment request.</p>}</section>}
   </main>;
 }

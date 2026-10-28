@@ -14,6 +14,7 @@ type GoogleTokenResponse = { access_token?: string; error?: string; error_descri
 type GoogleApi = { accounts: {
   oauth2: { initTokenClient: (options: { client_id: string; scope: string; callback: (response: GoogleTokenResponse) => void }) => { requestAccessToken: (options?: { prompt?: string }) => void } }
 } };
+let hostedAuthBackendWarmupStarted = false;
 
 function googleWebClientId() {
   const configured = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '').trim();
@@ -78,6 +79,15 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
+    if (!open || typeof window === 'undefined' || hostedAuthBackendWarmupStarted) return;
+    if (['localhost', '127.0.0.1'].includes(window.location.hostname)) return;
+    hostedAuthBackendWarmupStarted = true;
+    void fetch('/api/readyz', { cache: 'no-store' }).then((response) => {
+      if (!response.ok) hostedAuthBackendWarmupStarted = false;
+    }).catch(() => { hostedAuthBackendWarmupStarted = false; });
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     const dismissOutside = (event: PointerEvent) => {
       if (busy || !modalRef.current || modalRef.current.contains(event.target as Node)) return;
@@ -102,7 +112,10 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
     if (!account) { setError('That email or password is not recognized.'); setBusy(false); return; }
     setError('');
     try {
-      const loginPayload = { email: account.email, password: account.password, ...(['Landlord', 'Property Owner'].includes(account.role) ? { listings: await developmentListingFixtures() } : {}) };
+      const ownerDemo = ['Landlord', 'Property Owner'].includes(account.role);
+      const fixtureSeedKey = `umutungo-demo-listings-seeded:${account.email}`;
+      const shouldSeedFixtures = ownerDemo && window.localStorage.getItem(fixtureSeedKey) !== 'true';
+      const loginPayload = { email: account.email, password: account.password, ...(shouldSeedFixtures ? { listings: await developmentListingFixtures() } : {}) };
       let response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginPayload) });
       let result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; name?: string } };
       if (account.role === 'Tenant' && response.status === 401) {
@@ -112,6 +125,7 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
       if (response.status === 404) throw new Error('These testing credentials are only enabled on a development backend. On the live site, sign in with your registered account using Google or phone verification.');
       if (!response.ok || !result.access_token) throw new Error(result.error ?? 'A database session could not be created. Use a verified Umutungo account.');
       const sessionRole = account.role === 'Tenant' ? 'Tenant' : accountRoleFromApi(result.user?.role, account.role);
+      if (shouldSeedFixtures) window.localStorage.setItem(fixtureSeedKey, 'true');
       window.localStorage.setItem('umutungo-api-token', result.access_token);
       window.dispatchEvent(new Event('umutungo:listings-changed'));
       complete(sessionRole, true, result.user?.name);

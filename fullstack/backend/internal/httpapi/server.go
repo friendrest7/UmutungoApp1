@@ -371,6 +371,26 @@ func (s *Server) seedDevelopmentListings(r *http.Request, ownerID string, fixtur
 	if len(fixtures) > 200 {
 		return 0, errors.New("too many development listing fixtures")
 	}
+	if len(fixtures) == 0 {
+		return 0, nil
+	}
+	fixtureTags := make([]string, 0, len(fixtures))
+	for i := range fixtures {
+		fixture := &fixtures[i]
+		fixture.FixtureID = strings.TrimSpace(fixture.FixtureID)
+		fixture.Category = strings.ToLower(strings.TrimSpace(fixture.Category))
+		fixture.Title = strings.TrimSpace(fixture.Title)
+		if !strings.HasPrefix(fixture.FixtureID, "test-") || fixture.Title == "" || fixture.Price < 0 || len(fixture.Images) == 0 || len(fixture.Images) > 20 {
+			return 0, errors.New("invalid development listing fixture")
+		}
+		for index := range fixture.Images {
+			fixture.Images[index] = strings.TrimSpace(fixture.Images[index])
+			if !validMediaURL(fixture.Images[index]) {
+				return 0, errors.New("invalid development listing image URL")
+			}
+		}
+		fixtureTags = append(fixtureTags, "umutungo-fixture:"+fixture.FixtureID)
+	}
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
 		return 0, err
@@ -379,49 +399,99 @@ func (s *Server) seedDevelopmentListings(r *http.Request, ownerID string, fixtur
 	if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, ownerID); err != nil {
 		return 0, err
 	}
-	seeded := 0
+	existingTags := make(map[string]struct{}, len(fixtures))
+	rows, err := tx.Query(r.Context(), `SELECT tags FROM listings WHERE owner_id=$1 AND deleted_at IS NULL AND tags ?| $2::text[]`, ownerID, fixtureTags)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var rawTags []byte
+		if err := rows.Scan(&rawTags); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		var tags []string
+		if err := json.Unmarshal(rawTags, &tags); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		for _, tag := range tags {
+			if strings.HasPrefix(tag, "umutungo-fixture:") {
+				existingTags[strings.TrimPrefix(tag, "umutungo-fixture:")] = struct{}{}
+			}
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	type seededListing struct {
+		fixture developmentListingSeed
+		id      string
+	}
+	missing := make([]developmentListingSeed, 0, len(fixtures))
 	for _, fixture := range fixtures {
-		fixture.FixtureID = strings.TrimSpace(fixture.FixtureID)
-		fixture.Category = strings.ToLower(strings.TrimSpace(fixture.Category))
-		fixture.Title = strings.TrimSpace(fixture.Title)
-		if !strings.HasPrefix(fixture.FixtureID, "test-") || fixture.Title == "" || fixture.Price < 0 || len(fixture.Images) == 0 || len(fixture.Images) > 20 {
-			return 0, errors.New("invalid development listing fixture")
+		if _, exists := existingTags[fixture.FixtureID]; !exists {
+			missing = append(missing, fixture)
 		}
-		fixtureTag, _ := json.Marshal([]string{"umutungo-fixture:" + fixture.FixtureID})
-		var existingID string
-		err := tx.QueryRow(r.Context(), `SELECT id FROM listings WHERE owner_id=$1 AND tags @> $2::jsonb AND deleted_at IS NULL LIMIT 1`, ownerID, string(fixtureTag)).Scan(&existingID)
-		if err == nil {
-			continue
-		}
-		if err != pgx.ErrNoRows {
+	}
+	if len(missing) == 0 {
+		if err := tx.Commit(r.Context()); err != nil {
 			return 0, err
 		}
+		return 0, nil
+	}
+
+	listingBatch := &pgx.Batch{}
+	for _, fixture := range missing {
 		tags, _ := json.Marshal([]string{"umutungo-fixture:" + fixture.FixtureID})
+		listingBatch.Queue(`INSERT INTO listings(owner_id,category,transaction_type,title,description,price,currency,province,district,sector,status,tags,contact_method) VALUES($1,$2,$3,$4,$5,$6,'RWF',$7,$8,$9,'published',$10,'message') RETURNING id`, ownerID, fixture.Category, fixture.Transaction, fixture.Title, fixture.Description, fixture.Price, fixture.Province, fixture.District, fixture.Sector, string(tags))
+	}
+	listingResults := tx.SendBatch(r.Context(), listingBatch)
+	seededListings := make([]seededListing, 0, len(missing))
+	var batchErr error
+	for _, fixture := range missing {
 		var listingID string
-		err = tx.QueryRow(r.Context(), `INSERT INTO listings(owner_id,category,transaction_type,title,description,price,currency,province,district,sector,status,tags,contact_method) VALUES($1,$2,$3,$4,$5,$6,'RWF',$7,$8,$9,'published',$10,'message') RETURNING id`, ownerID, fixture.Category, fixture.Transaction, fixture.Title, fixture.Description, fixture.Price, fixture.Province, fixture.District, fixture.Sector, string(tags)).Scan(&listingID)
-		if err != nil {
-			return 0, err
+		if err := listingResults.QueryRow().Scan(&listingID); err != nil {
+			batchErr = err
+			break
 		}
-		for index, imageURL := range fixture.Images {
-			imageURL = strings.TrimSpace(imageURL)
-			if !validMediaURL(imageURL) {
-				return 0, errors.New("invalid development listing image URL")
-			}
-			if _, err := tx.Exec(r.Context(), `INSERT INTO listing_media(listing_id,media_type,url,sort_order) VALUES($1,'photo',$2,$3)`, listingID, imageURL, index); err != nil {
-				return 0, err
-			}
+		seededListings = append(seededListings, seededListing{fixture: fixture, id: listingID})
+	}
+	if err := listingResults.Close(); batchErr == nil && err != nil {
+		batchErr = err
+	}
+	if batchErr != nil {
+		return 0, batchErr
+	}
+
+	mediaBatch := &pgx.Batch{}
+	for _, item := range seededListings {
+		for index, imageURL := range item.fixture.Images {
+			mediaBatch.Queue(`INSERT INTO listing_media(listing_id,media_type,url,sort_order) VALUES($1,'photo',$2,$3)`, item.id, imageURL, index)
 		}
-		if fixture.Bedrooms > 0 || fixture.Bathrooms > 0 || fixture.Area > 0 {
-			if _, err := tx.Exec(r.Context(), `INSERT INTO measurements(listing_id,building_size,land_size,bedrooms,bathrooms) VALUES($1,$2,$3,$4,$5)`, listingID, fixture.Area, fixture.Area, fixture.Bedrooms, fixture.Bathrooms); err != nil {
-				return 0, err
-			}
+		if item.fixture.Bedrooms > 0 || item.fixture.Bathrooms > 0 || item.fixture.Area > 0 {
+			mediaBatch.Queue(`INSERT INTO measurements(listing_id,building_size,land_size,bedrooms,bathrooms) VALUES($1,$2,$3,$4,$5)`, item.id, item.fixture.Area, item.fixture.Area, item.fixture.Bedrooms, item.fixture.Bathrooms)
 		}
-		seeded++
+	}
+	mediaResults := tx.SendBatch(r.Context(), mediaBatch)
+	for range mediaBatch.Len() {
+		if _, err := mediaResults.Exec(); err != nil {
+			batchErr = err
+			break
+		}
+	}
+	if err := mediaResults.Close(); batchErr == nil && err != nil {
+		batchErr = err
+	}
+	if batchErr != nil {
+		return 0, batchErr
 	}
 	if err := tx.Commit(r.Context()); err != nil {
 		return 0, err
 	}
-	return seeded, nil
+	return len(seededListings), nil
 }
 
 func (s *Server) requestOTP(w http.ResponseWriter, r *http.Request) {
@@ -3506,7 +3576,7 @@ func (s *Server) subscriptionLevel(w http.ResponseWriter, r *http.Request) {
 			"owner@umutungo.test":        true,
 		}
 		if demoPremiumAccounts[strings.ToLower(strings.TrimSpace(user.Email))] {
-			writeJSON(w, http.StatusOK, map[string]any{"tier": "platinum", "status": "active", "demo": true})
+			writeJSON(w, http.StatusOK, map[string]any{"tier": "platinum", "status": "active"})
 			return
 		}
 	}

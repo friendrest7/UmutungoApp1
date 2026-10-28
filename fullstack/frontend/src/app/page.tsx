@@ -28,13 +28,6 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (isLocalDevelopmentHost()) {
-      setProperties(readLocalPropertyListings());
-      setListingLoadError(false);
-      const reloadLocalListings = () => setProperties(readLocalPropertyListings());
-      window.addEventListener('umutungo:listings-changed', reloadLocalListings);
-      return () => { cancelled = true; window.removeEventListener('umutungo:listings-changed', reloadLocalListings); };
-    }
     const cachedListings = readCachedApiListings();
     if (cachedListings.length) setProperties(cachedListings.map(toProperty));
     const loadListings = () => {
@@ -42,7 +35,16 @@ export default function HomePage() {
         .then((result) => {
           if (cancelled) return;
           if (!result) return;
-          const liveListings = (result?.items ?? []).map(toProperty);
+          let liveListings = (result?.items ?? []).map(toProperty);
+          if (isLocalDevelopmentHost()) {
+            try {
+              const stored = JSON.parse(window.localStorage.getItem('umutungo-local-property-listings') ?? '[]') as PropertyPlaceholder[];
+              const localFeatured = new Map(stored.filter((item) => typeof item.featured === 'boolean').map((item) => [item.id, Boolean(item.featured)]));
+              liveListings = liveListings.map((item) => localFeatured.has(item.id) ? { ...item, featured: localFeatured.get(item.id) } : item);
+              const liveIDs = new Set(liveListings.map((item) => item.id));
+              liveListings.push(...stored.filter((item) => item.featured && !liveIDs.has(item.id)));
+            } catch { /* Keep the live API listings when the local cache cannot be read. */ }
+          }
           if (result?.items?.length) writeCachedApiListings(result.items);
           if (liveListings.length > 0) {
             setListingLoadError(false);
@@ -129,7 +131,7 @@ export default function HomePage() {
   const propertyCategories = listingCategories.filter((category) => !selectedListingCategory || category.slug === selectedListingCategory).map((category) => {
     const categoryListings = visibleProperties.filter((property) => category.types.includes(property.type.toLowerCase()));
     const featuredListing = categoryListings.find((property) => property.featured);
-    const liveListings = [featuredListing ?? categoryListings[0]].filter((property): property is PropertyPlaceholder => Boolean(property));
+    const liveListings = selectedListingCategory ? categoryListings : [featuredListing ?? categoryListings[0]].filter((property): property is PropertyPlaceholder => Boolean(property));
     return { ...category, listings: liveListings };
   });
   const landingListings = propertyCategories.flatMap((category) => category.listings).sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)));
@@ -159,6 +161,7 @@ export default function HomePage() {
         </div>
         </div>
         {landingListings.length > 0 && <div className="landing-property-backdrop"><div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}{selectedListingCategory === null && <a className="landing-add-property-card" href="/post-property"><span className="landing-add-property-icon" aria-hidden="true">+</span><strong>{t(language, 'Post a property')}</strong><small>{t(language, 'Add a property')}</small><span className="landing-add-property-action">{t(language, 'Post a property')} <Icon name="arrow" size={15} /></span></a>}</div></div>}
+        {selectedListingCategory && landingListings.length === 0 && <p className="landing-category-empty" role="status">No published listings in this category yet.</p>}
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">

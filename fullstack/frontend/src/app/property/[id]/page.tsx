@@ -212,7 +212,6 @@ export default function PropertyDetailPage() {
           <article className="property-detail-copy">
             {property.type.trim().toLowerCase() !== 'other' && <span className="property-detail-type">{property.type}</span>}
             <h1>{property.title}</h1>
-            <p className="property-detail-listed">Property ID: {property.id}</p>
             <p className="property-detail-location">{property.location}</p>
             <strong className="property-detail-price">{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{property.priceNote}</small></>}</strong>
             <div className="property-detail-actions">
@@ -223,7 +222,7 @@ export default function PropertyDetailPage() {
               {property.area > 0 && <span><b>{property.area}</b> m²</span>}
             </div>}
             <div className="property-detail-meta"><span className="property-detail-listed">{property.listed}</span><span className="property-detail-availability">{property.availableFor === 'rent' ? 'Available to rent' : property.availableFor === 'both' ? 'Available to buy or rent' : 'Available to buy'}</span></div>
-            <p className="property-detail-listed">Negotiability: Ask the advertiser</p>
+            <div className="property-detail-after-negotiability">
             {property.poster && <div className="property-detail-meta"><span>Advertiser: {property.poster.businessName || property.poster.name} ({property.poster.role}){property.poster.verified ? ' · Verified' : ''}</span></div>}
             <article className="property-detail-about property-detail-description"><span className="property-detail-section-label">Description</span><p>{property.description?.trim() || 'Contact the property owner for more information about this listing.'}</p></article>
             {supports3DView && <section className="viewer-tour-feedback property-detail-feedback property-detail-feedback-desktop" aria-labelledby="property-tour-feedback-title">
@@ -235,6 +234,7 @@ export default function PropertyDetailPage() {
               </div>
               {tourSatisfaction === 'no' && directionsMapUrl && <><div className="property-inline-directions"><div><strong>Directions to this property</strong><button type="button" onClick={() => setDirectionsMapUrl('')} aria-label="Close directions"><Icon name="x" size={14} /></button></div><iframe src={directionsMapUrl} title={`Directions to ${property.title}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div><button className="property-detail-rent-button" type="button" onClick={openPropertyRequest}>Continue to get this property <Icon name="arrow" size={15} /></button></>}
             </section>}
+            </div>
           </article>
         </section>
       </main>

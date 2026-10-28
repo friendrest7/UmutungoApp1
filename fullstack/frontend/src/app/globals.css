@@ -3956,6 +3956,7 @@ body.theme-dark .property-detail-view-actions button:first-child:hover { border-
 .property-detail-gallery button:focus-visible, .property-detail-cover-button:focus-visible { outline: 3px solid #00C763; outline-offset: 3px; }
 .property-detail-gallery img { display: block; width: 105px; height: 76px; border-radius: inherit; background: #e5ece5; object-fit: cover; }
 .property-detail-copy { position: static; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 24px; border: 1px solid #e1e8e1; border-radius: 18px; background: #ffffff; box-shadow: 0 14px 38px rgba(19, 47, 32,.07); }
+.property-detail-after-negotiability { display: flex; width: 100%; flex-direction: column; gap: 9px; margin-top: .4cm; }
 .property-detail-type, .property-detail-section-label { display: inline-flex; align-items: center; width: fit-content; padding: 6px 10px; border-radius: 999px; background: #eaf5ef; color: #176339; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .property-detail-listed { display: block; margin: 0 0 5px; color: #728078; font-size: 11px; }
 .property-detail-availability { display: inline-flex; margin: 0; padding: 6px 9px; border: 1px solid #d9ebe1; border-radius: 10px; background: #f1f8f4; color: #286443; font-size: 11px; font-weight: 700; }
@@ -5475,6 +5476,7 @@ body.theme-dark .property-detail-copy .property-detail-rent-button:hover { backg
   .property-detail-view-actions { gap: 7px; margin: 7px 0; }
   .property-detail-view-actions button, .property-detail-view-actions button:first-child { min-height: 34px; padding: 0 11px; font-size: 10px; }
   .property-detail-copy { gap: 5px; padding: 16px; border-radius: 14px; }
+  .property-detail-after-negotiability { gap: 5px; margin-top: .3cm; }
   .property-detail-copy h1 { font-size: clamp(22px, 2vw, 28px); }
   .property-detail-price { font-size: 21px; }
   .property-detail-price small { font-size: 11px; }
@@ -5489,6 +5491,15 @@ body.theme-dark .property-detail-copy .property-detail-rent-button:hover { backg
   .property-detail-copy .property-detail-about { padding: 12px; }
   .property-detail-about h2, .property-detail-next-step h2 { margin: 4px 0; font-size: 16px; }
   .property-detail-about p, .property-detail-next-step p { font-size: 11px; line-height: 1.45; }
+  .property-detail-copy { margin-top: 0; }
+}
+
+@media (min-width: 801px) and (min-height: 901px) {
+  .property-detail-copy { margin-top: -1.9cm; }
+}
+
+@media (max-width: 800px) {
+  .property-detail-copy { margin-top: -0.3cm; }
 }
 
 .property-viewer-overlay.is-embedded .property-viewer-header { min-height: 48px; align-items: center; gap: 10px; padding: 7px 12px; }
@@ -5523,7 +5534,7 @@ body.theme-dark .property-viewer-overlay.is-embedded .property-viewer-close { bo
   .property-detail-media { position: relative; }
   .property-detail-view-actions { position: absolute; z-index: 2; top: 12px; left: 12px; margin: 0; }
   .property-detail-cover { height: min(70vh, 560px); min-height: 360px; }
-  .property-detail-copy { align-self: stretch; min-height: 100%; margin: 0; }
+  .property-detail-copy { align-self: stretch; min-height: 100%; margin: -0.3cm 0 0; }
 }
 
 body.theme-dark .property-detail-feedback .property-map-button { color: #ffffff !important; }

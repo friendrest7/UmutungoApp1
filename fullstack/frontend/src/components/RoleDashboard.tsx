@@ -83,7 +83,7 @@ function localFeaturedDashboardListings(): DashboardListing[] {
 const configs: Record<DashboardRole, DashboardConfig> = {
   commissioner: {
     eyebrow: 'Komisiyoneri workspace', greeting: '', welcome: 'Keep every property conversation moving.', action: 'Add a listing', actionIcon: 'bookPen',
-    navigation: [{ label: 'Overview', icon: 'building' }, { label: 'My listings', icon: 'home' }, { label: 'Enquiries', icon: 'users' }, { label: 'Messages', icon: 'users' }, { label: 'Visits', icon: 'bookPen' }],
+    navigation: [{ label: 'Overview', icon: 'building' }, { label: 'My listings', icon: 'home' }, { label: 'Advertise property', icon: 'sparkles' }, { label: 'Enquiries', icon: 'users' }, { label: 'Messages', icon: 'users' }, { label: 'Visits', icon: 'bookPen' }],
     metrics: [{ label: 'Active listings', value: '12', note: '+3 this month', icon: 'home', tone: 'green' }, { label: 'New enquiries', value: '24', note: '8 need a reply', icon: 'users', tone: 'amber' }, { label: 'Viewings this week', value: '8', note: '2 tomorrow', icon: 'bookPen', tone: 'blue' }, { label: 'Commission this month', value: 'RWF 2.4M', note: 'On track', icon: 'arrow', tone: 'dark' }],
     panelEyebrow: 'Stay responsive', panelTitle: 'Recent enquiries', activity: [{ name: 'Aline Mukamana', detail: 'Kacyiru apartment', time: '10 min ago', status: 'New', initials: 'AM' }, { name: 'Patrick Nshimiyimana', detail: 'Gisozi family home', time: '42 min ago', status: 'Follow up', initials: 'PN' }, { name: 'Grace Uwase', detail: 'Gacuriro residential plot', time: 'Yesterday', status: 'Viewing booked', initials: 'GU' }], sideEyebrow: 'Your calendar', sideTitle: 'Upcoming visits', sideItems: [{ title: 'Kacyiru apartment', detail: 'Today Ã‚Â· 11:30 AM', icon: 'home' }, { title: 'Gisozi family home', detail: 'Friday Ã‚Â· 2:00 PM', icon: 'bookPen' }],
   },
@@ -552,16 +552,16 @@ function LandlordPropertiesSection({ listings, title = 'My properties', actionLa
   </section>;
 }
 
-function LandlordAdvertisePropertiesSection({ listings, onFeature, notice, canAdvertise }: { listings: DashboardListing[]; onFeature: (listing: DashboardListing) => void; notice: string; canAdvertise: boolean }) {
+function LandlordAdvertisePropertiesSection({ listings, onFeature, notice, canAdvertise, audience = 'Owner', upgradeHref = '/upgrade/owner' }: { listings: DashboardListing[]; onFeature: (listing: DashboardListing) => void; notice: string; canAdvertise: boolean; audience?: 'Owner' | 'Komisiyoneri'; upgradeHref?: string }) {
   const publishedListings = listings.filter((listing) => listing.status === 'published');
   const visibleListings = canAdvertise ? publishedListings : publishedListings.filter((listing) => listing.featured);
   return (
     <section className="tenant-workspace-section landlord-advertise-workspace">
       <div className="tenant-workspace-heading">
-        <div><span className="role-dashboard-eyebrow">Landing page promotion</span><h2>Advertise a property</h2><p>{canAdvertise ? 'Choose which published listings to recommend to people visiting the Umutungo home page.' : 'Property promotion is included with active Silver, Gold, or Platinum Owner plans.'}</p></div>
+        <div><span className="role-dashboard-eyebrow">Landing page promotion</span><h2>Advertise a property</h2><p>{canAdvertise ? 'Choose which published listings to recommend to people visiting the Umutungo home page.' : `Property promotion is included with an active Silver, Gold, or Platinum ${audience} plan.`}</p></div>
         <span className="tenant-workspace-icon"><Icon name="sparkles" size={22} /></span>
       </div>
-      {!canAdvertise && <div className="landlord-advertise-upgrade"><div><strong>Upgrade required to advertise</strong><p>Choose an Owner plan to recommend listings on the home page.</p></div><Link className="role-dashboard-primary" href="/upgrade/owner"><Icon name="sparkles" size={15} /> View Owner plans</Link></div>}
+      {!canAdvertise && <div className="landlord-advertise-upgrade"><div><strong>Upgrade required to advertise</strong><p>Choose a {audience} plan to recommend listings on the home page.</p></div><Link className="role-dashboard-primary" href={upgradeHref}><Icon name="sparkles" size={15} /> View {audience} plans</Link></div>}
       {notice && <p className="workspace-action-notice" role="status"><Icon name="check" size={14} /> {notice}</p>}
       {visibleListings.length ? <div className="landlord-advertise-grid">{visibleListings.map((listing) => <article className={`landlord-property-card landlord-advertise-card ${listing.featured ? 'is-featured' : ''}`} key={listing.id}>
         <div className="landlord-property-image"><img src={listing.cover} alt={listing.title} /><span>{listing.featured ? 'Recommended' : 'Published'}</span></div>
@@ -570,7 +570,7 @@ function LandlordAdvertisePropertiesSection({ listings, onFeature, notice, canAd
           <strong>{listing.price} <small>{listing.priceNote}</small></strong>
           {listing.featured ? <button className="landlord-unrecommend-choice" type="button" onClick={() => onFeature(listing)} aria-pressed="true"><Icon name="check" size={15} />Unrecommend</button> : <button className="landlord-feature-choice" type="button" onClick={() => onFeature(listing)} aria-pressed="false"><Icon name="sparkles" size={15} />Recommend on home</button>}
         </div>
-      </article>)}</div> : canAdvertise ? <div className="landlord-empty-properties"><span className="tenant-workspace-icon"><Icon name="sparkles" size={22} /></span><h3>No published properties yet</h3><p>Publish a listing first, then select it here to feature it on the landing page.</p><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> Post a property</Link></div> : !publishedListings.some((listing) => listing.featured) && <div className="landlord-empty-properties"><span className="tenant-workspace-icon"><Icon name="sparkles" size={22} /></span><h3>No advertised properties</h3><p>Upgrade to an Owner plan to recommend a published listing on the landing page.</p></div>}
+      </article>)}</div> : canAdvertise ? <div className="landlord-empty-properties"><span className="tenant-workspace-icon"><Icon name="sparkles" size={22} /></span><h3>No published properties yet</h3><p>Publish a listing first, then select it here to feature it on the landing page.</p><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> Post a property</Link></div> : !publishedListings.some((listing) => listing.featured) && <div className="landlord-empty-properties"><span className="tenant-workspace-icon"><Icon name="sparkles" size={22} /></span><h3>No advertised properties</h3><p>Upgrade to a {audience} plan to recommend a published listing on the landing page.</p></div>}
     </section>
   );
 }
@@ -944,6 +944,7 @@ function CommissionerDashboard() {
   const [listings, setListings] = useState<DashboardListing[]>([]);
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [currentUserID, setCurrentUserID] = useState('commissioner-demo');
+  const [featureNotice, setFeatureNotice] = useState('');
   useEffect(() => {
     const load = async () => {
       const demoSession = isDevelopmentDemoSession();
@@ -973,8 +974,19 @@ function CommissionerDashboard() {
     return () => { window.removeEventListener('umutungo:commissioner-data-changed', refresh); window.removeEventListener('storage', refresh); };
   }, []);
   const metrics = config.metrics.map((metric, index) => index === 0 && listings.length ? { ...metric, value: String(listings.length), note: 'Saved in your workspace' } : metric);
+  const toggleCommissionerFeature = async (listing: DashboardListing) => {
+    const featured = !listing.featured;
+    setFeatureNotice(featured ? `Recommending ${listing.title}…` : `Removing ${listing.title} from recommendations…`);
+    try {
+      const result = await umutungoApi<{ is_featured: boolean }>(`/api/v1/listings/${encodeURIComponent(listing.id)}/featured`, { method: 'PATCH', body: JSON.stringify({ is_featured: featured }) });
+      if (!result) throw new Error('Could not update this property promotion.');
+      setListings((current) => current.map((item) => item.id === listing.id ? { ...item, featured: result.is_featured } : item));
+      setFeatureNotice(result.is_featured ? `${listing.title} is recommended on the home page.` : `${listing.title} was removed from home page recommendations.`);
+    } catch (error) { setFeatureNotice(error instanceof Error ? error.message : 'Could not update this property promotion.'); }
+  };
+  const canAdvertise = planLevel !== 'free';
   const overview = <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><p className="role-dashboard-eyebrow">{config.greeting}</p><h2>{config.welcome}</h2><p>Add properties, manage enquiries, and keep every client conversation moving from one workspace.</p></div><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> {t(language, 'Add a property')}</Link></section><WorkspacePlanLevelCard role="commissioner" level={planLevel} endsAt={planEndsAt} /><section className="role-dashboard-metrics" aria-label="Komisiyoneri metrics">{metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-panel landlord-overview-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">Latest uploads</span><h3>Property listings</h3></div><button type="button" onClick={() => setActive('My listings')}>View all <Icon name="arrow" size={14} /></button></div>{listings.slice(0, 3).map((listing) => <div className="role-dashboard-side-item" key={listing.id}><span><Icon name="home" size={16} /></span><div><strong>{listing.title}</strong><small>{listing.location} Ã‚Â· {listing.status}</small></div><Icon name="arrow" size={14} /></div>)}{!listings.length && <p className="landlord-empty-note">No property listings yet. Add your first property to get started.</p>}</div></div>;
-  const body = active === 'Overview' ? overview : active === 'My listings' ? <div className="role-dashboard-content"><LandlordPropertiesSection listings={listings} title="My listings" actionLabel="Add a property" /></div> : active === 'Messages' ? <div className="role-dashboard-content"><LandlordMessageWorkspace messages={messages} currentUserID={currentUserID} contactLabel="client" onSent={(message) => setMessages((current) => [...current, message])} /></div> : <div className="role-dashboard-content"><TenantWorkspaceSection view={active} /></div>;
+  const body = active === 'Overview' ? overview : active === 'My listings' ? <div className="role-dashboard-content"><LandlordPropertiesSection listings={listings} title="My listings" actionLabel="Add a property" /></div> : active === 'Advertise property' ? <div className="role-dashboard-content"><LandlordAdvertisePropertiesSection listings={listings} onFeature={(listing) => void toggleCommissionerFeature(listing)} notice={featureNotice} canAdvertise={canAdvertise} audience="Komisiyoneri" upgradeHref="/upgrade/post" /></div> : active === 'Messages' ? <div className="role-dashboard-content"><LandlordMessageWorkspace messages={messages} currentUserID={currentUserID} contactLabel="client" onSent={(message) => setMessages((current) => [...current, message])} /></div> : <div className="role-dashboard-content"><TenantWorkspaceSection view={active} /></div>;
   return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{t(language, config.eyebrow)}</span><nav aria-label="Komisiyoneri dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>{t(language, 'Home')}</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => setActive(item.label)}><Icon name={item.icon} size={17} /><span>{t(language, item.label)}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">{t(language, 'Back to marketplace')} <Icon name="arrow" size={14} /></Link><Link href="/post-property"><Icon name="bookPen" size={16} /> {t(language, 'Add a property')}</Link></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{t(language, config.eyebrow)}</span><h1>{t(language, active)}</h1></div><div className="role-dashboard-profile"><span className="role-dashboard-avatar">CM</span><span><strong>{t(language, 'My account')}</strong><small>{t(language, 'Verified Komisiyoneri')}</small></span><Icon name="chevron" size={14} /></div></header>{body}</section></main>;
 }
 

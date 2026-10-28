@@ -1106,7 +1106,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		l.tags, l.amenities, l.created_at, l.publish_at
 		, COALESCE((SELECT json_agg(json_build_object('type', lm.media_type, 'url', lm.url) ORDER BY lm.sort_order, lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id), '[]'::json) AS media
 		, COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) AS measurements
-		, (l.is_featured AND (EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW()) OR EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.listing_id=l.id AND p.plan='diamond' AND p.status='active'))) AS is_featured
+		, (l.is_featured AND (EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW()) OR EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.listing_id=l.id AND p.plan='diamond' AND p.status='active') OR EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id=l.owner_id AND s.status='active' AND s.tier IN ('silver','gold','platinum') AND (s.starts_at IS NULL OR s.starts_at <= NOW()) AND (s.ends_at IS NULL OR s.ends_at > NOW())))) AS is_featured
 		FROM listings l JOIN users u ON u.id=l.owner_id
 		WHERE l.deleted_at IS NULL AND l.status='published'
 		AND ($1='' OR l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%'
@@ -1118,7 +1118,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		AND ($6='' OR l.transaction_type=$6 OR (l.transaction_type='both' AND $6 IN ('buy','sell','rent','rent_out')))
 		AND ($9::double precision IS NULL OR l.price >= $9) AND ($10::double precision IS NULL OR l.price < $10)
 		AND ($11::integer IS NULL OR EXISTS (SELECT 1 FROM measurements m WHERE m.listing_id=l.id AND COALESCE(m.bedrooms,0) >= $11))
-		ORDER BY (l.is_featured AND (EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW()) OR EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.listing_id=l.id AND p.plan='diamond' AND p.status='active'))) DESC, l.created_at DESC, l.id DESC LIMIT $7 OFFSET $8`, args...)
+		ORDER BY (l.is_featured AND (EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW()) OR EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.listing_id=l.id AND p.plan='diamond' AND p.status='active') OR EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id=l.owner_id AND s.status='active' AND s.tier IN ('silver','gold','platinum') AND (s.starts_at IS NULL OR s.starts_at <= NOW()) AND (s.ends_at IS NULL OR s.ends_at > NOW())))) DESC, l.created_at DESC, l.id DESC LIMIT $7 OFFSET $8`, args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load listings")
 		return
@@ -1415,18 +1415,32 @@ func (s *Server) updateListingFeatured(w http.ResponseWriter, r *http.Request, l
 		return
 	}
 	if *input.Featured && user.Role != "admin" {
-		if user.Role != "property_owner" {
+		if user.Role == "komisiyoneri" {
+			var hasActivePlan bool
+			if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM subscriptions WHERE user_id=$1 AND status='active' AND tier IN ('silver','gold','platinum') AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at > NOW()))`, user.ID).Scan(&hasActivePlan); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not verify the Komisiyoneri plan")
+				return
+			}
+			if !hasActivePlan && s.cfg.AppEnv == "development" && strings.EqualFold(user.Email, "commissioner@umutungo.test") {
+				hasActivePlan = true
+			}
+			if !hasActivePlan {
+				errorJSON(w, http.StatusForbidden, "an active Silver, Gold, or Platinum Komisiyoneri plan is required to advertise listings")
+				return
+			}
+		} else if user.Role != "property_owner" {
 			errorJSON(w, http.StatusForbidden, "an active Property Owner plan is required to advertise listings")
 			return
-		}
-		var hasActivePlan bool
-		if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM owner_upgrade_purchases WHERE owner_id=$1 AND status='active' AND (expires_at > NOW() OR (plan='diamond' AND listing_id=$2)))`, user.ID, listingID).Scan(&hasActivePlan); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not verify the Property Owner plan")
-			return
-		}
-		if !hasActivePlan {
-			errorJSON(w, http.StatusForbidden, "an active Owner plan or Diamond promotion for this land listing is required")
-			return
+		} else {
+			var hasActivePlan bool
+			if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM owner_upgrade_purchases WHERE owner_id=$1 AND status='active' AND (expires_at > NOW() OR (plan='diamond' AND listing_id=$2)))`, user.ID, listingID).Scan(&hasActivePlan); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not verify the Property Owner plan")
+				return
+			}
+			if !hasActivePlan {
+				errorJSON(w, http.StatusForbidden, "an active Owner plan or Diamond promotion for this land listing is required")
+				return
+			}
 		}
 	}
 	query := `UPDATE listings SET is_featured=$1,updated_at=NOW() WHERE id=$2 AND deleted_at IS NULL AND ($1=FALSE OR status='published')`

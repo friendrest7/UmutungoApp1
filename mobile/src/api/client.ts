@@ -92,8 +92,17 @@ export async function listListings(query: ListingQuery = {}) {
     const base = await readPublicCache<{ items: ApiListing[]; count: number }>(`${baseUrl()}/api/v1/listings`);
     if (!base) throw error;
     const contains = (value: string | undefined, filter: string | undefined) => !filter || (value ?? '').toLocaleLowerCase().includes(filter.toLocaleLowerCase());
+    const matchesTransaction = (value: string, filter?: string) => {
+      if (!filter) return true;
+      const listingType = value.toLowerCase();
+      const requestedType = filter.toLowerCase();
+      if (listingType === 'both') return ['buy', 'sell', 'sale', 'rent', 'rent_out'].includes(requestedType);
+      if (['buy', 'sell', 'sale'].includes(requestedType)) return ['buy', 'sell', 'sale'].includes(listingType);
+      if (['rent', 'rent_out'].includes(requestedType)) return ['rent', 'rent_out'].includes(listingType);
+      return listingType === requestedType;
+    };
     const filtered = base.items.filter((item) => contains(item.title, query.search) || contains(`${item.district} ${item.sector} ${item.province}`, query.search))
-      .filter((item) => contains(item.category, query.category) && contains(item.transaction_type, query.transaction_type)
+      .filter((item) => contains(item.category, query.category) && matchesTransaction(item.transaction_type, query.transaction_type)
         && contains(item.province, query.province) && contains(item.district, query.district) && contains(item.sector, query.sector)
         && (query.min_price === undefined || item.price >= query.min_price) && (query.max_price === undefined || item.price < query.max_price));
     const offset = query.offset ?? 0;

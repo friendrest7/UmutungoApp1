@@ -37,13 +37,13 @@ export function PropertyCard({ listing, onPress, cardWidth }: { listing: ApiList
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [activePhoto, setActivePhoto] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [savedOwnerId, setSavedOwnerId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dialog, setDialog] = useState<'contact' | 'share' | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     let active = true;
-    if (user) void favoriteSnapshot(user.id).then((ids) => { if (active) setSaved(ids.has(listing.id)); });
-    else setSaved(false);
+    if (user) void favoriteSnapshot(user.id).then((ids) => { if (active) { setSaved(ids.has(listing.id)); setSavedOwnerId(user.id); } });
     return () => { active = false; };
   }, [listing.id, user]);
   const photos = [...new Set([
@@ -57,6 +57,7 @@ export function PropertyCard({ listing, onPress, cardWidth }: { listing: ApiList
   const verified = listing.owner?.verified === true;
   const phone = verified ? listing.owner.phone?.trim() : '';
   const roleLabel = listing.owner.role.toLowerCase().includes('komisiyoneri') ? t('Contact advertiser') : t('Contact owner');
+  const isSaved = Boolean(user && user.id === savedOwnerId && saved);
   const residential = /house|home|apartment|residential|villa|room/i.test(listing.category);
   const land = /land|plot/i.test(listing.category);
   const vehicle = /vehicle|car|motorcycle|truck/i.test(listing.category);
@@ -74,11 +75,12 @@ export function PropertyCard({ listing, onPress, cardWidth }: { listing: ApiList
     if (!user) { router.push('/auth/sign-in'); return; }
     setSaving(true);
     try {
-      if (saved) await removeFavorite(listing.id);
+      if (isSaved) await removeFavorite(listing.id);
       else await saveFavorite({ property_id: listing.id, title: listing.title, type: listing.category, location: listingLocation(listing), price: formatPrice(listing), image: photos[0] || '' });
-      setSaved(!saved);
+      setSaved(!isSaved);
+      setSavedOwnerId(user.id);
       const snapshot = await favoriteSnapshot(user.id);
-      if (saved) snapshot.delete(listing.id); else snapshot.add(listing.id);
+      if (isSaved) snapshot.delete(listing.id); else snapshot.add(listing.id);
     } catch { /* Keep the card responsive when the network is unavailable. */ }
     finally { setSaving(false); }
   };
@@ -98,7 +100,7 @@ export function PropertyCard({ listing, onPress, cardWidth }: { listing: ApiList
         <View style={{ borderRadius: 18, backgroundColor: '#ffffff', paddingHorizontal: 10, paddingVertical: 6 }}><Text style={{ color: '#000000', fontSize: 10, fontWeight: '600' }}>{listing.category}</Text></View>
       </View>
       {verified && <View pointerEvents="none" style={{ position: 'absolute', bottom: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 18, backgroundColor: colors.green, paddingHorizontal: 9, paddingVertical: 6 }}><Ionicons name="checkmark-circle" size={13} color="#000000" /><Text style={{ color: '#000000', fontSize: 10, fontWeight: '700' }}>{t('Verified')}</Text></View>}
-      <Pressable accessibilityRole="button" accessibilityLabel={saved ? t('Remove from saved') : t('Save property')} accessibilityState={{ checked: saved, disabled: saving }} disabled={saving} onPress={() => void toggleSaved()} style={{ position: 'absolute', top: 10, right: 10, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: '#ffffff' }}><Ionicons name={saved ? 'heart' : 'heart-outline'} size={21} color={saved ? '#c62828' : '#000000'} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={isSaved ? t('Remove from saved') : t('Save property')} accessibilityState={{ checked: isSaved, disabled: saving }} disabled={saving} onPress={() => void toggleSaved()} style={{ position: 'absolute', top: 10, right: 10, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: '#ffffff' }}><Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={21} color={isSaved ? '#c62828' : '#000000'} /></Pressable>
     </View>
     <View style={{ padding: 14, gap: 9 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}><Text style={[styles.heading, { flex: 1, fontFamily: 'ArchivoBlack', fontSize: 17, lineHeight: 23 }]}>{listing.title}</Text><View style={{ borderRadius: 7, backgroundColor: colors.greenSoft, paddingHorizontal: 8, paddingVertical: 5 }}><Text style={{ color: colors.greenDark, fontSize: 10, fontWeight: '600' }}>{intent}</Text></View></View>

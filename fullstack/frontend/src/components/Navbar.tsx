@@ -149,6 +149,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const isTenant = roleKey === 'Tenant' || roleKey === 'Client';
   const postActionLabel = isTenant ? 'Upgrade to Post' : 'Post a Property';
   const postActionHint = isTenant ? 'Choose an account type that can publish property listings.' : 'Share a property with people looking.';
+  const dashboardPath = dashboardPathForRole(roleKey);
   const goTo = (id: string) => { setMobileOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); };
   const openFavorites = () => { setFavoritesPanelOpen((open) => !open); setAccountMenuOpen(false); setMobileOpen(false); };
   useEffect(() => {
@@ -398,6 +399,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   return <>
     <aside className={`site-header ${scrolled ? 'is-scrolled' : ''} ${landingVisible ? '' : 'is-hidden'}`}>
       <div className="sidebar-shell"><nav className="sidebar-nav" aria-label="Property navigation">
+        <a className="sidebar-nav-link sidebar-home-link" href="/"><Icon name="home" size={17} /><span>{t(language, 'Home')}</span></a>
         <a className="sidebar-nav-link sidebar-market-link" href="/categories/houses?intent=Rent"><Icon name="home" size={17} /><span>{t(language, 'Rent')}</span></a>
         <a className="sidebar-nav-link sidebar-market-link" href="/categories/houses?intent=Buy"><Icon name="building" size={17} /><span>{t(language, 'Buy')}</span></a>
         <a className="sidebar-nav-link sidebar-market-link" href="/categories/commercial"><Icon name="building" size={17} /><span>{t(language, 'Commercial')}</span></a>
@@ -410,9 +412,10 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
       <div className="topbar-inner">
         <div className="topbar-brand-group">
           <a className="topbar-brand" href="/" aria-label="Umutungo home"><Logo darkMode={darkMode} /></a>
-          <a className="topbar-home-link" href="/">{t(language, 'Home')}</a>
         </div>
         <nav className="desktop-nav" aria-label="Primary navigation">
+          <a className="nav-link topbar-home-link" href="/"><span>{t(language, 'Home')}</span></a>
+          {signedIn && dashboardPath && <a className="nav-dashboard-link" href={dashboardPath} onClick={() => setMobileOpen(false)}>{t(language, 'Dashboard')}</a>}
           <button className={`nav-link nav-category-trigger ${categoryMenuOpen ? 'is-open' : ''}`} type="button" ref={categoryMenuTriggerRef} aria-haspopup="true" aria-expanded={categoryMenuOpen} aria-controls="nav-category-panel" onClick={() => setCategoryMenuOpen((open) => !open)}><span>{t(language, 'Categories')}</span><Icon name="chevron" size={13} /></button>
           <a className="nav-link" href="/about"><span>{t(language, 'About us')}</span></a>
           <a className="nav-contact-link" href="/#contact">{t(language, 'Contact us')}</a>
@@ -438,6 +441,8 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
       </nav>}
 
       {mobileOpen && <div className="mobile-menu" id="mobile-menu">
+        <a className="mobile-menu-link" href="/" onClick={() => setMobileOpen(false)}>{t(language, 'Home')}<Icon name="home" size={15} /></a>
+        {signedIn && dashboardPath && <a className="mobile-menu-link" href={dashboardPath} onClick={() => setMobileOpen(false)}>{t(language, 'Dashboard')}<Icon name="user" size={15} /></a>}
         <button className="mobile-menu-link" type="button" aria-expanded={categoryMenuOpen} aria-controls="nav-category-panel" onClick={() => { setMobileOpen(false); setCategoryMenuOpen((open) => !open); }}>{t(language, 'Categories')}<Icon name={categoryMenuOpen ? 'chevron' : 'arrow'} size={14} /></button>
         <a className="mobile-menu-link" href="/about" onClick={() => setMobileOpen(false)}>{t(language, 'About us')}</a>
         <a className="mobile-menu-link mobile-contact-link" href="/#contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>

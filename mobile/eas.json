@@ -10,7 +10,9 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://umutungoapp1-backend.onrender.com",
         "EXPO_PUBLIC_CHAT_API_URL": "https://umutungo.rw/api/chat",
-        "EXPO_PUBLIC_PROPERTY_SEARCH_API_URL": "https://umutungo.rw/api/property-search"
+        "EXPO_PUBLIC_PROPERTY_SEARCH_API_URL": "https://umutungo.rw/api/property-search",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "128904720035-13hdispbjdum6iphqb3e1ct5ohmdnkb1.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "947964372839-5mbve9eh4k07qpqkvm0h7cp35tm9rj8o.apps.googleusercontent.com"
       }
     },
     "preview": {

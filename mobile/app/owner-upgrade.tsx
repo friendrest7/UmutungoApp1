@@ -55,12 +55,13 @@ export default function OwnerUpgradeScreen() {
       } else {
         setNotice('Payment request sent. Approve it on your MTN MoMo phone; this screen will check for confirmation.');
       }
-      await load();
+      void load().catch(() => undefined);
     } catch (cause) {
       setNotice('');
       setError(cause instanceof Error ? cause.message : 'MTN payment could not be started.');
-      const latest = await load().catch(() => null);
-      if (latest?.purchases[0]?.plan === plan && latest.purchases[0].status === 'failed') delete idempotencyKeys.current[plan];
+      void load().then((latest) => {
+        if (latest.purchases[0]?.plan === plan && latest.purchases[0].status === 'failed') delete idempotencyKeys.current[plan];
+      }).catch(() => undefined);
     } finally { setBusy(false); }
   };
 

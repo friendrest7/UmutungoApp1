@@ -3497,6 +3497,19 @@ func (s *Server) subscriptionLevel(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "administrator accounts do not use member plans")
 		return
 	}
+	if s.cfg.AppEnv == "development" {
+		demoPremiumAccounts := map[string]bool{
+			"tenant@umutungo.test":       true,
+			"client@umutungo.test":       true,
+			"commissioner@umutungo.test": true,
+			"landlord@umutungo.test":     true,
+			"owner@umutungo.test":        true,
+		}
+		if demoPremiumAccounts[strings.ToLower(strings.TrimSpace(user.Email))] {
+			writeJSON(w, http.StatusOK, map[string]any{"tier": "platinum", "status": "active", "demo": true})
+			return
+		}
+	}
 	var tier string
 	var startsAt, endsAt *time.Time
 	err := s.db.QueryRow(r.Context(), `SELECT tier,starts_at,ends_at FROM subscriptions WHERE user_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at > NOW()) ORDER BY created_at DESC LIMIT 1`, user.ID).Scan(&tier, &startsAt, &endsAt)

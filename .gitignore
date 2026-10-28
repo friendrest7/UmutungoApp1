@@ -15,4 +15,5 @@ backend/storage/
 *.p8
 google-services.json
 .gradle/
+.gradle-fresh/
 GoogleService-Info.plist

@@ -79,11 +79,12 @@ export function OwnerUpgrade() {
         setMessage('MTN could not start this payment. Check your number and balance, then try again.');
       } else if (result.payment_status === 'successful' || result.status === 'active') setMessage('MTN confirmed your payment and the plan is active.');
       else setMessage(`Payment request sent to ${phone.trim()}. Check your phone for the MTN MoMo prompt, confirm the amount, and enter your MoMo PIN in that official MTN prompt. Umutungo never asks for or stores your PIN. This page will check the payment status.`);
-      await refresh();
+      void refresh().catch(() => undefined);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not start this upgrade.');
-      const latest = await refresh().catch(() => null);
-      if (latest?.purchases[0]?.plan === selected && latest.purchases[0].status === 'failed') window.localStorage.removeItem(storageKey);
+      void refresh().then((latest) => {
+        if (latest?.purchases[0]?.plan === selected && latest.purchases[0].status === 'failed') window.localStorage.removeItem(storageKey);
+      }).catch(() => undefined);
     } finally { setBusy(false); }
   };
   const selectedPrice = data?.prices?.[selected] ?? 0;

@@ -4,12 +4,14 @@ import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from '
 import Link from 'next/link';
 import { Icon, IconName } from './Icons';
 import { Logo } from './Logo';
+import type { PropertyPlaceholder } from './PropertyCard';
 import { FavoritesPanel } from './Navbar';
 import { AboutVideo, ApiApplication, ApiMessage, ApiNotification, FavoriteItem, TenantBooking, TenantDashboardData, apiToken, deleteAboutVideo, getAboutVideo, listFavorites, removeFavorite, uploadAboutVideo, umutungoApi } from '../lib/umutungoApi';
 import { AuthModal } from './AuthModal';
 import { Language, t } from '../data/translations';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
+import { isLocalDevelopmentHost } from '../lib/localListings';
 import { getDistrictNames, getSectorNames, provinceNames } from '../data/rwandaLocations';
 import { AdminActivityExportRecord, downloadActivityExcel, downloadActivityImage, downloadActivityPdf } from '../lib/adminReportExports';
 
@@ -23,9 +25,9 @@ const dashboardRequiredRoles: Record<DashboardRole, string[]> = { tenant: ['tena
 type Metric = { label: string; value: string; note: string; icon: IconName; tone: 'green' | 'amber' | 'blue' | 'dark' };
 type Activity = { name: string; detail: string; time: string; status: string; initials: string };
 type DashboardConfig = { eyebrow: string; greeting: string; welcome: string; action: string; actionIcon: IconName; navigation: Array<{ label: string; icon: IconName }>; metrics: Metric[]; panelEyebrow: string; panelTitle: string; activity: Activity[]; sideEyebrow: string; sideTitle: string; sideItems: Array<{ title: string; detail: string; icon: IconName }> };
-type DashboardListing = { id: string; title: string; type: string; intent: string; location: string; price: string; priceNote: string; cover: string; images: string[]; bedrooms: string; bathrooms: string; area: string; status: string; savedAt: string };
+type DashboardListing = { id: string; title: string; type: string; intent: string; location: string; price: string; priceNote: string; cover: string; images: string[]; bedrooms: string; bathrooms: string; area: string; status: string; savedAt: string; featured?: boolean };
 type LandlordApplication = ApiApplication & { applicant?: string; phone?: string; decision_note?: string };
-type OwnerListingRecord = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; cover?: string; images?: string[]; media?: Array<{ type?: string; url: string; sort_order?: number }>; created_at: string };
+type OwnerListingRecord = { id: string; category: string; transaction_type: string; title: string; description: string; price: number; currency: string; province: string; district: string; sector: string; cell?: string; village?: string; status: string; cover?: string; images?: string[]; media?: Array<{ type?: string; url: string; sort_order?: number }>; created_at: string; is_featured?: boolean };
 
 const mapOwnerListing = (item: OwnerListingRecord): DashboardListing => {
   const intent = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
@@ -34,8 +36,21 @@ const mapOwnerListing = (item: OwnerListingRecord): DashboardListing => {
     : item.images ?? [];
   const images = Array.from(new Set(uploadedImages.filter(Boolean)));
   const cover = item.cover && images.includes(item.cover) ? item.cover : images[0] || item.cover || '/properties/house-01.jpg';
-  return { id: item.id, title: item.title, type: item.category, intent, location: [item.sector, item.district, item.province].filter(Boolean).join(' - '), price: (item.currency || 'RWF') + ' ' + item.price.toLocaleString(), priceNote: intent === 'For rent' ? '/ month' : '', cover, images: images.length ? images : [cover], bedrooms: '—', bathrooms: '—', area: '—', status: item.status, savedAt: item.created_at };
+  return { id: item.id, title: item.title, type: item.category, intent, location: [item.sector, item.district, item.province].filter(Boolean).join(' - '), price: (item.currency || 'RWF') + ' ' + item.price.toLocaleString(), priceNote: intent === 'For rent' ? '/ month' : '', cover, images: images.length ? images : [cover], bedrooms: '—', bathrooms: '—', area: '—', status: item.status, savedAt: item.created_at, featured: item.is_featured ?? false };
 };
+
+function localFeaturedDashboardListings(): DashboardListing[] {
+  try {
+    const local = JSON.parse(window.localStorage.getItem('umutungo-local-property-listings') ?? '[]') as PropertyPlaceholder[];
+    return local.filter((item) => item.featured).map((item) => ({
+      id: item.id, title: item.title, type: item.type,
+      intent: item.availableFor === 'rent' ? 'For rent' : item.availableFor === 'book' ? 'Book' : 'For sale',
+      location: item.location, price: item.price, priceNote: item.priceNote, cover: item.image,
+      images: item.images?.length ? item.images : [item.image], bedrooms: String(item.bedrooms),
+      bathrooms: String(item.bathrooms), area: String(item.area), status: 'published', savedAt: item.listed, featured: true,
+    }));
+  } catch { return []; }
+}
 
 const configs: Record<DashboardRole, DashboardConfig> = {
   commissioner: {
@@ -501,15 +516,70 @@ function TenantWorkspaceSection({ view, tenantData, favorites = [], notification
   return <><section className="tenant-workspace-section"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">{panel.eyebrow}</span><h2>{panel.title}</h2><p>{panel.description}</p></div><span className="tenant-workspace-icon"><Icon name={panel.icon} size={22} /></span></div>{tenantData?.bookings && <TenantBookingSummary bookings={tenantData.bookings} />}{rows.length ? <div className="tenant-workspace-list">{rows.map((row) => <article key={row.title}><span className="tenant-workspace-row-icon"><Icon name={panel.icon} size={16} /></span><div><strong>{row.title}</strong><small>{row.detail}</small></div><button type="button" onClick={() => 'propertyID' in row && row.propertyID ? window.location.assign('/property/' + encodeURIComponent(row.propertyID)) : handleAction(row.action, 'application' in row ? row.application : undefined)}>{row.action}<Icon name="arrow" size={14} /></button>{'application' in row && row.application && row.application.viewed_at && <><button type="button" onClick={() => onContact?.(row.application!)}>Contact landlord<Icon name="users" size={14} /></button><button type="button" onClick={() => onReview?.(row.application!)}>Review property<Icon name="arrow" size={14} /></button></>}</article>)}</div> : <div className="tenant-message-empty"><Icon name={panel.icon} size={20} /><div><strong>{view === 'Applications' ? 'No applications yet' : view === 'Rent & utilities' ? 'No payments yet' : view === 'Viewings' ? 'No viewings yet' : view === 'Maintenance' ? 'No maintenance requests yet' : 'No saved properties yet'}</strong><p>{view === 'Applications' ? 'Apply to a listing to track its status here.' : view === 'Rent & utilities' ? 'Your payment history will appear after a payment is recorded.' : view === 'Viewings' ? 'Viewings appear after a listing contact confirms a visit.' : view === 'Maintenance' ? 'Create a request when you need help with a property you rent.' : 'Save a listing from the marketplace and it will appear here.'}</p></div></div>}{(notice || workspaceNotice) && <p className="workspace-action-notice" role="status"><Icon name="check" size={14} /> {notice || workspaceNotice}</p>}<button className="role-dashboard-primary" type="button" onClick={() => openWorkspaceAction(primaryLabel)}><Icon name={view === 'Messages' ? 'bookPen' : 'arrow'} size={16} /> {primaryLabel}</button></section>{workspaceAction && <TenantWorkspaceActionDialog action={workspaceAction} onClose={() => setWorkspaceAction(null)} onNotice={(message) => { setWorkspaceNotice(message); onAction?.(message); }} />}</>;
 }
 
-function LandlordPropertiesSection({ listings, title = 'My properties', actionLabel = 'Post a property', onDelete, onManage }: { listings: DashboardListing[]; title?: string; actionLabel?: string; onDelete?: (listing: DashboardListing) => void; onManage?: (listing: DashboardListing) => void }) {
-  return <section className="landlord-properties-section"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">Your inventory</span><h2>{title}</h2><p>View the property assets you have uploaded and keep each listing ready for its next step.</p></div><span className="tenant-workspace-icon"><Icon name="home" size={22} /></span></div>{listings.length ? <div className="landlord-property-grid">{listings.map((listing) => <article className="landlord-property-card" key={listing.id}><div className="landlord-property-image"><img src={listing.cover} alt={listing.title} /><span>{listing.status}</span></div><div className="landlord-property-copy"><div><span className="role-dashboard-eyebrow">{listing.type} Ã‚Â· {listing.intent}</span><h3>{listing.title}</h3><p>{listing.location}</p></div><strong>{listing.price} <small>{listing.priceNote}</small></strong><div className="landlord-property-meta"><span>{listing.bedrooms} beds</span><span>{listing.bathrooms} baths</span><span>{listing.area} m2</span></div><div className="landlord-property-actions"><button type="button" onClick={() => onManage?.(listing)}>Manage listing <Icon name="arrow" size={14} /></button>{onDelete && <button className="landlord-delete-button" type="button" onClick={() => onDelete(listing)}>Delete listing</button>}</div></div></article>)}</div> : <div className="landlord-empty-properties"><span className="tenant-workspace-icon"><Icon name="download" size={22} /></span><h3>No uploaded properties yet</h3><p>Your saved listing assets will appear here after you complete the post-property builder.</p><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> {actionLabel}</Link></div>}</section>;
+function LandlordPropertiesSection({ listings, title = 'My properties', actionLabel = 'Post a property', onDelete, onManage, onFeature, showFeaturedFilter = false, showFeaturedOnly = false, onToggleFeaturedFilter }: { listings: DashboardListing[]; title?: string; actionLabel?: string; onDelete?: (listing: DashboardListing) => void; onManage?: (listing: DashboardListing) => void; onFeature?: (listing: DashboardListing) => void; showFeaturedFilter?: boolean; showFeaturedOnly?: boolean; onToggleFeaturedFilter?: () => void }) {
+  const displayedListings = showFeaturedOnly ? listings.filter((listing) => listing.featured) : listings;
+  return <section className="landlord-properties-section">
+    <div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">Your inventory</span><h2>{title}</h2><p>View the property assets you have uploaded and keep each listing ready for its next step.</p></div><div className="landlord-properties-heading-actions">{showFeaturedFilter && <button className="landlord-recommended-filter" type="button" onClick={onToggleFeaturedFilter}><Icon name={showFeaturedOnly ? 'home' : 'sparkles'} size={15} />{showFeaturedOnly ? 'Show all properties' : 'Recommended properties'}{!showFeaturedOnly && <span>{listings.filter((listing) => listing.featured).length}</span>}</button>}<span className="tenant-workspace-icon"><Icon name="home" size={22} /></span></div></div>
+    {displayedListings.length ? <div className="landlord-property-grid">{displayedListings.map((listing) => <article className="landlord-property-card" key={listing.id}><div className="landlord-property-image"><img src={listing.cover} alt={listing.title} /><span>{listing.featured ? 'Recommended' : listing.status}</span></div><div className="landlord-property-copy"><div><span className="role-dashboard-eyebrow">{listing.type} - {listing.intent}</span><h3>{listing.title}</h3><p>{listing.location}</p></div><strong>{listing.price} <small>{listing.priceNote}</small></strong><div className="landlord-property-meta"><span>{listing.bedrooms} beds</span><span>{listing.bathrooms} baths</span><span>{listing.area} m2</span></div><div className="landlord-property-actions">{listing.featured && onFeature && <button className="is-featured" type="button" onClick={() => onFeature(listing)} aria-pressed="true"><Icon name="check" size={14} /> Unrecommend</button>}<button type="button" onClick={() => onManage?.(listing)}>Manage listing <Icon name="arrow" size={14} /></button>{onDelete && <button className="landlord-delete-button" type="button" onClick={() => onDelete(listing)}>Delete listing</button>}</div></div></article>)}</div> : showFeaturedOnly ? <div className="landlord-empty-properties"><span className="tenant-workspace-icon"><Icon name="sparkles" size={22} /></span><h3>No recommended properties yet</h3><p>Choose a published property in Advertise property to recommend it on the home page.</p><button className="role-dashboard-primary" type="button" onClick={onToggleFeaturedFilter}>Show all properties</button></div> : <div className="landlord-empty-properties"><span className="tenant-workspace-icon"><Icon name="download" size={22} /></span><h3>No uploaded properties yet</h3><p>Your saved listing assets will appear here after you complete the post-property builder.</p><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> {actionLabel}</Link></div>}
+  </section>;
+}
+
+function LandlordAdvertisePropertiesSection({ listings, onFeature, notice }: { listings: DashboardListing[]; onFeature: (listing: DashboardListing) => void; notice: string }) {
+  const publishedListings = listings.filter((listing) => listing.status === 'published');
+  return (
+    <section className="tenant-workspace-section landlord-advertise-workspace">
+      <div className="tenant-workspace-heading">
+        <div><span className="role-dashboard-eyebrow">Landing page promotion</span><h2>Advertise a property</h2><p>Choose which published listings to recommend to people visiting the Umutungo home page.</p></div>
+        <span className="tenant-workspace-icon"><Icon name="sparkles" size={22} /></span>
+      </div>
+      {notice && <p className="workspace-action-notice" role="status"><Icon name="check" size={14} /> {notice}</p>}
+      {publishedListings.length ? <div className="landlord-advertise-grid">{publishedListings.map((listing) => <article className={`landlord-property-card landlord-advertise-card ${listing.featured ? 'is-featured' : ''}`} key={listing.id}>
+        <div className="landlord-property-image"><img src={listing.cover} alt={listing.title} /><span>{listing.featured ? 'Recommended' : 'Published'}</span></div>
+        <div className="landlord-property-copy">
+          <div><span className="role-dashboard-eyebrow">{listing.type} - {listing.intent}</span><h3>{listing.title}</h3><p>{listing.location}</p></div>
+          <strong>{listing.price} <small>{listing.priceNote}</small></strong>
+          {listing.featured ? <button className="landlord-unrecommend-choice" type="button" onClick={() => onFeature(listing)} aria-pressed="true"><Icon name="check" size={15} />Unrecommend</button> : <button className="landlord-feature-choice" type="button" onClick={() => onFeature(listing)} aria-pressed="false"><Icon name="sparkles" size={15} />Recommend on home</button>}
+        </div>
+      </article>)}</div> : <div className="landlord-empty-properties"><span className="tenant-workspace-icon"><Icon name="sparkles" size={22} /></span><h3>No published properties yet</h3><p>Publish a listing first, then select it here to feature it on the landing page.</p><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> Post a property</Link></div>}
+    </section>
+  );
 }
 
 function LandlordListingEditor({ listing, onSave, onCancel }: { listing: DashboardListing; onSave: (listing: DashboardListing) => void; onCancel: () => void }) {
   const [title, setTitle] = useState(listing.title);
   const [price, setPrice] = useState(listing.price.replace(/[^0-9.]/g, ''));
   const [status, setStatus] = useState(listing.status);
-  return <section className="tenant-workspace-section listing-editor"><div className="tenant-workspace-heading"><div><span className="role-dashboard-eyebrow">Listing editor</span><h2>Manage listing</h2><p>Update the details your tenants and buyers see in the marketplace.</p></div><span className="tenant-workspace-icon"><Icon name="bookPen" size={22} /></span></div><form className="listing-editor-form" onSubmit={(event) => { event.preventDefault(); const numericPrice = Number(price); onSave({ ...listing, title: title.trim() || listing.title, price: `${listing.price.split(' ')[0] || 'RWF'} ${Number.isFinite(numericPrice) ? numericPrice.toLocaleString() : price}`, status }); }}><label>Property title<input value={title} onChange={(event) => setTitle(event.target.value)} required /></label><label>Price<input inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value.replace(/[^0-9.]/g, ''))} required /></label><label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="published">Published</option><option value="draft">Draft</option><option value="paused">Paused</option></select></label><div className="listing-editor-actions"><button className="role-dashboard-primary" type="submit">Save changes <Icon name="check" size={15} /></button><button className="role-dashboard-outline" type="button" onClick={onCancel}>Cancel</button></div></form></section>;
+  return (
+    <section className="tenant-workspace-section listing-editor">
+      <div className="listing-editor-heading">
+        <div>
+          <button className="listing-editor-back" type="button" onClick={onCancel}><Icon name="arrow" size={14} /> My properties</button>
+          <span className="role-dashboard-eyebrow">Listing editor</span>
+          <h2>Edit your property</h2>
+          <p>Keep your price and listing status up to date for people browsing Umutungo.</p>
+        </div>
+        <span className={`listing-editor-status status-${status.toLowerCase()}`}><i />{status}</span>
+      </div>
+      <div className="listing-editor-layout">
+        <aside className="listing-editor-preview" aria-label="Property preview">
+          <div className="listing-editor-preview-image"><img src={listing.cover} alt={title} /><span>{status}</span></div>
+          <div className="listing-editor-preview-copy">
+            <span>{listing.type} - {listing.intent}</span>
+            <h3>{title || 'Your property title'}</h3>
+            <p><Icon name="pin" size={14} /> {listing.location}</p>
+            <strong>{listing.price.split(' ')[0] || 'RWF'} {Number(price || 0).toLocaleString()}</strong>
+          </div>
+        </aside>
+        <form className="listing-editor-form" onSubmit={(event) => { event.preventDefault(); const numericPrice = Number(price); onSave({ ...listing, title: title.trim() || listing.title, price: `${listing.price.split(' ')[0] || 'RWF'} ${Number.isFinite(numericPrice) ? numericPrice.toLocaleString() : price}`, status }); }}>
+          <div className="listing-editor-form-heading"><h3>Listing details</h3><p>These details appear to people viewing your property.</p></div>
+          <label htmlFor="landlord-listing-title">Property title<input id="landlord-listing-title" value={title} onChange={(event) => setTitle(event.target.value)} required /></label>
+          <label htmlFor="landlord-listing-price">Price <span>{listing.price.split(' ')[0] || 'RWF'}</span><input id="landlord-listing-price" inputMode="numeric" value={price} onChange={(event) => setPrice(event.target.value.replace(/[^0-9.]/g, ''))} required /></label>
+          <label htmlFor="landlord-listing-status">Listing status<select id="landlord-listing-status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="published">Published</option><option value="draft">Draft</option><option value="paused">Paused</option></select></label>
+          <div className="listing-editor-actions"><button className="role-dashboard-primary" type="submit"><Icon name="check" size={15} /> Save changes</button><button className="role-dashboard-outline" type="button" onClick={onCancel}>Cancel</button></div>
+        </form>
+      </div>
+    </section>
+  );
 }
 
 function LandlordNotifications({ applications, onApprove, onOpenApplications }: { applications: LandlordApplication[]; onApprove: (application: LandlordApplication) => void; onOpenApplications: () => void }) {
@@ -538,17 +608,37 @@ function LandlordDashboard() {
   const [currentUserID, setCurrentUserID] = useState('');
   const [notice, setNotice] = useState('');
   const [editingListing, setEditingListing] = useState<DashboardListing | null>(null);
+  const [showRecommendedOnly, setShowRecommendedOnly] = useState(false);
   const [contactCommissionerOpen, setContactCommissionerOpen] = useState(false);
   const [commissionerMessage, setCommissionerMessage] = useState('');
   useEffect(() => {
     const load = async () => {
       const demoSession = isDevelopmentDemoSession();
-      if (demoSession) { try { setListings(JSON.parse(window.localStorage.getItem('umutungo-landlord-properties') ?? '[]') as DashboardListing[]); } catch { setListings([]); } }
+      if (demoSession || isLocalDevelopmentHost()) { try { setListings(JSON.parse(window.localStorage.getItem('umutungo-landlord-properties') ?? '[]') as DashboardListing[]); } catch { setListings([]); } }
       else setListings([]);
       try {
         const apiListings = await umutungoApi<{ items: OwnerListingRecord[] }>('/api/v1/owner/listings');
-        if (apiListings?.items) setListings(apiListings.items.map(mapOwnerListing));
-      } catch { if (!demoSession) setListings([]); }
+        if (apiListings?.items) {
+          const apiMapped = apiListings.items.map(mapOwnerListing);
+          if (demoSession || isLocalDevelopmentHost()) {
+            const localFeaturedByID = new Map<string, boolean>();
+            try {
+              const localOwnerListings = JSON.parse(window.localStorage.getItem('umutungo-landlord-properties') ?? '[]') as DashboardListing[];
+              localOwnerListings.forEach((item) => { if (typeof item.featured === 'boolean') localFeaturedByID.set(item.id, item.featured); });
+              const localMarketListings = JSON.parse(window.localStorage.getItem('umutungo-local-property-listings') ?? '[]') as PropertyPlaceholder[];
+              localMarketListings.forEach((item) => { if (typeof item.featured === 'boolean') localFeaturedByID.set(item.id, item.featured); });
+            } catch { /* Use API recommendation state when the local cache is unavailable. */ }
+            const merged = apiMapped.map((item) => localFeaturedByID.has(item.id) ? { ...item, featured: localFeaturedByID.get(item.id) } : item);
+            const knownIDs = new Set(merged.map((item) => item.id));
+            setListings([...merged, ...localFeaturedDashboardListings().filter((item) => !knownIDs.has(item.id))]);
+          } else setListings(apiMapped);
+        } else if (demoSession || isLocalDevelopmentHost()) {
+          setListings((current) => { const knownIDs = new Set(current.map((item) => item.id)); return [...current, ...localFeaturedDashboardListings().filter((item) => !knownIDs.has(item.id))]; });
+        }
+      } catch {
+        if (!demoSession && !isLocalDevelopmentHost()) setListings([]);
+        else setListings((current) => { const knownIDs = new Set(current.map((item) => item.id)); return [...current, ...localFeaturedDashboardListings().filter((item) => !knownIDs.has(item.id))]; });
+      }
       let localApplications: LandlordApplication[] = [];
       try {
         if (!demoSession) throw new Error('Demo data is disabled for live accounts.');
@@ -628,6 +718,45 @@ function LandlordDashboard() {
     setEditingListing(null);
     setNotice(`${listing.title} was updated.`);
   };
+  const toggleFeaturedListing = async (listing: DashboardListing) => {
+    const updated = { ...listing, featured: !listing.featured };
+    const persistLocalSelection = () => {
+      setListings((current) => current.map((item) => item.id === listing.id ? updated : item));
+      try {
+        const stored = JSON.parse(window.localStorage.getItem('umutungo-landlord-properties') ?? '[]') as DashboardListing[];
+        window.localStorage.setItem('umutungo-landlord-properties', JSON.stringify(stored.some((item) => item.id === listing.id)
+          ? stored.map((item) => item.id === listing.id ? updated : item)
+          : [...stored, updated]));
+        const localListings = JSON.parse(window.localStorage.getItem('umutungo-local-property-listings') ?? '[]') as PropertyPlaceholder[];
+        const localProperty: PropertyPlaceholder = {
+          id: listing.id, title: listing.title, type: listing.type, location: listing.location,
+          price: listing.price, priceNote: listing.priceNote, bedrooms: 0, bathrooms: 0, area: 0,
+          accent: '#00C763', image: listing.cover, images: listing.images, listed: listing.savedAt,
+          availableFor: listing.intent === 'For rent' ? 'rent' : 'sale', featured: updated.featured,
+        };
+        const exists = localListings.some((item) => item.id === listing.id);
+        if (exists || updated.featured) {
+          window.localStorage.setItem('umutungo-local-property-listings', JSON.stringify(exists
+            ? localListings.map((item) => item.id === listing.id ? { ...item, featured: updated.featured } : item)
+            : [...localListings, localProperty]));
+          window.dispatchEvent(new CustomEvent('umutungo:listings-changed'));
+        }
+      } catch { /* Keep the dashboard toggle available if browser storage is unavailable. */ }
+      setNotice(updated.featured ? `${listing.title} is recommended on the landing page.` : `${listing.title} was removed from landing page recommendations.`);
+    };
+    setListings((current) => current.map((item) => item.id === listing.id ? updated : item));
+    setNotice(updated.featured ? `Recommending ${listing.title}…` : `Removing ${listing.title} from recommendations…`);
+    try {
+      const response = await umutungoApi<{ id: string; is_featured: boolean }>(`/api/v1/listings/${encodeURIComponent(listing.id)}/featured`, { method: 'PATCH', body: JSON.stringify({ is_featured: updated.featured }) });
+      if (!response) throw new Error('The listing service is unavailable.');
+      persistLocalSelection();
+      window.dispatchEvent(new Event('umutungo:listings-changed'));
+      setNotice(updated.featured ? `${listing.title} is recommended on the landing page.` : `${listing.title} was removed from landing page recommendations.`);
+    } catch (cause) {
+      if (!isDevelopmentDemoSession() && !isLocalDevelopmentHost()) { setListings((current) => current.map((item) => item.id === listing.id ? listing : item)); setNotice(cause instanceof Error ? cause.message : 'The recommendation could not be updated.'); return; }
+      persistLocalSelection();
+    }
+  };
   const sendCommissionerMessage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const body = commissionerMessage.trim();
@@ -647,9 +776,10 @@ function LandlordDashboard() {
   };
   const metrics = config.metrics.map((metric, index) => index === 0 && listings.length ? { ...metric, value: String(listings.length), note: 'Saved in your workspace' } : metric);
   const landlordNotificationPanel = <div className="role-dashboard-content"><LandlordNotifications applications={applications} onApprove={approveApplication} onOpenApplications={() => setActive('Enquiries')} /></div>;
-  const overview = <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><h2>A clearer view of every property you own.</h2><p>Upload, manage, and promote your property assets from one professional workspace.</p></div><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> {t(language, 'Post a property')}</Link></section><section className="role-dashboard-metrics" aria-label="Landlord metrics">{metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-panel landlord-overview-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">Latest uploads</span><h3>Property assets</h3></div><button type="button" onClick={() => setActive('My properties')}>View all <Icon name="arrow" size={14} /></button></div>{listings.slice(0, 3).map((listing) => <div className="role-dashboard-side-item" key={listing.id}><span><Icon name="home" size={16} /></span><div><strong>{listing.title}</strong><small>{listing.location} Ã‚Â· {listing.status}</small></div><Icon name="arrow" size={14} /></div>)}{!listings.length && <p className="landlord-empty-note">No new property assets yet. Start with your first listing.</p>}</div></div>;
-  const body = active === 'Overview' ? <>{overview}{landlordNotificationPanel}</> : active === 'My properties' ? <div className="role-dashboard-content">{editingListing ? <LandlordListingEditor listing={editingListing} onSave={saveListing} onCancel={() => setEditingListing(null)} /> : <LandlordPropertiesSection listings={listings} onDelete={deleteListing} onManage={setEditingListing} />}</div> : active === 'Enquiries' ? <div className="role-dashboard-content"><LandlordApplicationsWithPrice applications={applications} onApprove={approveApplication} notice={notice} /></div> : active === 'Messages' ? <div className="role-dashboard-content"><LandlordMessageWorkspace messages={messages} currentUserID={currentUserID} onSent={(message) => setMessages((current) => [...current, message])} /></div> : <div className="role-dashboard-content"><TenantWorkspaceSection view={active} onPrimaryAction={(action) => { if (action === 'Contact Komisiyoneri') setContactCommissionerOpen(true); }} onAction={(action) => setNotice(`${action} selected.`)} notice={notice} /></div>;
-  return <main className="role-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{t(language, config.eyebrow)}</span><nav aria-label="Property Owner dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>{t(language, 'Home')}</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => { setActive(item.label); setEditingListing(null); }}><Icon name={item.icon} size={17} /><span>{t(language, item.label)}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">{t(language, 'Back to marketplace')} <Icon name="arrow" size={14} /></Link><Link href="/post-property"><Icon name="bookPen" size={16} /> Post property</Link></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{t(language, config.eyebrow)}</span><h1>{t(language, active)}</h1></div><button className="role-dashboard-profile" type="button" onClick={() => setActive('Overview')}><span className="role-dashboard-avatar">LL</span><span><strong>{t(language, 'My account')}</strong><small>{t(language, 'Verified Property Owner')}</small></span><Icon name="chevron" size={14} /></button></header>{body}{contactCommissionerOpen && <div className="tenant-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="commissioner-contact-title"><button className="tenant-dialog-backdrop" type="button" aria-label="Close commissioner message" onClick={() => setContactCommissionerOpen(false)} /><section className="tenant-dialog"><button className="property-action-close" type="button" aria-label="Close commissioner message" onClick={() => setContactCommissionerOpen(false)}><Icon name="x" size={18} /></button><span className="role-dashboard-eyebrow">Komisiyoneri support</span><h2 id="commissioner-contact-title">Contact Komisiyoneri</h2><form className="tenant-dialog-form" onSubmit={sendCommissionerMessage}><p>Send a message to the Komisiyoneri helping coordinate your property.</p><textarea value={commissionerMessage} onChange={(event) => setCommissionerMessage(event.target.value)} placeholder="Write your message" rows={5} required /><button className="role-dashboard-primary" type="submit">Send message <Icon name="arrow" size={15} /></button></form></section></div>}</section></main>;
+  const featuredCount = listings.filter((listing) => listing.featured).length;
+  const overview = <div className="role-dashboard-content"><section className="role-dashboard-welcome"><div><h2>A clearer view of every property you own.</h2><p>Upload, manage, and promote your property assets from one professional workspace.</p></div><div className="landlord-welcome-actions"><Link className="role-dashboard-primary" href="/post-property"><Icon name="bookPen" size={16} /> {t(language, 'Post a property')}</Link><button className="role-dashboard-primary landlord-advertise-link" type="button" onClick={() => setActive("Advertise property")}><Icon name="sparkles" size={16} /> Advertise property</button><button className="role-dashboard-primary" type="button" onClick={() => { setShowRecommendedOnly(true); setActive('My properties'); }}><Icon name="home" size={16} /> View recommended properties <span>{featuredCount}</span></button></div></section><section className="role-dashboard-metrics" aria-label="Landlord metrics">{metrics.map((metric) => <article key={metric.label}><span className={`role-dashboard-metric-icon ${metric.tone}`}><Icon name={metric.icon} size={17} /></span><small>{metric.label}</small><strong>{metric.value}</strong><em>{metric.note}</em></article>)}</section><div className="role-dashboard-panel landlord-overview-panel"><div className="role-dashboard-panel-heading"><div><span className="role-dashboard-eyebrow">Latest uploads</span><h3>Property assets</h3></div><button type="button" onClick={() => setActive('My properties')}>View all <Icon name="arrow" size={14} /></button></div>{listings.length > 0 && <div className="landlord-overview-property-grid">{listings.slice(0, 3).map((listing) => <article className="landlord-property-card landlord-overview-listing" key={listing.id}><div className="landlord-property-image"><img src={listing.cover} alt={listing.title} /><span>{listing.status}</span></div><div className="landlord-property-copy"><div><span className="role-dashboard-eyebrow">{listing.type} - {listing.intent}</span><h3>{listing.title}</h3><p>{listing.location}</p></div><strong>{listing.price} <small>{listing.priceNote}</small></strong><div className="landlord-property-actions"><button type="button" onClick={() => setActive("My properties")}>Manage listing <Icon name="arrow" size={14} /></button></div></div></article>)}</div>}{!listings.length && <p className="landlord-empty-note">No new property assets yet. Start with your first listing.</p>}{listings.length > 0 && <button className="landlord-overview-view-more" type="button" onClick={() => setActive("My properties")}>View more uploaded properties <Icon name="arrow" size={14} /></button>}</div></div>;
+  const body = active === 'Overview' ? <>{overview}{landlordNotificationPanel}</> : active === 'My properties' ? <div className="role-dashboard-content">{editingListing ? <LandlordListingEditor listing={editingListing} onSave={saveListing} onCancel={() => setEditingListing(null)} /> : <LandlordPropertiesSection listings={listings} title={showRecommendedOnly ? 'Recommended properties' : 'My properties'} onDelete={deleteListing} onManage={setEditingListing} onFeature={toggleFeaturedListing} showFeaturedFilter showFeaturedOnly={showRecommendedOnly} onToggleFeaturedFilter={() => setShowRecommendedOnly((current) => !current)} />}</div> : active === 'Advertise property' ? <div className="role-dashboard-content"><LandlordAdvertisePropertiesSection listings={listings} onFeature={toggleFeaturedListing} notice={notice} /></div> : active === 'Enquiries' ? <div className="role-dashboard-content"><LandlordApplicationsWithPrice applications={applications} onApprove={approveApplication} notice={notice} /></div> : active === 'Messages' ? <div className="role-dashboard-content"><LandlordMessageWorkspace messages={messages} currentUserID={currentUserID} onSent={(message) => setMessages((current) => [...current, message])} /></div> : <div className="role-dashboard-content"><TenantWorkspaceSection view={active} onPrimaryAction={(action) => { if (action === 'Contact Komisiyoneri') setContactCommissionerOpen(true); }} onAction={(action) => setNotice(`${action} selected.`)} notice={notice} /></div>;
+  return <main className="role-dashboard landlord-dashboard"><aside className="role-dashboard-sidebar"><Link className="role-dashboard-brand" href="/"><Logo /></Link><span className="role-dashboard-label">{t(language, config.eyebrow)}</span><nav aria-label="Property Owner dashboard navigation"><Link className="role-dashboard-nav role-dashboard-home-link" href="/"><Icon name="home" size={17} /><span>{t(language, 'Home')}</span></Link>{config.navigation.map((item) => <button className={`role-dashboard-nav ${active === item.label ? 'active' : ''}`} key={item.label} type="button" onClick={() => { setActive(item.label); setEditingListing(null); }}><Icon name={item.icon} size={17} /><span>{t(language, item.label)}</span></button>)}</nav><div className="role-dashboard-sidebar-bottom"><Link href="/">{t(language, 'Back to marketplace')} <Icon name="arrow" size={14} /></Link><Link href="/post-property"><Icon name="bookPen" size={16} /> Post property</Link></div></aside><section className="role-dashboard-main"><header className="role-dashboard-topbar"><div><span className="role-dashboard-eyebrow">{t(language, config.eyebrow)}</span><h1>{t(language, active)}</h1></div><button className="role-dashboard-profile" type="button" onClick={() => setActive('Overview')}><span className="role-dashboard-avatar">LL</span><span><strong>{t(language, 'My account')}</strong><small>{t(language, 'Verified Property Owner')}</small></span><Icon name="chevron" size={14} /></button></header>{body}{contactCommissionerOpen && <div className="tenant-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="commissioner-contact-title"><button className="tenant-dialog-backdrop" type="button" aria-label="Close commissioner message" onClick={() => setContactCommissionerOpen(false)} /><section className="tenant-dialog"><button className="property-action-close" type="button" aria-label="Close commissioner message" onClick={() => setContactCommissionerOpen(false)}><Icon name="x" size={18} /></button><span className="role-dashboard-eyebrow">Komisiyoneri support</span><h2 id="commissioner-contact-title">Contact Komisiyoneri</h2><form className="tenant-dialog-form" onSubmit={sendCommissionerMessage}><p>Send a message to the Komisiyoneri helping coordinate your property.</p><textarea value={commissionerMessage} onChange={(event) => setCommissionerMessage(event.target.value)} placeholder="Write your message" rows={5} required /><button className="role-dashboard-primary" type="submit">Send message <Icon name="arrow" size={15} /></button></form></section></div>}</section></main>;
 }
 
 function AdminLocationWorkspace() {

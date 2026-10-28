@@ -1035,6 +1035,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		l.tags, l.amenities, l.created_at, l.publish_at
 		, COALESCE((SELECT json_agg(json_build_object('type', lm.media_type, 'url', lm.url) ORDER BY lm.sort_order, lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id), '[]'::json) AS media
 		, COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) AS measurements
+		, l.is_featured
 		FROM listings l JOIN users u ON u.id=l.owner_id
 		WHERE l.deleted_at IS NULL AND l.status='published'
 		AND ($1='' OR l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%'
@@ -1046,7 +1047,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		AND ($6='' OR l.transaction_type=$6 OR (l.transaction_type='both' AND $6 IN ('buy','sell','rent','rent_out')))
 		AND ($9::double precision IS NULL OR l.price >= $9) AND ($10::double precision IS NULL OR l.price < $10)
 		AND ($11::integer IS NULL OR EXISTS (SELECT 1 FROM measurements m WHERE m.listing_id=l.id AND COALESCE(m.bedrooms,0) >= $11))
-		ORDER BY l.created_at DESC, l.id DESC LIMIT $7 OFFSET $8`, args...)
+		ORDER BY l.is_featured DESC, l.created_at DESC, l.id DESC LIMIT $7 OFFSET $8`, args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load listings")
 		return
@@ -1063,7 +1064,8 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		var media, measurements []byte
 		var createdAt time.Time
 		var publishAt *time.Time
-		if err := rows.Scan(&id, &ownerID, &ownerName, &ownerRole, &ownerVerifiedAt, &ownerPhone, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &publishAt, &media, &measurements); err != nil {
+		var isFeatured bool
+		if err := rows.Scan(&id, &ownerID, &ownerName, &ownerRole, &ownerVerifiedAt, &ownerPhone, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &publishAt, &media, &measurements, &isFeatured); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not read listings")
 			return
 		}
@@ -1084,7 +1086,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 			"category": category, "transaction_type": transactionType, "title": title, "description": description,
 			"price": price, "currency": currency, "province": province, "district": district, "sector": sector,
 			"cell": cell, "village": village, "latitude": latitude, "longitude": longitude, "status": status,
-			"tags": rawJSON(tags), "amenities": rawJSON(amenities), "media": rawJSON(media), "images": images, "measurements": rawJSON(measurements), "created_at": createdAt, "publish_at": publishAt,
+			"tags": rawJSON(tags), "amenities": rawJSON(amenities), "media": rawJSON(media), "images": images, "measurements": rawJSON(measurements), "created_at": createdAt, "publish_at": publishAt, "is_featured": isFeatured,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -1308,6 +1310,10 @@ func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
 		s.listReviews(w, r, id)
 		return
 	}
+	if len(parts) > 1 && parts[1] == "featured" && r.Method == http.MethodPatch {
+		s.updateListingFeatured(w, r, id)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		s.getListing(w, r, id)
@@ -1318,6 +1324,42 @@ func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
 	default:
 		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func (s *Server) updateListingFeatured(w http.ResponseWriter, r *http.Request, listingID string) {
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "property_owner" && user.Role != "komisiyoneri" && user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "property owner access required")
+		return
+	}
+	var input struct {
+		Featured *bool `json:"is_featured"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Featured == nil {
+		errorJSON(w, http.StatusBadRequest, "is_featured must be provided")
+		return
+	}
+	query := `UPDATE listings SET is_featured=$1,updated_at=NOW() WHERE id=$2 AND deleted_at IS NULL AND ($1=FALSE OR status='published')`
+	args := []any{*input.Featured, listingID}
+	if user.Role != "admin" {
+		query += ` AND owner_id=$3`
+		args = append(args, user.ID)
+	}
+	query += ` RETURNING is_featured`
+	var featured bool
+	if err := s.db.QueryRow(r.Context(), query, args...).Scan(&featured); err != nil {
+		if err == pgx.ErrNoRows {
+			errorJSON(w, http.StatusNotFound, "published listing not found")
+			return
+		}
+		errorJSON(w, http.StatusInternalServerError, "could not update featured listing")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": listingID, "is_featured": featured})
 }
 
 const maxListingMediaBytes int64 = 10 * 1024 * 1024
@@ -3225,7 +3267,7 @@ func (s *Server) ownerListings(w http.ResponseWriter, r *http.Request) {
 		SELECT l.id,l.owner_id,u.name,u.role,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,
 		l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.status,
 		l.tags,l.amenities,l.created_at,l.publish_at,COALESCE((SELECT url FROM listing_media lm WHERE lm.listing_id=l.id AND lm.media_type='photo' ORDER BY lm.sort_order LIMIT 1),''),
-		COALESCE((SELECT json_agg(json_build_object('type',lm.media_type,'url',lm.url,'sort_order',lm.sort_order) ORDER BY lm.sort_order,lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id),'[]'::json)
+		COALESCE((SELECT json_agg(json_build_object('type',lm.media_type,'url',lm.url,'sort_order',lm.sort_order) ORDER BY lm.sort_order,lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id),'[]'::json),l.is_featured
 		FROM listings l JOIN users u ON u.id=l.owner_id WHERE %s AND l.deleted_at IS NULL ORDER BY l.created_at DESC`, ownerFilter), args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load owner listings")
@@ -3240,7 +3282,8 @@ func (s *Server) ownerListings(w http.ResponseWriter, r *http.Request) {
 		var createdAt time.Time
 		var publishAt *time.Time
 		var media []byte
-		if err := rows.Scan(&id, &listingOwnerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &status, &tags, &amenities, &createdAt, &publishAt, &cover, &media); err != nil {
+		var isFeatured bool
+		if err := rows.Scan(&id, &listingOwnerID, &ownerName, &ownerRole, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &status, &tags, &amenities, &createdAt, &publishAt, &cover, &media, &isFeatured); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not read owner listings")
 			return
 		}
@@ -3256,7 +3299,7 @@ func (s *Server) ownerListings(w http.ResponseWriter, r *http.Request) {
 			"id": id, "category": category, "transaction_type": transactionType, "title": title, "description": description,
 			"price": price, "currency": currency, "province": province, "district": district, "sector": sector,
 			"cell": cell, "village": village, "status": status, "tags": rawJSON(tags), "amenities": rawJSON(amenities),
-			"owner": map[string]string{"id": listingOwnerID, "name": ownerName, "role": ownerRole}, "cover": cover, "images": images, "media": mediaItems, "created_at": createdAt, "publish_at": publishAt,
+			"owner": map[string]string{"id": listingOwnerID, "name": ownerName, "role": ownerRole}, "cover": cover, "images": images, "media": mediaItems, "created_at": createdAt, "publish_at": publishAt, "is_featured": isFeatured,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})

@@ -8,7 +8,7 @@ import { Language, t } from '../data/translations';
 import { propertySlug, supportsSpatialPreview } from '../lib/listings';
 
 export type PropertyPoster = { id?: string; name: string; businessName?: string; photoUrl?: string; phone?: string; location?: string; role: 'Komisiyoneri' | 'Landlord' | 'Property Owner'; verified?: boolean; postedAt?: string; rating?: string };
-export type PropertyPlaceholder = { id: string; title: string; type: string; location: string; latitude?: number | null; longitude?: number | null; price: string; priceNote: string; bedrooms: number; bathrooms: number; parkingSpaces?: number; area: number; negotiable?: boolean; amenities?: string[]; tags?: string[]; accent: string; image: string; images?: string[]; photoCount?: number; listed: string; availableFor?: 'rent' | 'sale' | 'both' | 'book'; description?: string; poster?: PropertyPoster };
+export type PropertyPlaceholder = { id: string; title: string; type: string; location: string; latitude?: number | null; longitude?: number | null; price: string; priceNote: string; bedrooms: number; bathrooms: number; parkingSpaces?: number; area: number; negotiable?: boolean; amenities?: string[]; tags?: string[]; accent: string; image: string; images?: string[]; photoCount?: number; listed: string; availableFor?: 'rent' | 'sale' | 'both' | 'book'; description?: string; poster?: PropertyPoster; featured?: boolean };
 type PropertyCardProps = { language: Language; property: PropertyPlaceholder; favorite: boolean; onFavorite: () => void };
 
 export function PropertyCard({ language, property, favorite, onFavorite }: PropertyCardProps) {
@@ -68,7 +68,7 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
         return <div className="property-image-slide" key={`${image}-${index}`}><Image src={displayedImage} alt={`${t(language, property.title)} ${t(language, 'property image')} ${index + 1}`} fill sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 33vw" unoptimized={displayedImage.startsWith('http')} className="property-image-art" onError={() => setImageFallbacks((current) => ({ ...current, [index]: '/properties/listing-placeholder.svg' }))} /></div>;
       })}</div>
       <Link className="property-card-photo-link" href={`${detailHref}${detailHref.includes('?') ? '&' : '?'}gallery=1`} aria-label={`${t(language, 'Open photo gallery for')} ${property.title}`} />
-      <div className="property-card-photo-labels"><span className="property-category-badge">{t(language, property.type)}</span></div>
+      <div className="property-card-photo-labels"><span className="property-category-badge">{t(language, property.type)}</span>{property.featured && <span className="property-card-recommended-badge"><Icon name="sparkles" size={12} /> Recommended</span>}</div>
       {property.poster?.verified && <span className="property-card-verified-badge"><Icon name="check" size={12} />{t(language, 'Verified')}</span>}
       <button className={`favorite-button ${favorite ? 'is-favorite' : ''}`} type="button" onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? `${t(language, 'Remove property from favorites')}: ${property.title}` : `${t(language, 'Save property')}: ${property.title}`}><Icon name="heart" size={18} filled={favorite} /></button>
     </div>

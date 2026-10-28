@@ -127,10 +127,12 @@ export default function HomePage() {
     { name: 'Other assets', slug: 'other', types: ['other'] },
   ];
   const propertyCategories = listingCategories.filter((category) => !selectedListingCategory || category.slug === selectedListingCategory).map((category) => {
-    const liveListings = visibleProperties.filter((property) => category.types.includes(property.type.toLowerCase())).slice(0, 1);
+    const categoryListings = visibleProperties.filter((property) => category.types.includes(property.type.toLowerCase()));
+    const featuredListing = categoryListings.find((property) => property.featured);
+    const liveListings = [featuredListing ?? categoryListings[0]].filter((property): property is PropertyPlaceholder => Boolean(property));
     return { ...category, listings: liveListings };
   });
-  const landingListings = propertyCategories.flatMap((category) => category.listings);
+  const landingListings = propertyCategories.flatMap((category) => category.listings).sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)));
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />

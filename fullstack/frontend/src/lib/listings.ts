@@ -17,6 +17,7 @@ export type ApiListing = {
   latitude?: number | null;
   longitude?: number | null;
   status: string;
+  is_featured?: boolean;
   created_at: string;
   publish_at?: string | null;
   images?: string[];
@@ -137,6 +138,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     amenities: item.amenities ?? [],
     tags: item.tags ?? [],
     listed: listingDate,
+    featured: item.is_featured ?? false,
     availableFor: both ? 'both' : rent ? 'rent' : 'sale',
     description: item.description,
     poster: {

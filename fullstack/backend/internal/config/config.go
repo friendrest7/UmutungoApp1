@@ -63,9 +63,9 @@ func Load() Config {
 		TwilioAccountSID:     env("TWILIO_ACCOUNT_SID", ""),
 		TwilioAuthToken:      env("TWILIO_AUTH_TOKEN", ""),
 		TwilioFromNumber:     env("TWILIO_FROM_NUMBER", ""),
-		OwnerSilverPrice:     envFloat("OWNER_SILVER_PRICE_RWF"),
-		OwnerGoldPrice:       envFloat("OWNER_GOLD_PRICE_RWF"),
-		OwnerPlatinumPrice:   envFloat("OWNER_PLATINUM_PRICE_RWF"),
+		OwnerSilverPrice:     envFloatDefault("OWNER_SILVER_PRICE_RWF", 10000),
+		OwnerGoldPrice:       envFloatDefault("OWNER_GOLD_PRICE_RWF", 20000),
+		OwnerPlatinumPrice:   envFloatDefault("OWNER_PLATINUM_PRICE_RWF", 30000),
 	}
 }
 
@@ -97,9 +97,15 @@ func loadLocalEnv() {
 	}
 }
 
-func envFloat(key string) float64 {
+func envFloatDefault(key string, fallback float64) float64 {
 	value := env(key, "")
-	amount, _ := strconv.ParseFloat(value, 64)
+	if value == "" {
+		return fallback
+	}
+	amount, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fallback
+	}
 	return amount
 }
 

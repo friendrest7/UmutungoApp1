@@ -1035,7 +1035,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		l.tags, l.amenities, l.created_at, l.publish_at
 		, COALESCE((SELECT json_agg(json_build_object('type', lm.media_type, 'url', lm.url) ORDER BY lm.sort_order, lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id), '[]'::json) AS media
 		, COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) AS measurements
-		, (l.is_featured AND EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW())) AS is_featured
+		, (l.is_featured AND (EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW()) OR EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.listing_id=l.id AND p.plan='diamond' AND p.status='active'))) AS is_featured
 		FROM listings l JOIN users u ON u.id=l.owner_id
 		WHERE l.deleted_at IS NULL AND l.status='published'
 		AND ($1='' OR l.title ILIKE '%' || $1 || '%' OR l.description ILIKE '%' || $1 || '%'
@@ -1047,7 +1047,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		AND ($6='' OR l.transaction_type=$6 OR (l.transaction_type='both' AND $6 IN ('buy','sell','rent','rent_out')))
 		AND ($9::double precision IS NULL OR l.price >= $9) AND ($10::double precision IS NULL OR l.price < $10)
 		AND ($11::integer IS NULL OR EXISTS (SELECT 1 FROM measurements m WHERE m.listing_id=l.id AND COALESCE(m.bedrooms,0) >= $11))
-		ORDER BY (l.is_featured AND EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW())) DESC, l.created_at DESC, l.id DESC LIMIT $7 OFFSET $8`, args...)
+		ORDER BY (l.is_featured AND (EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW()) OR EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.listing_id=l.id AND p.plan='diamond' AND p.status='active'))) DESC, l.created_at DESC, l.id DESC LIMIT $7 OFFSET $8`, args...)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load listings")
 		return
@@ -1349,12 +1349,12 @@ func (s *Server) updateListingFeatured(w http.ResponseWriter, r *http.Request, l
 			return
 		}
 		var hasActivePlan bool
-		if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM owner_upgrade_purchases WHERE owner_id=$1 AND status='active' AND expires_at > NOW())`, user.ID).Scan(&hasActivePlan); err != nil {
+		if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM owner_upgrade_purchases WHERE owner_id=$1 AND status='active' AND (expires_at > NOW() OR (plan='diamond' AND listing_id=$2)))`, user.ID, listingID).Scan(&hasActivePlan); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not verify the Property Owner plan")
 			return
 		}
 		if !hasActivePlan {
-			errorJSON(w, http.StatusForbidden, "an active Silver, Gold, or Platinum plan is required to advertise listings")
+			errorJSON(w, http.StatusForbidden, "an active Owner plan or Diamond promotion for this land listing is required")
 			return
 		}
 	}
@@ -2098,7 +2098,67 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ownerUpgradePrices() map[string]float64 {
-	return map[string]float64{"silver": s.cfg.OwnerSilverPrice, "gold": s.cfg.OwnerGoldPrice, "platinum": s.cfg.OwnerPlatinumPrice}
+	return map[string]float64{"silver": 10000, "gold": 20000, "platinum": 30000, "diamond": 100000}
+}
+
+func ownerPlanDays(plan string) int {
+	switch plan {
+	case "gold":
+		return 180
+	case "platinum":
+		return 365
+	case "diamond":
+		return 0
+	default:
+		return 90
+	}
+}
+
+func (s *Server) activateDemoOwnerUpgrade(w http.ResponseWriter, r *http.Request, user CurrentUser, plan, listingID, idempotencyKey string) {
+	allowedDemoAccount := strings.EqualFold(user.Email, "landlord@umutungo.test") || strings.EqualFold(user.Email, "owner@umutungo.test")
+	if s.cfg.AppEnv != "development" || !allowedDemoAccount {
+		errorJSON(w, http.StatusForbidden, "no-payment upgrades are only available to development demo owners")
+		return
+	}
+	token, err := randomToken()
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create demo upgrade reference")
+		return
+	}
+	reference := "DEMO-" + token[:16]
+	now := time.Now().UTC()
+	var expiresAt *time.Time
+	if days := ownerPlanDays(plan); days > 0 {
+		expires := now.Add(time.Duration(days) * 24 * time.Hour)
+		expiresAt = &expires
+	}
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not begin demo upgrade")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if plan != "diamond" {
+		if _, err := tx.Exec(r.Context(), `UPDATE owner_upgrade_purchases SET status='expired' WHERE owner_id=$1 AND status='active' AND plan <> 'diamond' AND idempotency_key<>$2`, user.ID, idempotencyKey); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not refresh demo plan")
+			return
+		}
+	}
+	var purchaseID string
+	err = tx.QueryRow(r.Context(), `
+		INSERT INTO owner_upgrade_purchases(owner_id,plan,amount,currency,status,transaction_reference,idempotency_key,purchased_at,activated_at,expires_at,is_demo,listing_id)
+		VALUES($1,$2,0,'RWF','active',$3,$4,$5,$5,$6,TRUE,NULLIF($7,'')::uuid)
+		ON CONFLICT(owner_id,idempotency_key) DO UPDATE SET plan=EXCLUDED.plan,amount=0,currency='RWF',status='active',transaction_reference=EXCLUDED.transaction_reference,purchased_at=EXCLUDED.purchased_at,activated_at=EXCLUDED.activated_at,expires_at=EXCLUDED.expires_at,is_demo=TRUE,listing_id=EXCLUDED.listing_id
+		RETURNING id`, user.ID, plan, reference, idempotencyKey, now, expiresAt, listingID).Scan(&purchaseID)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not activate demo plan")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not save demo plan")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": purchaseID, "owner_id": user.ID, "plan": plan, "amount": 0, "currency": "RWF", "status": "active", "payment_status": "successful", "transaction_reference": reference, "provider": "demo", "is_demo": true, "purchased_at": now, "activated_at": now, "expires_at": expiresAt})
 }
 
 func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
@@ -2121,7 +2181,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		if user.Role == "admin" {
 			ownerID = nil
 		}
-		rows, err := s.db.Query(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.amount,p.currency,p.status,p.transaction_reference,p.purchased_at,p.activated_at,p.expires_at,p.created_at,COALESCE(pay.status,'pending'),p.provider_transaction_id,p.verified_at,COALESCE(pay.receipt_number,''),COALESCE(pay.provider,''),COALESCE(pay.provider_reference,''),COALESCE(pay.id::text,''),COALESCE(pay.amount,0) FROM owner_upgrade_purchases p LEFT JOIN payments pay ON pay.id=p.payment_id WHERE ($1::uuid IS NULL OR p.owner_id=$1) ORDER BY p.created_at DESC LIMIT 200`, ownerID)
+		rows, err := s.db.Query(r.Context(), `SELECT p.id,p.owner_id,p.plan,p.amount,p.currency,p.status,p.transaction_reference,p.purchased_at,p.activated_at,p.expires_at,p.created_at,COALESCE(pay.status,CASE WHEN p.is_demo THEN 'successful' ELSE 'pending' END),p.provider_transaction_id,p.verified_at,COALESCE(pay.receipt_number,''),COALESCE(pay.provider,CASE WHEN p.is_demo THEN 'demo' ELSE '' END),COALESCE(pay.provider_reference,''),COALESCE(pay.id::text,''),COALESCE(pay.amount,0),p.is_demo,COALESCE(p.listing_id::text,'') FROM owner_upgrade_purchases p LEFT JOIN payments pay ON pay.id=p.payment_id WHERE ($1::uuid IS NULL OR p.owner_id=$1) ORDER BY p.created_at DESC LIMIT 200`, ownerID)
 		if err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not load owner upgrades")
 			return
@@ -2129,14 +2189,15 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		purchases := make([]map[string]any, 0)
 		for rows.Next() {
-			var id, purchaseOwnerID, plan, currency, status, reference, paymentStatus, receipt, provider, providerReference, paymentID string
+			var id, purchaseOwnerID, plan, currency, status, reference, paymentStatus, receipt, provider, providerReference, paymentID, listingID string
 			var amount float64
 			var paymentAmount float64
+			var isDemo bool
 			var purchasedAt, activatedAt, expiresAt *time.Time
 			var providerTransactionID *string
 			var verifiedAt *time.Time
 			var createdAt time.Time
-			if err := rows.Scan(&id, &purchaseOwnerID, &plan, &amount, &currency, &status, &reference, &purchasedAt, &activatedAt, &expiresAt, &createdAt, &paymentStatus, &providerTransactionID, &verifiedAt, &receipt, &provider, &providerReference, &paymentID, &paymentAmount); err != nil {
+			if err := rows.Scan(&id, &purchaseOwnerID, &plan, &amount, &currency, &status, &reference, &purchasedAt, &activatedAt, &expiresAt, &createdAt, &paymentStatus, &providerTransactionID, &verifiedAt, &receipt, &provider, &providerReference, &paymentID, &paymentAmount, &isDemo, &listingID); err != nil {
 				errorJSON(w, http.StatusInternalServerError, "could not read owner upgrades")
 				return
 			}
@@ -2163,7 +2224,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-			purchases = append(purchases, map[string]any{"id": id, "owner_id": purchaseOwnerID, "plan": plan, "amount": amount, "currency": currency, "status": status, "payment_status": paymentStatus, "transaction_reference": reference, "receipt_number": receipt, "provider_transaction_id": providerTransactionID, "verified_at": verifiedAt, "purchased_at": purchasedAt, "activated_at": activatedAt, "expires_at": expiresAt, "created_at": createdAt})
+			purchases = append(purchases, map[string]any{"id": id, "owner_id": purchaseOwnerID, "plan": plan, "amount": amount, "currency": currency, "status": status, "payment_status": paymentStatus, "transaction_reference": reference, "receipt_number": receipt, "provider_transaction_id": providerTransactionID, "verified_at": verifiedAt, "purchased_at": purchasedAt, "activated_at": activatedAt, "expires_at": expiresAt, "created_at": createdAt, "is_demo": isDemo, "listing_id": listingID})
 		}
 		if err := rows.Err(); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not read owner upgrades")
@@ -2175,6 +2236,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 			Plan           string `json:"plan"`
 			Provider       string `json:"provider"`
 			Phone          string `json:"phone"`
+			ListingID      string `json:"listing_id"`
 			IdempotencyKey string `json:"idempotency_key"`
 		}
 		if !decodeJSON(w, r, &input) {
@@ -2183,12 +2245,33 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		input.Plan = strings.ToLower(strings.TrimSpace(input.Plan))
 		input.Provider = strings.ToLower(strings.TrimSpace(input.Provider))
 		price, validPlan := s.ownerUpgradePrices()[input.Plan]
-		if !validPlan || price <= 0 || math.Trunc(price) != price {
+		if !validPlan || (input.Provider != "demo" && (price <= 0 || math.Trunc(price) != price)) {
 			errorJSON(w, http.StatusBadRequest, "choose a plan with a configured server price")
 			return
 		}
 		if input.IdempotencyKey == "" || len(input.IdempotencyKey) > 100 {
 			errorJSON(w, http.StatusBadRequest, "a valid idempotency_key is required")
+			return
+		}
+		if input.Plan == "diamond" {
+			if input.ListingID == "" {
+				errorJSON(w, http.StatusBadRequest, "choose a published land listing for the Diamond one-time payment")
+				return
+			}
+			var eligible bool
+			if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL AND status='published' AND lower(category)='land' AND transaction_type IN ('buy','sell','sale'))`, input.ListingID, user.ID).Scan(&eligible); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not verify the land listing")
+				return
+			}
+			if !eligible {
+				errorJSON(w, http.StatusBadRequest, "Diamond is available as a one-time promotion for published land listings only")
+				return
+			}
+		} else {
+			input.ListingID = ""
+		}
+		if input.Provider == "demo" {
+			s.activateDemoOwnerUpgrade(w, r, user, input.Plan, input.ListingID, input.IdempotencyKey)
 			return
 		}
 		if input.Provider != "mtn_momo" {
@@ -2206,7 +2289,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		}
 		defer tx.Rollback(r.Context())
 		var purchaseID, reference string
-		insertErr := tx.QueryRow(r.Context(), `INSERT INTO owner_upgrade_purchases(owner_id,plan,amount,transaction_reference,idempotency_key) VALUES($1,$2,$3,'pending',$4) ON CONFLICT(owner_id,idempotency_key) DO NOTHING RETURNING id`, user.ID, input.Plan, price, input.IdempotencyKey).Scan(&purchaseID)
+		insertErr := tx.QueryRow(r.Context(), `INSERT INTO owner_upgrade_purchases(owner_id,plan,amount,transaction_reference,idempotency_key,listing_id) VALUES($1,$2,$3,'pending',$4,NULLIF($5,'')::uuid) ON CONFLICT(owner_id,idempotency_key) DO NOTHING RETURNING id`, user.ID, input.Plan, price, input.IdempotencyKey, input.ListingID).Scan(&purchaseID)
 		if insertErr == pgx.ErrNoRows {
 			var existingPlan string
 			if err := tx.QueryRow(r.Context(), `SELECT id,plan,amount,transaction_reference FROM owner_upgrade_purchases WHERE owner_id=$1 AND idempotency_key=$2`, user.ID, input.IdempotencyKey).Scan(&purchaseID, &existingPlan, new(float64), &reference); err != nil {

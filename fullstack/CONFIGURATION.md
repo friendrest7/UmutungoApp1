@@ -31,9 +31,9 @@ Configure secrets in the named hosting service, not in a committed file. `.env.e
 | `MEDIA_UPLOAD_DIR` | Render disk/filesystem | Listing and About media storage path | No | Render backend |
 | `MEDIA_PUBLIC_BASE_URL` | Umutungo | Public API origin used to build media URLs | No | Render backend |
 | `GOOGLE_CLIENT_IDS` | Google OAuth | Comma-separated allowlist of web/Android/iOS OAuth client IDs | No | Render backend |
-| `OWNER_SILVER_PRICE_RWF` | Umutungo | Optional owner plan amount in whole RWF | No | Render backend |
-| `OWNER_GOLD_PRICE_RWF` | Umutungo | Optional owner plan amount in whole RWF | No | Render backend |
-| `OWNER_PLATINUM_PRICE_RWF` | Umutungo | Optional owner plan amount in whole RWF | No | Render backend |
+| `OWNER_SILVER_PRICE_RWF` | Umutungo | Silver owner plan price in RWF (defaults to 10,000) | No | Render backend |
+| `OWNER_GOLD_PRICE_RWF` | Umutungo | Gold owner plan price in RWF (defaults to 20,000) | No | Render backend |
+| `OWNER_PLATINUM_PRICE_RWF` | Umutungo | Platinum owner plan price in RWF (defaults to 30,000) | No | Render backend |
 | `MTN_TARGET_ENVIRONMENT` | MTN MoMo Rwanda | Must be `sandbox` or approved production `mtnrwanda` | No | Render backend |
 | `MTN_BASE_URL` | MTN MoMo Rwanda | Sandbox or production Collection API host; must match target environment | No | Render backend |
 | `MTN_API_USER` | MTN MoMo Rwanda | Country-specific API User for OAuth token requests | Yes | Render backend |

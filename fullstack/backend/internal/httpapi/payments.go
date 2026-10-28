@@ -63,10 +63,12 @@ func (s *Server) applyVerifiedPayment(ctx context.Context, paymentID, providerSt
 			return err
 		}
 		if providerStatus == "successful" {
-			if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='expired' WHERE owner_id=$1 AND status='active'`, ownerID); err != nil {
-				return err
+			if plan != "diamond" {
+				if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='expired' WHERE owner_id=$1 AND status='active' AND plan <> 'diamond'`, ownerID); err != nil {
+					return err
+				}
 			}
-			if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='active',purchased_at=NOW(),activated_at=NOW(),expires_at=NOW()+CASE plan WHEN 'silver' THEN INTERVAL '90 days' WHEN 'gold' THEN INTERVAL '180 days' ELSE INTERVAL '365 days' END,provider_transaction_id=$2,verified_at=NOW() WHERE payment_id=$1`, paymentID, financialTransactionID); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='active',purchased_at=NOW(),activated_at=NOW(),expires_at=CASE plan WHEN 'diamond' THEN NULL WHEN 'silver' THEN NOW()+INTERVAL '90 days' WHEN 'gold' THEN NOW()+INTERVAL '180 days' ELSE NOW()+INTERVAL '365 days' END,provider_transaction_id=$2,verified_at=NOW() WHERE payment_id=$1`, paymentID, financialTransactionID); err != nil {
 				return err
 			}
 		} else if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status=$2 WHERE payment_id=$1 AND status='pending'`, paymentID, providerStatus); err != nil {

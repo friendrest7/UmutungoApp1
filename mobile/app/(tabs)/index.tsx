@@ -144,7 +144,7 @@ export default function HomeScreen() {
         <Text style={{ color: 'rgba(255, 255, 255,0.84)', fontSize: 13, lineHeight: 19 }}>{t('Browse homes, land and spaces from local owners.')}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 50, paddingLeft: 13, paddingRight: 5, borderRadius: 14, backgroundColor: '#ffffff' }}>
           <Ionicons name="sparkles-outline" size={19} color={colors.greenDark} />
-          <TextInput value={query} onChangeText={setQuery} onSubmitEditing={goToAiSearch} placeholder={t('Describe the properties you want and we get them for you')} placeholderTextColor="#68766c" returnKeyType="search" style={{ minWidth: 0, flex: 1, color: '#17251d', fontSize: 13 }} />
+          <TextInput value={query} onChangeText={setQuery} onSubmitEditing={goToAiSearch} placeholder={t('Describe the properties you want and we get them for you')} placeholderTextColor="#68766c" returnKeyType="search" style={{ minWidth: 0, flex: 1, color: '#17251d', fontFamily: 'Lexend', fontSize: 13 }} />
           <Pressable onPress={goToAiSearch} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: colors.green }} accessibilityLabel={t('Search')}>
             <Ionicons name="arrow-forward" size={18} color="#ffffff" />
           </Pressable>

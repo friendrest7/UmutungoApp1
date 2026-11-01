@@ -1,5 +1,5 @@
 import React, { Children, cloneElement, isValidElement } from 'react';
-import { Platform, Text as NativeText, type TextProps } from 'react-native';
+import { Platform, StyleSheet, Text as NativeText, type TextProps } from 'react-native';
 import { useI18n } from '@/i18n';
 
 function translateChildren(children: React.ReactNode, translate: (value: string) => string): React.ReactNode {
@@ -15,5 +15,17 @@ function translateChildren(children: React.ReactNode, translate: (value: string)
 export function LocalizedText({ children, ...props }: TextProps) {
   const { t } = useI18n();
   const sansSerif = Platform.select({ ios: 'Lexend', android: 'Lexend', default: 'Lexend' });
-  return <NativeText {...props} style={[{ fontFamily: sansSerif }, props.style]}>{translateChildren(children, t)}</NativeText>;
+  const textStyle = StyleSheet.flatten(props.style);
+  const requestedFamily = textStyle?.fontFamily;
+  const requestedWeight = String(textStyle?.fontWeight ?? '400');
+  const fontFamily = requestedFamily?.startsWith('Lexend') && requestedFamily !== 'Lexend'
+    ? requestedFamily
+    : requestedWeight === '700' || requestedWeight === '800' || requestedWeight === '900'
+      ? requestedWeight === '900' ? 'LexendBlack' : requestedWeight === '800' ? 'LexendExtraBold' : 'LexendBold'
+      : requestedWeight === '600'
+        ? 'LexendSemiBold'
+        : requestedWeight === '500'
+          ? 'LexendMedium'
+          : sansSerif;
+  return <NativeText {...props} style={[props.style, { fontFamily }]}>{translateChildren(children, t)}</NativeText>;
 }

@@ -2,7 +2,7 @@ export type ColorPalette = typeof lightColors;
 
 export const brandColors = {
   primary: '#00C763', black: '#000000', white: '#FFFFFF',
-  headingFont: 'ArchivoBlack', bodyFont: 'Lexend',
+  headingFont: 'Lexend', bodyFont: 'Lexend',
 } as const;
 
 export const lightColors = {

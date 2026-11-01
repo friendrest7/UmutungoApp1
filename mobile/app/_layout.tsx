@@ -5,8 +5,6 @@ import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useFonts } from 'expo-font';
-import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
-import { Lexend_400Regular, Lexend_500Medium, Lexend_600SemiBold, Lexend_700Bold } from '@expo-google-fonts/lexend';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { AuthProvider } from '@/auth/AuthContext';
 import { syncOfflineChanges } from '@/api/client';
@@ -16,7 +14,17 @@ import { LocalizationProvider } from '@/i18n';
 
 function AppShell() {
   const { isDark, colors } = useTheme();
-  const [fontsLoaded] = useFonts({ ArchivoBlack: ArchivoBlack_400Regular, Lexend: Lexend_400Regular, LexendMedium: Lexend_500Medium, LexendSemiBold: Lexend_600SemiBold, LexendBold: Lexend_700Bold });
+  const [fontsLoaded] = useFonts({
+    LexendThin: require('../assets/fonts/Lexend-Thin.ttf'),
+    LexendExtraLight: require('../assets/fonts/Lexend-ExtraLight.ttf'),
+    LexendLight: require('../assets/fonts/Lexend-Light.ttf'),
+    Lexend: require('../assets/fonts/Lexend-Regular.ttf'),
+    LexendMedium: require('../assets/fonts/Lexend-Medium.ttf'),
+    LexendSemiBold: require('../assets/fonts/Lexend-SemiBold.ttf'),
+    LexendBold: require('../assets/fonts/Lexend-Bold.ttf'),
+    LexendExtraBold: require('../assets/fonts/Lexend-ExtraBold.ttf'),
+    LexendBlack: require('../assets/fonts/Lexend-Black.ttf'),
+  });
   const { t } = useI18n();
   const [offline, setOffline] = useState(false);
   useEffect(() => NetInfo.addEventListener((state) => {

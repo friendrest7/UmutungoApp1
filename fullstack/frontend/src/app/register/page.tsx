@@ -10,10 +10,11 @@ import { t } from '../../data/translations';
 import { usePersistentLanguage } from '../../lib/language';
 import { apiBaseUrl } from '../../lib/umutungoApi';
 
-type RegistrationRole = 'Client' | 'Komisiyoneri' | 'Landlord' | 'Property Owner';
+type RegistrationRole = 'Client' | 'Tenant' | 'Komisiyoneri' | 'Landlord' | 'Property Owner';
 
-const roleOptions: Array<{ role: RegistrationRole; detail: string; storageRole: 'Client' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' }> = [
+const roleOptions: Array<{ role: RegistrationRole; detail: string; storageRole: 'Client' | 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' }> = [
   { role: 'Client', detail: 'I want to search, compare, buy, or rent property.', storageRole: 'Client' },
+  { role: 'Tenant', detail: 'I want to find and rent a place to live.', storageRole: 'Tenant' },
   { role: 'Komisiyoneri', detail: 'I help clients buy, sell, or rent property.', storageRole: 'Commissioner / Komisiyoneri' },
   { role: 'Landlord', detail: 'I manage rental property and tenants.', storageRole: 'Landlord' },
   { role: 'Property Owner', detail: 'I own property and want to sell or rent it.', storageRole: 'Property Owner' },
@@ -47,7 +48,7 @@ export default function RegisterPage() {
     const selected = roleOptions.find((item) => item.role === role) ?? roleOptions[0];
     setBusy(true); setError(''); setNotice('');
     try {
-      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim(), role: selected.role === 'Komisiyoneri' ? 'komisiyoneri' : selected.role === 'Client' ? 'client' : 'property_owner' }) });
+      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim(), role: selected.role === 'Komisiyoneri' ? 'komisiyoneri' : selected.role === 'Client' ? 'client' : selected.role === 'Tenant' ? 'tenant' : 'property_owner' }) });
       const result = await response.json() as { error?: string; development_code?: string; message?: string };
       if (!response.ok) throw new Error(result.error ?? 'Account registration could not be completed.');
       setPendingPhone(phone.trim());
@@ -70,7 +71,7 @@ export default function RegisterPage() {
       window.localStorage.setItem('umutungo-api-token', result.access_token);
       window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: selected.storageRole, name: name.trim(), phone: pendingPhone, email: email.trim(), kycStatus: selected.storageRole === 'Client' ? 'not_required' : 'pending', signedInAt: new Date().toISOString() }));
       window.dispatchEvent(new Event('umutungo:auth-changed'));
-      const dashboardPaths = { Client: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner' } as const;
+      const dashboardPaths = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner' } as const;
       window.location.assign(dashboardPaths[selected.storageRole]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Phone verification could not be completed.');

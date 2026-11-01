@@ -1,5 +1,8 @@
 export type IconName =
   | 'arrow'
+  | 'area'
+  | 'bath'
+  | 'bed'
   | 'building'
   | 'car'
   | 'wrench'
@@ -32,6 +35,7 @@ export type IconName =
   | 'video'
   | 'eye'
   | 'eyeOff'
+  | 'externalLink'
   | 'x';
 
 type IconProps = { name: IconName; size?: number; strokeWidth?: number; filled?: boolean };
@@ -41,6 +45,9 @@ export function Icon({ name, size = 18, strokeWidth = 1.8, filled = false }: Ico
 
   const paths: Record<IconName, React.ReactNode> = {
     arrow: <><path d="M5 12h13" {...common} /><path d="m13 6 6 6-6 6" {...common} /></>,
+    area: <><rect x="3" y="3" width="18" height="18" rx="2" fill="none" {...common} /><path d="M8 16 16 8M9 8h7v7" fill="none" {...common} /></>,
+    bath: <><path d="M9 6 8.3 4.7a2 2 0 1 0-3.3 2.2L6 9" fill="none" {...common} /><path d="M7 9h13l1 5a2 2 0 0 1-2 2H7a4 4 0 0 1-4-4v-1a2 2 0 0 1 2-2h2Z" fill="none" {...common} /><path d="M9 16v4M17 16v4" fill="none" {...common} /></>,
+    bed: <><path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9" fill="none" {...common} /></>,
     building: <><path d="M4 21h16M6 21V5l6-3 6 3v16M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1" fill="none" {...common} /></>,
     car: <><path d="m5 11 1.5-4.2A2 2 0 0 1 8.4 5.5h7.2a2 2 0 0 1 1.9 1.3L19 11l1.4 1.2a2 2 0 0 1 .6 1.5V18h-2v-2H5v2H3v-4.3a2 2 0 0 1 .6-1.5L5 11Z" fill="none" {...common} /><path d="M5 11h14M7 13.5h.01M17 13.5h.01" fill="none" {...common} /></>,
     wrench: <><path d="M14.5 6.5a5 5 0 0 0-6.2 6.2L3 18l3 3 5.3-5.3a5 5 0 0 0 6.2-6.2l-3 3-3-3 3-3Z" fill="none" {...common} /></>,
@@ -51,6 +58,7 @@ export function Icon({ name, size = 18, strokeWidth = 1.8, filled = false }: Ico
     download: <><path d="M12 3v11M7 10l5 5 5-5M5 21h14" fill="none" {...common} /></>,
     eye: <><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" fill="none" {...common} /><circle cx="12" cy="12" r="2.6" fill="none" {...common} /></>,
     eyeOff: <><path d="m3 3 18 18M10.6 6.2A10.6 10.6 0 0 1 12 6c6.1 0 9.5 6 9.5 6a15.6 15.6 0 0 1-3.1 3.7M6.2 6.2C3.8 7.8 2.5 12 2.5 12s3.4 6 9.5 6c1.1 0 2.1-.2 3-.5" fill="none" {...common} /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" {...common} /></>,
+    externalLink: <><path d="M14 4h6v6M20 4l-9 9" fill="none" {...common} /><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" fill="none" {...common} /></>,
     googlePlay: <><path d="M3.6 2.5c-.4.5-.6 1.1-.6 1.9v15.2c0 .8.2 1.4.6 1.9L14.7 12 3.6 2.5Z" fill="#4285f4" /><path d="m15.8 13 3.2 1.8c1.1.6 1.1 1.8 0 2.4l-3.3 1.8-3.6-3 3.7-3Z" fill="#fbbc04" /><path d="m3.6 2.5 11.1 9.5-3.7 3L3.6 2.5Z" fill="#34a868" /><path d="m3.6 21.5 7.4-6.5 3.7 3-11.1 3.5Z" fill="#ea4335" /></>,
     apple: <path d="M16.8 12.7c0-2.5 2-3.7 2.1-3.8a4.5 4.5 0 0 0-3.5-1.9c-1.5-.2-2.9.9-3.6.9-.7 0-1.8-.9-3-.9a4.5 4.5 0 0 0-3.8 2.3c-1.6 2.8-.4 7 1.1 9.3.8 1.1 1.6 2.4 2.8 2.3 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.2 2.7-2.3.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.1-.8-2.1-3.2ZM14.5 5.5c.6-.7 1-1.7.9-2.7-.9 0-1.9.6-2.5 1.2-.5.6-1 1.6-.9 2.5.9.1 1.9-.4 2.5-1Z" fill="currentColor" />,
     instagram: <><rect x="3" y="3" width="18" height="18" rx="5" fill="none" {...common} /><circle cx="12" cy="12" r="4.2" fill="none" {...common} /><circle cx="17.4" cy="6.7" r="1" fill="currentColor" /></>,

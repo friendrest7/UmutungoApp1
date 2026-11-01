@@ -102,7 +102,7 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
 
   const reset = () => { setMethod('choose'); setEmail(''); setPassword(''); setPhone(''); setCode(''); setError(''); setNotice(''); setBusy(false); };
   const close = () => { if (!busy) { reset(); onClose(); } };
-  const registrationRole = role === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : role === 'Tenant' ? 'Client' : role === 'Admin' ? undefined : role;
+  const registrationRole = role === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : role === 'Admin' ? undefined : role;
   const registrationHref = registrationRole ? `/register?role=${encodeURIComponent(registrationRole)}` : '/register';
   const complete = (accountRole: AuthRole, testingAccount = false, accountName?: string) => { window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: accountRole, testingAccount, testingFirstName: accountName?.trim().split(/\s+/)[0] || 'Umutungo', signedInAt: new Date().toISOString() })); reset(); onSuccess(accountRole); };
   const submitEmail = async (event: FormEvent<HTMLFormElement>) => {

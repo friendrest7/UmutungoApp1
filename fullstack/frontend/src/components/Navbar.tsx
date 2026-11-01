@@ -21,6 +21,13 @@ type NavbarProps = {
 };
 
 const authRoles = ['Client', 'Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Property Owner', 'Admin'];
+const joinOptions: Array<{ label: AuthRole; registerAs: string; description: string; icon: IconName }> = [
+  { label: 'Client', registerAs: 'Client', description: 'Explore and compare properties.', icon: 'search' },
+  { label: 'Tenant', registerAs: 'Tenant', description: 'Find a place to rent and manage applications.', icon: 'home' },
+  { label: 'Landlord', registerAs: 'Landlord', description: 'Manage rental properties and tenants.', icon: 'home' },
+  { label: 'Commissioner / Komisiyoneri', registerAs: 'Komisiyoneri', description: 'Help clients find and manage property.', icon: 'users' },
+  { label: 'Property Owner', registerAs: 'Property Owner', description: 'Share property you own for sale or rent.', icon: 'building' },
+];
 const languages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];
 const languageCodes: Record<Language, string> = { English: 'EN', French: 'FR', Kinyarwanda: 'RW', Swahili: 'SW' };
 const dashboardPaths: Record<AuthRole, string> = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner', Admin: '/admin' };
@@ -117,6 +124,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [roleKey, setRoleKey] = useState('');
   const [authOpen, setAuthOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [getStartedOpen, setGetStartedOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const mobileAccountMenuRef = useRef<HTMLDivElement>(null);
   const [pendingRole, setPendingRole] = useState<AuthRole | undefined>();
@@ -279,13 +287,13 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   }, [onLandingVisibilityChange]);
 
   useEffect(() => {
-    if (!accountMenuOpen) return;
-    const closeOnOutsideClick = (event: MouseEvent) => { const target = event.target as Node; if (!accountMenuRef.current?.contains(target) && !mobileAccountMenuRef.current?.contains(target)) setAccountMenuOpen(false); };
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setAccountMenuOpen(false); };
+    if (!accountMenuOpen && !getStartedOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => { const target = event.target as Node; if (!accountMenuRef.current?.contains(target) && !mobileAccountMenuRef.current?.contains(target)) { setAccountMenuOpen(false); setGetStartedOpen(false); } };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setAccountMenuOpen(false); setGetStartedOpen(false); } };
     document.addEventListener('mousedown', closeOnOutsideClick);
     document.addEventListener('keydown', closeOnEscape);
     return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
-  }, [accountMenuOpen]);
+  }, [accountMenuOpen, getStartedOpen]);
 
   const showSignInModal = (requestedRole?: AuthRole, returnTo?: string) => {
     setPendingRole(requestedRole);
@@ -296,6 +304,18 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const openSignIn = (requestedRole?: AuthRole, returnTo?: string) => {
     showSignInModal(requestedRole ?? 'Client', returnTo);
   };
+
+  const chooseJoinRole = (registerAs: string) => {
+    setGetStartedOpen(false);
+    setMobileOpen(false);
+    router.push(`/register?role=${encodeURIComponent(registerAs)}`);
+  };
+
+  const getStartedPanel = <div className="get-started-panel" role="dialog" aria-label="Choose an account type">
+    <div className="get-started-panel-heading"><span>GET STARTED</span><strong>Choose your account</strong></div>
+    <div className="get-started-options">{joinOptions.map((option) => <button className="get-started-option" type="button" key={option.label} onClick={() => chooseJoinRole(option.registerAs)}><span className="get-started-option-icon"><Icon name={option.icon} size={17} /></span><span><strong>Join as {option.label === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : option.label}</strong><small>{option.description}</small></span><Icon name="arrow" size={14} /></button>)}</div>
+    <div className="get-started-signin">Already have an account? <button type="button" onClick={() => { setGetStartedOpen(false); openSignIn('Client'); }}>Sign in</button></div>
+  </div>;
 
   useEffect(() => {
     const requestSignIn = (event: Event) => {
@@ -427,8 +447,9 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
            <div className="nav-notifications-wrap"><button className="nav-notifications" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationPanelOpen} onClick={() => setNotificationPanelOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>{notificationPanelOpen && <NotificationsPanel language={language} items={notifications} onSelect={openNotification} />}</div>
           <div className="nav-utility-group" aria-label="Site preferences"><Dropdown label={languageCodes[language]} items={languages} active={language} onSelect={(value) => onLanguageChange(value as Language)} icon="globe" /><ThemeToggle darkMode={darkMode} onToggle={onToggleTheme} language={language} /></div>
           <div className="account-menu-wrap" ref={accountMenuRef}>
-            <button className={`nav-sign-in ${signedIn ? 'nav-account' : ''}`} type="button" title={t(language, signedIn ? 'Account' : 'Sign in')} aria-label={t(language, signedIn ? 'Account' : 'Sign in')} aria-expanded={signedIn ? accountMenuOpen : undefined} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => (onSignIn ? onSignIn() : openSignIn())}>{signedIn && <Icon name="user" size={16} />}{t(language, signedIn ? 'Account' : 'Sign in')}{signedIn && <Icon name="chevron" size={12} />}</button>
+            <button className={`nav-sign-in ${signedIn ? 'nav-account' : ''}`} type="button" title={t(language, signedIn ? 'Account' : 'Get started')} aria-label={t(language, signedIn ? 'Account' : 'Get started')} aria-haspopup={signedIn ? undefined : 'dialog'} aria-expanded={signedIn ? accountMenuOpen : getStartedOpen} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>{signedIn && <Icon name="user" size={16} />}{t(language, signedIn ? 'Account' : 'Get started')}{signedIn && <Icon name="chevron" size={12} />}</button>
             {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} />}
+            {!signedIn && getStartedOpen && getStartedPanel}
           </div>
           <span className="mobile-post-action">{postAction}</span>
           <button className="mobile-menu-button" type="button" aria-expanded={mobileOpen} aria-controls="mobile-menu" aria-label={mobileOpen ? 'Close menu' : 'Open menu'} onClick={() => setMobileOpen(!mobileOpen)}><Icon name={mobileOpen ? 'x' : 'menu'} size={22} /></button>
@@ -447,8 +468,9 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <a className="mobile-menu-link" href="/about" onClick={() => setMobileOpen(false)}>{t(language, 'About us')}</a>
         <a className="mobile-menu-link mobile-contact-link" href="/#contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>
-          <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-expanded={signedIn ? accountMenuOpen : undefined} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setMobileOpen(false); onSignIn ? onSignIn() : openSignIn(); }}>{t(language, signedIn ? 'Account' : 'Sign in')}<Icon name={signedIn && accountMenuOpen ? 'chevron' : 'user'} size={15} /></button>
+          <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-haspopup={signedIn ? undefined : 'dialog'} aria-expanded={signedIn ? accountMenuOpen : getStartedOpen} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>{t(language, signedIn ? 'Account' : 'Get started')}<Icon name={signedIn && accountMenuOpen ? 'chevron' : signedIn ? 'user' : 'chevron'} size={15} /></button>
           {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} showSettings={false} />}
+          {!signedIn && getStartedOpen && getStartedPanel}
         </div>
       </div>}
     </header>

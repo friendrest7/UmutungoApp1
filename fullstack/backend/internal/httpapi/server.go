@@ -3582,15 +3582,15 @@ func (s *Server) subscriptionLevel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.cfg.AppEnv == "development" {
-		demoPremiumAccounts := map[string]bool{
-			"tenant@umutungo.test":       true,
-			"client@umutungo.test":       true,
-			"commissioner@umutungo.test": true,
-			"landlord@umutungo.test":     true,
-			"owner@umutungo.test":        true,
+		demoPremiumAccounts := map[string]string{
+			"tenant@umutungo.test":       "platinum",
+			"client@umutungo.test":       "platinum",
+			"commissioner@umutungo.test": "silver",
+			"landlord@umutungo.test":     "silver",
+			"owner@umutungo.test":        "silver",
 		}
-		if demoPremiumAccounts[strings.ToLower(strings.TrimSpace(user.Email))] {
-			writeJSON(w, http.StatusOK, map[string]any{"tier": "platinum", "status": "active"})
+		if tier, ok := demoPremiumAccounts[strings.ToLower(strings.TrimSpace(user.Email))]; ok {
+			writeJSON(w, http.StatusOK, map[string]any{"tier": tier, "status": "active"})
 			return
 		}
 	}

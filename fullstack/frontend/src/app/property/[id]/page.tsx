@@ -223,7 +223,7 @@ export default function PropertyDetailPage() {
             </div>}
             <div className="property-detail-meta"><span className="property-detail-listed">{property.listed}</span><span className="property-detail-availability">{property.availableFor === 'rent' ? 'Available to rent' : property.availableFor === 'both' ? 'Available to buy or rent' : 'Available to buy'}</span></div>
             <div className="property-detail-after-negotiability">
-            {property.poster && <div className="property-detail-meta"><span>Advertiser: {property.poster.businessName || property.poster.name} ({property.poster.role}){property.poster.verified ? ' · Verified' : ''}</span></div>}
+            {property.poster && <div className="property-detail-meta"><span>Advertiser: {property.poster.businessName || property.poster.name} ({property.poster.role})</span></div>}
             <article className="property-detail-about property-detail-description"><span className="property-detail-section-label">Description</span><p>{property.description?.trim() || 'Contact the property owner for more information about this listing.'}</p></article>
             {supports3DView && <section className="viewer-tour-feedback property-detail-feedback property-detail-feedback-desktop" aria-labelledby="property-tour-feedback-title">
               <div><strong id="property-tour-feedback-title">Are you satisfied with the 3D view to continue checkout?</strong><span>Choose what you would like to do next.</span></div>

@@ -94,6 +94,14 @@ const workspaceTranslations: Record<Language, Record<string, string>> = {
 };
 for (const language of ['en', 'fr', 'rw', 'sw'] as const) Object.assign(translations[language], workspaceTranslations[language]);
 
+const ownerSessionTranslations: Record<Language, Record<string, string>> = {
+  en: { 'Sign in to manage your properties and rent.': 'Sign in to manage your properties and rent.', 'Your session has expired. Sign in again to continue.': 'Your session has expired. Sign in again to continue.', 'Checking your account…': 'Checking your account…', 'Sign in to continue': 'Sign in to continue' },
+  fr: { 'Sign in to manage your properties and rent.': 'Connectez-vous pour gérer vos biens et vos loyers.', 'Your session has expired. Sign in again to continue.': 'Votre session a expiré. Reconnectez-vous pour continuer.', 'Checking your account…': 'Vérification de votre compte…', 'Sign in to continue': 'Connectez-vous pour continuer' },
+  rw: { 'Sign in to manage your properties and rent.': 'Injira ucunge imitungo yawe n’ubukode.', 'Your session has expired. Sign in again to continue.': 'Igihe wari winjiriye cyarangiye. Ongera winjire ukomeze.', 'Checking your account…': 'Turimo kugenzura konti yawe…', 'Sign in to continue': 'Injira ukomeze' },
+  sw: { 'Sign in to manage your properties and rent.': 'Ingia ili kusimamia mali na kodi zako.', 'Your session has expired. Sign in again to continue.': 'Kipindi chako cha kuingia kimeisha. Ingia tena ili kuendelea.', 'Checking your account…': 'Tunaangalia akaunti yako…', 'Sign in to continue': 'Ingia ili uendelee' },
+};
+for (const language of ['en', 'fr', 'rw', 'sw'] as const) Object.assign(translations[language], ownerSessionTranslations[language]);
+
 const directionsTranslations: Record<Language, Record<string, string>> = {
   en: { 'View route and travel time': 'View route and travel time', 'Directions from your current location to': 'Directions from your current location to', 'Google Maps will show the route and estimated travel time.': 'Google Maps will show the route and estimated travel time.' },
   fr: { 'View route and travel time': 'Voir l’itinéraire et le temps de trajet', 'Directions from your current location to': 'Itinéraire depuis votre position actuelle vers', 'Google Maps will show the route and estimated travel time.': 'Google Maps affichera l’itinéraire et le temps de trajet estimé.' },

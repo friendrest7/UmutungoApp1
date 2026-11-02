@@ -12,16 +12,21 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const isOwner = user?.role === 'property_owner';
+  const ownerRoute = pathname.includes('/owner-');
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
-  const isOwner = user?.role === 'property_owner';
+  useEffect(() => {
+    if (authLoading || !ownerRoute || isOwner) return;
+    router.replace((user ? '/(tabs)/dashboard' : '/auth/sign-in') as never);
+  }, [authLoading, isOwner, ownerRoute, router, user]);
   return <><Tabs screenOptions={{ headerShown: false, tabBarHideOnKeyboard: true, tabBarActiveTintColor: colors.green, tabBarInactiveTintColor: colors.muted, tabBarStyle: { height: 60 + insets.bottom, paddingBottom: Math.max(8, insets.bottom), paddingTop: 8, borderTopColor: colors.line, backgroundColor: colors.paper }, tabBarLabelStyle: { fontFamily: 'LexendBold', fontSize: 11, fontWeight: '700' }}}>
     {isOwner ? <>
       <Tabs.Screen name="owner-home" options={{ title: 'Home', tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} /> }} />

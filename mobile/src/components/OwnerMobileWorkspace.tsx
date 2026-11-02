@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
-import { createOwnerWorkspaceRecord, getOwnerWorkspace, listApplications, OwnerWorkspace } from '@/api/client';
+import { ApiError, createOwnerWorkspaceRecord, getOwnerWorkspace, listApplications, OwnerWorkspace } from '@/api/client';
+import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/theme/ThemeContext';
 import { useRouter } from 'expo-router';
 import type { ApiApplication } from '@/api/types';
@@ -12,21 +13,22 @@ const money=(value:number)=>`RWF ${Math.round(value).toLocaleString('en-RW')}`;
 const todayKigali=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Kigali',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 
 export function OwnerMobileWorkspace({ tab }: {tab:OwnerTab}) {
-  const {colors,styles}=useTheme(); const router=useRouter(); const [data,setData]=useState<OwnerWorkspace|null>(null); const [applications,setApplications]=useState<ApiApplication[]>([]); const [busy,setBusy]=useState(true); const [error,setError]=useState('');
+  const {colors,styles}=useTheme(); const router=useRouter(); const {user,loading:authLoading,signOut}=useAuth(); const [data,setData]=useState<OwnerWorkspace|null>(null); const [applications,setApplications]=useState<ApiApplication[]>([]); const [busy,setBusy]=useState(true); const [error,setError]=useState(''); const [sessionExpired,setSessionExpired]=useState(false);
   const [dialog,setDialog]=useState<'property'|'charge'|'payment'|'maintenance'|''>(''); const [saving,setSaving]=useState(false); const [message,setMessage]=useState('');
   const [property,setProperty]=useState({name:'',province:'City of Kigali',district:'Gasabo',sector:'Kacyiru',unit:'',monthly_rent:''});
   const [charge,setCharge]=useState({unit_id:'',tenant_name:'',tenant_phone:'+250',amount_due:'',due_date:todayKigali()});
   const [payment,setPayment]=useState({charge_id:'',amount:'',method:'cash',reference:'',idempotency_key:''});
   const [repair,setRepair]=useState({unit_id:'',description:'',priority:'normal'});
-  const load=useCallback(async()=>{setError('');try{setData(await getOwnerWorkspace());}catch(cause){setError(cause instanceof Error?cause.message:'Could not load owner workspace.');}finally{setBusy(false);}},[]);
-  useEffect(()=>{let active=true;void Promise.resolve().then(()=>{if(!active)return;void load();if(tab==='inbox')void listApplications().then(result=>{if(active)setApplications(result.items);}).catch(cause=>{if(active)setError(cause instanceof Error?cause.message:'Could not load owner enquiries.');});});return()=>{active=false;};},[load,tab]);
+  const load=useCallback(async()=>{if(authLoading)return;if(!user){setData(null);setError('Sign in to manage your properties and rent.');setSessionExpired(true);setBusy(false);return;}setError('');setSessionExpired(false);try{setData(await getOwnerWorkspace());}catch(cause){if(cause instanceof ApiError&&cause.status===401){setError('Your session has expired. Sign in again to continue.');setSessionExpired(true);}else setError(cause instanceof Error?cause.message:'Could not load owner workspace.');}finally{setBusy(false);}},[authLoading,user]);
+  useEffect(()=>{let active=true;void Promise.resolve().then(()=>{if(!active)return;void load();if(tab==='inbox'&&user)void listApplications().then(result=>{if(active)setApplications(result.items);}).catch(cause=>{if(active){if(cause instanceof ApiError&&cause.status===401){setError('Your session has expired. Sign in again to continue.');setSessionExpired(true);}else setError(cause instanceof Error?cause.message:'Could not load owner enquiries.');}});});return()=>{active=false;};},[load,tab,user]);
   const submit=async()=>{if(!dialog)return;setSaving(true);setError('');try{const action=dialog;const payload=dialog==='property'?{...property,monthly_rent:Number(property.monthly_rent)||0}:dialog==='charge'?{...charge,amount_due:Number(charge.amount_due)}:dialog==='maintenance'?repair:{...payment,amount:Number(payment.amount)};await createOwnerWorkspaceRecord(action,payload);setDialog('');setMessage(dialog==='payment'?'Payment recorded. This does not collect money through a provider.':'Saved successfully.');await load();}catch(cause){setError(cause instanceof Error?cause.message:'Could not save your changes.');}finally{setSaving(false);}};
   const openPayment=(chargeId:string,balance:number)=>{setPayment({charge_id:chargeId,amount:String(balance),method:'cash',reference:'',idempotency_key:`mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`});setDialog('payment');};
   const field=(label:string,value:string,onChangeText:(value:string)=>void,keyboardType:'default'|'phone-pad'|'number-pad'='default')=><View style={{gap:5}}><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} keyboardType={keyboardType} style={[styles.input,{minHeight:46}]} /></View>;
   const header=tab==='home'?'Your portfolio':tab==='properties'?'Properties & units':tab==='rent'?'Rent & payments':tab==='inbox'?'Inbox':'More';
   return <><ScrollView style={styles.screen} contentContainerStyle={[styles.safeContent,{gap:12}]} refreshControl={<RefreshControl refreshing={busy} onRefresh={()=>{setBusy(true);void load();}}/>}>
     <Text style={styles.brand}>UMUTUNGO · OWNER</Text><Text style={styles.title}>{header}</Text>
-    {error?<View style={[styles.card,{gap:10}]}><Text style={styles.error}>{error}</Text><Pressable style={styles.secondaryButton} onPress={()=>{setBusy(true);void load();}}><Text style={styles.secondaryText}>Try again</Text></Pressable></View>:null}
+    {authLoading?<View style={styles.card}><Text style={styles.muted}>Checking your account…</Text></View>:null}
+    {error?<View style={[styles.card,{gap:10}]}><Text style={styles.error}>{error}</Text><Pressable style={sessionExpired?styles.button:styles.secondaryButton} onPress={()=>{if(sessionExpired){void signOut().finally(()=>router.replace('/auth/sign-in'));return;}setBusy(true);void load();}}><Text style={sessionExpired?styles.buttonText:styles.secondaryText}>{sessionExpired?'Sign in to continue':'Try again'}</Text></Pressable></View>:null}
     {message?<Pressable onPress={()=>setMessage('')} style={[styles.card,{borderColor:colors.green}]}><Text style={styles.body}>{message}</Text></Pressable>:null}
     {!error&&data&&tab==='home'&&<>
       <View style={[styles.card,{backgroundColor:colors.greenDark,gap:8}]}><Text style={{color:'#DCECE3',fontSize:12}}>Monthly collection · {data.month}</Text><Text style={{color:'#FFFFFF',fontSize:25,fontWeight:'800'}}>{money(data.summary.collected)}</Text><Text style={{color:'#DCECE3',fontSize:12}}>{money(data.summary.expected)} expected · {money(data.summary.balance)} outstanding</Text><Pressable accessibilityRole="button" style={[styles.button,{minHeight:48,marginTop:5,backgroundColor:'#00BD66'}]} onPress={()=>{const item=data.rent.find(row=>row.balance>0);if(item)openPayment(item.id,item.balance);else setMessage('No unpaid rent charges are available to record against.');}}><Text style={[styles.buttonText,{color:'#092318'}]}>＋ Record payment</Text></Pressable></View>

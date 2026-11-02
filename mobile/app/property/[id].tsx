@@ -12,6 +12,7 @@ import { formatPrice, listingLocation } from '@/components/PropertyCard';
 import { useI18n } from '@/i18n';
 import MomoQrScanner from '@/components/MomoQrScanner';
 import * as Crypto from 'expo-crypto';
+import { resolveMediaUrl } from '@/api/media';
 
 export default function PropertyDetailScreen() {
   const { colors, styles } = useTheme();
@@ -69,7 +70,7 @@ export default function PropertyDetailScreen() {
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
-  const photos = useMemo(() => listing?.media?.filter((item) => item.type === 'photo' && item.url) ?? [], [listing]);
+  const photos = useMemo(() => listing?.media?.filter((item) => (item.type ?? 'photo') === 'photo' && item.url).map((item) => ({ ...item, url: resolveMediaUrl(item.url) })) ?? [], [listing]);
   const galleryWidth = Math.max(260, Math.min(width - 40, 520));
   const stayNights = checkIn && checkOut ? Math.max(0, Math.round((Date.parse(`${checkOut}T00:00:00`) - Date.parse(`${checkIn}T00:00:00`)) / 86400000)) : 0;
   const chargeUnits = bookingPeriod === 'daily' ? stayNights : Math.ceil(stayNights / 30);
@@ -205,7 +206,7 @@ export default function PropertyDetailScreen() {
       </View>
       {!!(listing.amenities?.length || listing.tags?.length) && <View style={{ gap: 4, paddingTop: 4 }}><Text style={styles.label}>Features and accessibility</Text><Text style={styles.body}>{[...(listing.amenities ?? []), ...(listing.tags ?? [])].join(' · ')}</Text></View>}
     </View>
-    {isHouse && listing.media?.some((item) => item.type === 'tour_3d' && item.url) && <Pressable style={styles.secondaryButton} onPress={() => { const tour = listing.media?.find((item) => item.type === 'tour_3d' && item.url); if (tour?.url) void Linking.openURL(tour.url); }}><Text style={styles.secondaryText}>Open 3D property tour</Text></Pressable>}
+    {isHouse && listing.media?.some((item) => item.type === 'tour_3d' && item.url) && <Pressable style={styles.secondaryButton} onPress={() => { const tour = listing.media?.find((item) => item.type === 'tour_3d' && item.url); if (tour?.url) void Linking.openURL(resolveMediaUrl(tour.url)); }}><Text style={styles.secondaryText}>Open 3D property tour</Text></Pressable>}
     {(listing.transaction_type === 'sell' || listing.transaction_type === 'rent_out') && user?.id !== listing.owner.id && <View style={[styles.card, { gap: 10 }]}><Text style={styles.heading}>Pay with MTN MoMo</Text><Text style={styles.body}>Amount: {formatPrice(listing)}. The server uses the published listing price.</Text><View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><TextInput style={[styles.input, { flex: 1 }]} value={paymentPhone} onChangeText={setPaymentPhone} placeholder="MTN Rwanda number (e.g. 078...)" placeholderTextColor={colors.muted} keyboardType="phone-pad" autoComplete="tel" /><Pressable style={[styles.secondaryButton, { paddingHorizontal: 12 }]} onPress={() => setShowMomoScanner(true)}><Text style={styles.secondaryText}>Scan QR</Text></Pressable></View><Pressable style={styles.button} disabled={busy} onPress={() => void payWithMomo()}><Text style={styles.buttonText}>{busy ? 'Waiting for MTN…' : 'Request MoMo payment'}</Text></Pressable>{paymentNotice && <Text style={{ color: colors.greenDark, fontWeight: '700' }}>{paymentNotice}</Text>}{paymentError && <Text style={styles.error}>{paymentError}</Text>}</View>}
     <Pressable style={saved ? styles.secondaryButton : styles.button} disabled={busy} onPress={() => void toggleSaved()}><Text style={saved ? styles.secondaryText : styles.buttonText}>{saved ? t('Remove from saved') : t('Save property')}</Text></Pressable>
     <View style={[styles.card, { gap: 10 }]}><Text style={styles.heading}>{t('Contact owner')}: {listing.owner.name}</Text><Text style={styles.body}>{t('Send a message to the property owner.')}</Text><TextInput style={[styles.input, { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 }]} value={message} onChangeText={setMessage} placeholder={t('Ask about availability, viewing times, or terms')} placeholderTextColor={colors.muted} multiline /><Pressable style={styles.button} disabled={busy || !message.trim()} onPress={() => void send()}><Text style={styles.buttonText}>{t('Send message')}</Text></Pressable>{messageNotice && <Text style={{ color: colors.greenDark, fontWeight: '700' }}>{messageNotice}</Text>}{messageError && <Text style={styles.error}>{messageError}</Text>}<Pressable onPress={() => router.push({ pathname: '/messages', params: { listing_id: listing.id, recipient_id: listing.owner.id, title: listing.owner.name } })}><Text style={{ color: colors.green, fontWeight: '800' }}>Open inbox</Text></Pressable></View>

@@ -1769,7 +1769,8 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 	var price float64
 	var latitude, longitude *float64
 	var tags, amenities []byte
-	var createdAt, expiresAt time.Time
+	var createdAt time.Time
+	var expiresAt *time.Time
 	var publishAt *time.Time
 	var ownerVerifiedAt *time.Time
 	var measurements []byte

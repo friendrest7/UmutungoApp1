@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { useTheme } from '@/theme/ThemeContext';
+import { resolveMediaUrl } from '@/api/media';
 import { useRouter } from 'expo-router';
 import { useI18n } from '@/i18n';
 
@@ -44,7 +45,7 @@ export default function ChatScreen() {
     <View style={{ padding: 18, paddingBottom: 10 }}><Text style={styles.brand}>UMUTUNGO ASSISTANT</Text><Text style={styles.title}>Tell me what you need</Text><Text style={styles.muted}>The assistant uses live listing and professional directory results where available.</Text></View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, gap: 10 }} keyboardShouldPersistTaps="handled">
       {messages.map((message, index) => <View key={`${index}-${message.role}`} style={[styles.card, { alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '92%', backgroundColor: message.role === 'user' ? colors.greenSoft : colors.paper }]}><Text style={styles.body}>{message.content}</Text>{message.listings?.map((listing) => {
-        const photo = listing.images?.[0] ?? listing.media?.find((media) => !media.type?.toLowerCase().includes('video'))?.url;
+        const photo = resolveMediaUrl(listing.images?.[0] ?? listing.media?.find((media) => !media.type?.toLowerCase().includes('video'))?.url);
         const location = [listing.sector, listing.district, listing.province].filter(Boolean).join(' · ');
         return <Pressable key={listing.id} onPress={() => router.push({ pathname: '/property/[id]', params: { id: listing.id } })} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 9, padding: 8, borderRadius: 12, backgroundColor: colors.canvas }}>
           <Image source={photo ? { uri: photo } : require('../assets/placeholder-property.jpg')} style={{ width: 74, height: 68, borderRadius: 9, backgroundColor: colors.greenSoft }} resizeMode="cover" />

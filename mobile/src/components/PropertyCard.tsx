@@ -10,6 +10,7 @@ import { listFavorites, removeFavorite, saveFavorite } from '../api/client';
 import type { ApiListing } from '../api/types';
 import { useTheme } from '../theme/ThemeContext';
 import { useI18n } from '../i18n';
+import { resolveMediaUrl } from '../api/media';
 
 const fallback = require('../../assets/placeholder-property.jpg');
 const listingPhotoFallbacks: Record<string, number> = {
@@ -47,9 +48,9 @@ export function PropertyCard({ listing, onPress, cardWidth }: { listing: ApiList
     return () => { active = false; };
   }, [listing.id, user]);
   const photos = [...new Set([
-    ...(listing.media ?? []).filter((item) => item.url && !item.type.toLowerCase().includes('video') && !item.type.toLowerCase().includes('tour')).map((item) => item.url),
-    ...(listing.images ?? []).filter(Boolean),
-  ])];
+    ...(listing.media ?? []).filter((item) => item.url && !(item.type ?? 'photo').toLowerCase().includes('video') && !(item.type ?? 'photo').toLowerCase().includes('tour')).map((item) => resolveMediaUrl(item.url)),
+    ...(listing.images ?? []).map(resolveMediaUrl),
+  ].filter(Boolean))];
   const cardFallback = listingPhotoFallbacks[listing.id] ? listingPhotoFallbacks[listing.id] : fallback;
   const imageWidth = cardWidth || Math.min(screenWidth - 40, 720);
   const imageHeight = Math.min(250, Math.max(190, imageWidth * 0.58));

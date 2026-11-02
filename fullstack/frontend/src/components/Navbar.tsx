@@ -117,6 +117,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const [viewMoreOpen, setViewMoreOpen] = useState(false);
   const categoryMenuRootRef = useRef<HTMLElement>(null);
   const categoryMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -134,13 +135,14 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [notifications, setNotifications] = useState<NavNotification[]>([]);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   useEffect(() => {
-    if (!categoryMenuOpen) return;
+    if (!categoryMenuOpen && !viewMoreOpen) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!categoryMenuRootRef.current?.contains(event.target as Node)) setCategoryMenuOpen(false);
+      if (!categoryMenuRootRef.current?.contains(event.target as Node)) { setCategoryMenuOpen(false); setViewMoreOpen(false); }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       setCategoryMenuOpen(false);
+      setViewMoreOpen(false);
       categoryMenuTriggerRef.current?.focus();
     };
     document.addEventListener('pointerdown', closeOnOutsidePointer);
@@ -149,7 +151,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
       document.removeEventListener('pointerdown', closeOnOutsidePointer);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, [categoryMenuOpen]);
+  }, [categoryMenuOpen, viewMoreOpen]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
   const favoritesRef = useRef<HTMLDivElement>(null);
@@ -420,12 +422,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     <aside className={`site-header ${scrolled ? 'is-scrolled' : ''} ${landingVisible ? '' : 'is-hidden'}`}>
       <div className="sidebar-shell"><nav className="sidebar-nav" aria-label="Property navigation">
         <a className="sidebar-nav-link sidebar-home-link" href="/"><Icon name="home" size={17} /><span>{t(language, 'Home')}</span></a>
-        <a className="sidebar-nav-link sidebar-market-link" href="/categories/houses?intent=Rent"><Icon name="home" size={17} /><span>{t(language, 'Rent')}</span></a>
-        <a className="sidebar-nav-link sidebar-market-link" href="/categories/houses?intent=Buy"><Icon name="building" size={17} /><span>{t(language, 'Buy')}</span></a>
-        <a className="sidebar-nav-link sidebar-market-link" href="/categories/commercial"><Icon name="building" size={17} /><span>{t(language, 'Commercial')}</span></a>
-        <HoverHint text={t(language, 'View your saved properties.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} onClick={openFavorites}><Icon name="heart" size={17} /><span>{t(language, 'Favorites')}</span></button></HoverHint>
-        <HoverHint text={t(language, 'Check your latest updates.')} placement="right"><button className="sidebar-nav-link sidebar-icon-action notification-action" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')}><Icon name="bell" size={17} /><span>{t(language, 'Notifications')}</span><b>0</b></button></HoverHint>
-       </nav>{signedIn && <div className="sidebar-account"><HoverHint text={t(language, 'Access your Umutungo account.')} placement="right"><button className="sidebar-nav-link sidebar-account-link" type="button" title={t(language, 'Log out')} aria-label={t(language, 'Log out')} onClick={signOut}><Icon name="user" size={17} /><span>{t(language, 'Log out')}</span></button></HoverHint></div>}</div>
+       </nav></div>
     </aside>
 
     <header className={`topbar ${scrolled ? 'is-scrolled' : ''}`} ref={categoryMenuRootRef}>
@@ -435,10 +432,9 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         </div>
         <nav className="desktop-nav" aria-label="Primary navigation">
           <a className="nav-link topbar-home-link" href="/"><span>{t(language, 'Home')}</span></a>
+          <button className={`nav-link nav-view-more-trigger ${viewMoreOpen ? 'is-open' : ''}`} type="button" aria-expanded={viewMoreOpen} aria-controls="nav-view-more-panel" onClick={() => { setCategoryMenuOpen(false); setViewMoreOpen((open) => !open); }}><span>{t(language, 'View more')}</span><Icon name="chevron" size={13} /></button>
+          {!signedIn && <><a className="nav-join-role" href="/register?role=Komisiyoneri">For Komisiyoneri</a><a className="nav-join-role" href="/register?role=Property%20Owner">For Property Owners</a><a className="nav-join-role" href="/register?role=Landlord">For Landlords</a></>}
           {signedIn && dashboardPath && <a className="nav-dashboard-link" href={dashboardPath} onClick={() => setMobileOpen(false)}>{t(language, 'Dashboard')}</a>}
-          <button className={`nav-link nav-category-trigger ${categoryMenuOpen ? 'is-open' : ''}`} type="button" ref={categoryMenuTriggerRef} aria-haspopup="true" aria-expanded={categoryMenuOpen} aria-controls="nav-category-panel" onClick={() => setCategoryMenuOpen((open) => !open)}><span>{t(language, 'Categories')}</span><Icon name="chevron" size={13} /></button>
-          <a className="nav-link" href="/about"><span>{t(language, 'About us')}</span></a>
-          <a className="nav-contact-link" href="/#contact">{t(language, 'Contact us')}</a>
         </nav>
 
         <div className="nav-actions">
@@ -456,6 +452,16 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         </div>
       </div>
 
+      {viewMoreOpen && <nav className="nav-view-more-panel" id="nav-view-more-panel" aria-label={t(language, 'More navigation')}>
+        <a href="/categories/houses?intent=Rent" onClick={() => setViewMoreOpen(false)}><Icon name="home" size={14} /><span>{t(language, 'Rent')}</span></a>
+        <a href="/categories/houses?intent=Buy" onClick={() => setViewMoreOpen(false)}><Icon name="building" size={14} /><span>{t(language, 'Buy')}</span></a>
+        <a href="/categories/commercial" onClick={() => setViewMoreOpen(false)}><Icon name="building" size={14} /><span>{t(language, 'Commercial')}</span></a>
+        <button type="button" onClick={() => { setViewMoreOpen(false); setCategoryMenuOpen(true); }}><Icon name="building" size={14} /><span>{t(language, 'Categories')}</span></button>
+        <a href="/about" onClick={() => setViewMoreOpen(false)}><Icon name="sparkles" size={14} /><span>{t(language, 'About us')}</span></a>
+        <a href="/#contact" onClick={() => setViewMoreOpen(false)}><Icon name="users" size={14} /><span>{t(language, 'Contact us')}</span></a>
+        <button type="button" onClick={() => { setViewMoreOpen(false); setNotificationPanelOpen((open) => !open); }}><Icon name="bell" size={14} /><span>{t(language, 'Notifications')}</span></button>
+      </nav>}
+
       {categoryMenuOpen && <nav className="nav-category-panel" id="nav-category-panel" aria-label={t(language, 'Property categories')}>
         <div className="nav-category-panel-heading"><div><span>UMUTUNGO CATEGORIES</span><strong>What are you looking for?</strong></div><button type="button" aria-label={t(language, 'Close categories')} onClick={() => setCategoryMenuOpen(false)}><Icon name="x" size={17} /></button></div>
         <div className="nav-category-grid">{navCategories.map((category) => <a className="nav-category-item" href={`/categories/${category.slug}`} key={category.slug} onClick={() => { setCategoryMenuOpen(false); setMobileOpen(false); }}><span className="nav-category-icon"><Icon name={category.icon} size={20} /></span><span className="nav-category-copy"><strong>{t(language, category.name)}</strong><small>{category.description}</small></span><Icon name="arrow" size={14} /></a>)}</div>
@@ -465,6 +471,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <a className="mobile-menu-link" href="/" onClick={() => setMobileOpen(false)}>{t(language, 'Home')}<Icon name="home" size={15} /></a>
         {signedIn && dashboardPath && <a className="mobile-menu-link" href={dashboardPath} onClick={() => setMobileOpen(false)}>{t(language, 'Dashboard')}<Icon name="user" size={15} /></a>}
         <button className="mobile-menu-link" type="button" aria-expanded={categoryMenuOpen} aria-controls="nav-category-panel" onClick={() => { setMobileOpen(false); setCategoryMenuOpen((open) => !open); }}>{t(language, 'Categories')}<Icon name={categoryMenuOpen ? 'chevron' : 'arrow'} size={14} /></button>
+        <button className="mobile-menu-link" type="button" aria-expanded={viewMoreOpen} aria-controls="nav-view-more-panel" onClick={() => setViewMoreOpen((open) => !open)}>{t(language, 'View more')}<Icon name={viewMoreOpen ? 'chevron' : 'arrow'} size={14} /></button>
         <a className="mobile-menu-link" href="/about" onClick={() => setMobileOpen(false)}>{t(language, 'About us')}</a>
         <a className="mobile-menu-link mobile-contact-link" href="/#contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>

@@ -10,10 +10,10 @@ npm test
 npm start
 ```
 
-The current installable preview APK is in `results/mobile-builds/Umutungo-android-preview.apk`. To build a replacement (the profile increments Android versionCode automatically):
+The current installable preview APK is in `mobile/results/mobile-builds/Umutungo-android-preview.apk` (EAS build `d5b682c2-2870-44f3-816f-64e44b20a6f0`, version code `45`). To build a replacement (the profile increments Android versionCode automatically):
 
 ```cmd
-npx eas-cli build --platform android --profile preview --wait
+npx eas-cli build --platform android --profile android-apk --wait
 ```
 
 Manual checks:

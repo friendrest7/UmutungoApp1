@@ -556,12 +556,16 @@ body.theme-dark .directory-assistant-help p { color: rgba(245, 247, 250,.72); }
 .registration-header { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 20px clamp(20px, 5vw, 72px); border-bottom: 1px solid rgba(20, 83, 48, .16); background: rgba(255, 255, 255, .72); box-shadow: 0 8px 24px rgba(18, 72, 42, .08); backdrop-filter: blur(14px); }
 .registration-header .brand-logo { width: 118px; height: auto; }
 .registration-shell { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(260px, .8fr) minmax(360px, 1fr); gap: clamp(30px, 8vw, 110px); width: min(1000px, calc(100% - 40px)); margin: 0 auto; padding: clamp(50px, 9vw, 110px) 0; transform: translateY(-1cm); }
-.registration-intro { align-self: flex-start; padding: clamp(28px, 4vw, 44px); border-radius: 18px; background: #00C763; box-shadow: 0 22px 60px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08); }
-.registration-intro .post-eyebrow { display: block; margin-top: -12px; color: #9ed4b6; font-size: clamp(14px, 2vw, 18px); letter-spacing: .08em; }
-.registration-intro h1 { margin: 8px 0 15px; font-family: var(--brand-body); font-size: clamp(16px, 2.7vw, 31px); letter-spacing: -.06em; line-height: .98; }
-.registration-intro h1 { color: #ffffff; }
-.registration-intro h1 em { color: #ffffff; font-style: normal; }
-.registration-intro p { max-width: 390px; color: rgba(255, 255, 255, .76); font-size: 18px; line-height: 1.6; }
+.registration-intro-column { display: grid; align-content: start; gap: 12px; }
+.registration-intro-signin { justify-self: start; margin-left: 8px; }
+.registration-intro-signin { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 10px; padding: 0 17px; border: 1px solid var(--brand-green); border-radius: 999px; background: var(--brand-green); color: #ffffff; font-size: 10px; font-weight: 800; }
+.registration-intro-signin:hover, .registration-intro-signin:focus-visible, .registration-intro-signin:active { border-color: var(--brand-green); background: var(--brand-green); color: #ffffff; }
+.registration-intro { align-self: flex-start; padding: clamp(28px, 4vw, 44px); border: 1px solid rgba(17, 20, 18, .08); border-radius: 18px; background: #ffffff; color: #111412; box-shadow: 0 22px 60px rgba(0, 0, 0, .18); }
+.registration-intro .post-eyebrow { display: block; margin-top: -12px; color: #26734a; font-size: 11px; letter-spacing: .08em; }
+.registration-intro h1 { margin: 8px 0 13px; font-family: var(--brand-body); font-size: clamp(24px, 2.4vw, 29px); letter-spacing: -.05em; line-height: 1.04; }
+.registration-intro h1, .registration-intro h1 em { color: #111412; }
+.registration-intro h1 em { font-style: normal; }
+.registration-intro p { max-width: 390px; color: #58645c; font-size: 14px; line-height: 1.55; }
 .registration-form { display: grid; gap: 14px; padding: clamp(22px, 4vw, 35px); border: 1px solid rgba(255, 255, 255, .72); border-radius: 17px; background: rgba(255, 255, 255, .9); box-shadow: 0 22px 60px rgba(9, 35, 21, .2), inset 0 1px 0 rgba(255, 255, 255, .95); backdrop-filter: blur(18px); }
 .registration-form label { display: grid; gap: 7px; color: var(--ink); font-size: 10px; font-weight: 800; }
 .registration-form input { min-height: 43px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); font: inherit; font-weight: 500; outline: 0; }
@@ -598,12 +602,16 @@ body.theme-dark .directory-assistant-help p { color: rgba(245, 247, 250,.72); }
 .registration-submit { width: 100%; justify-content: center; }
 .registration-signin-link { justify-self: center; padding: 3px 8px; border: 0; background: transparent; color: var(--green-dark); cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; }
 .registration-signin-link:hover, .registration-signin-link:focus-visible { color: var(--ink); text-decoration: underline; outline-offset: 3px; }
+.registration-shell .registration-intro-column > .registration-intro-signin { display: inline-flex; width: calc(100% - 16px); min-height: 40px; align-items: center; justify-content: center; gap: 10px; justify-self: start; margin: 0 8px; padding: 0 17px; border: 1px solid var(--brand-green); border-radius: 999px; background: var(--brand-green); color: #ffffff !important; font-size: 10px; font-weight: 800; text-decoration: none; }
+.registration-shell .registration-intro-column > .registration-intro-signin:is(:hover, :focus-visible, :active) { border-color: var(--brand-green); background: var(--brand-green); color: #ffffff !important; text-decoration: none; }
 @media (max-width: 760px) { .registration-shell { grid-template-columns: 1fr; padding-top: 45px; } .footer-register-link { margin: 0 20px 20px; } }
 .interface-preferences .theme-toggle { color: var(--muted); }
 body.theme-dark .interface-language-select { border-color: rgba(245, 247, 250,.22); background: rgba(21, 25, 31,.72); color: rgba(245, 247, 250,.78); }
 body.theme-dark .interface-language-select select { color: #f5f7fa; }
 body.theme-dark .interface-preferences .theme-toggle { color: rgba(245, 247, 250,.78); }
 body.theme-dark .registration-page { background-color: #0b0d10; background-image: linear-gradient(105deg, rgba(8, 10, 13,.6), rgba(8, 10, 13,.28)), url('/properties/kigali-neighborhood.jpg'); color: #f5f7fa; }
+body.theme-dark .registration-intro { border-color: rgba(255,255,255,.12); background: #111315; color: #f5f7fa; }
+body.theme-dark .registration-intro :is(.post-eyebrow, h1, h1 em, p) { color: #f5f7fa; }
 body.theme-dark .registration-header { border-color: rgba(245, 247, 250,.16); background: rgba(11, 13, 16,.72); }
 body.theme-dark .registration-form { border-color: rgba(245, 247, 250,.18); background: rgba(21, 25, 31,.9); color: #f5f7fa; }
 body.theme-dark .registration-form label, body.theme-dark .registration-form legend { color: #f5f7fa; }
@@ -1218,12 +1226,14 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 .tenant-workspace-heading p { max-width: 500px; margin: 0; color: var(--dashboard-muted); font-size: 11px; line-height: 1.65; }
 .tenant-workspace-icon { display: grid; width: 52px; height: 52px; flex: 0 0 auto; place-items: center; border: 1px solid #a7d6bc; border-radius: 15px; background: linear-gradient(145deg, #e7f7ee, #ccebda); color: #00C763; box-shadow: 0 8px 18px rgba(2, 162, 74,.12); }
 .tenant-workspace-list { display: grid; margin: 24px 0; }
-.tenant-workspace-list article { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 13px; min-height: 74px; border-bottom: 1px solid var(--dashboard-line); }
+.tenant-workspace-list article { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 10px 13px; min-height: 74px; padding: 14px 0; border-bottom: 1px solid var(--dashboard-line); }
 .tenant-workspace-row-icon { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid #b6ddc8; border-radius: 11px; background: #eff9f3; color: #00C763; }
 .tenant-workspace-list article > div { display: grid; gap: 5px; }
 .tenant-workspace-list strong { font-size: 11px; }
 .tenant-workspace-list small { color: var(--dashboard-muted); font-size: 9px; }
 .tenant-workspace-list button, .tenant-overview-panel a { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #00C763; cursor: pointer; font-size: 9px; font-weight: 800; }
+.tenant-workspace-actions { display: flex; grid-column: 2; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tenant-workspace-list .tenant-workspace-actions button { min-height: 34px; padding: 7px 10px; border: 1px solid #c9e4d5; border-radius: 8px; background: #f0f9f4; color: #145b35 !important; }
 .tenant-overview-panel { margin-top: 14px; }
 .tenant-overview-panel > .role-dashboard-panel-heading a { display: inline-flex; align-items: center; gap: 6px; color: #00C763; font-size: 10px; font-weight: 800; }
 .tenant-overview-cards { display: grid; gap: 0; }
@@ -1757,6 +1767,16 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 .property-action-signin-note, .payment-demo-note { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .property-action-signin-note svg, .payment-demo-note svg { flex: 0 0 auto; color: var(--green); }
 .property-action-panel.is-payment-step { width: min(570px, 100%); }
+body.theme-dark .property-action-panel { border-color: #35413a; background: #151a17; color: #f5f7fa; }
+body.theme-dark .property-action-panel :is(h2, p, label, strong, .eyebrow) { color: #f5f7fa; }
+body.theme-dark .property-action-panel :is(.property-action-intro, .property-action-option small, .property-action-signin-note, .payment-demo-note) { color: #c1ccc5; }
+body.theme-dark .property-action-panel .property-action-close { border-color: #46534a; background: #202820; color: #ffffff; }
+body.theme-dark .property-action-panel .property-action-option { border-color: #3a493f; color: #f5f7fa; }
+body.theme-dark .property-action-panel .property-action-option:hover,
+body.theme-dark .property-action-panel .property-action-option.is-selected { border-color: var(--brand-green); background: #183524; }
+body.theme-dark .property-action-panel .property-action-option-icon { background: #24372b; color: #69dfa0; }
+body.theme-dark .property-action-panel :is(input, textarea, select) { border-color: #46534a; background: #202820; color: #ffffff; }
+body.theme-dark .property-action-panel :is(input, textarea, select)::placeholder { color: #a7b3aa; }
 .payment-summary { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 18px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--muted); font-size: 9px; }
 .payment-summary strong { color: var(--ink); font-size: 12px; white-space: nowrap; }
 .payment-summary strong small { color: var(--muted); font-size: 8px; font-weight: 500; }
@@ -2410,6 +2430,14 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 
 .app.theme-dark .role-dashboard { --dashboard-paper: #0b0d10; --dashboard-surface: #15191f; --dashboard-ink: #f5f7fa; --dashboard-muted: rgba(245, 247, 250,.68); --dashboard-line: rgba(245, 247, 250,.15); background: var(--dashboard-paper); color: var(--dashboard-ink); }
 .app.theme-dark .role-dashboard-sidebar, .app.theme-dark .role-dashboard-topbar, .app.theme-dark .role-dashboard-metrics article, .app.theme-dark .role-dashboard-panel, .app.theme-dark .tenant-workspace-section, .app.theme-dark .landlord-properties-section, .app.theme-dark .landlord-property-card { border-color: var(--dashboard-line); background: var(--dashboard-surface); color: var(--dashboard-ink); }
+.app.theme-dark .role-dashboard-metrics small,
+.role-dashboard.dashboard-dark .role-dashboard-metrics small { color: #ffffff !important; }
+.role-dashboard.dashboard-dark .tenant-booking-summary { border-color: #31563f; background: #17271d; color: #f4f8f5; }
+.role-dashboard.dashboard-dark .tenant-booking-summary article { border-color: #31503c; }
+.role-dashboard.dashboard-dark .tenant-booking-summary article strong { color: #f4f8f5; }
+.role-dashboard.dashboard-dark .tenant-booking-summary article small { color: #bdc9c0; }
+.role-dashboard.dashboard-dark .tenant-workspace-actions button { border-color: #42614d; background: #1a3022; color: #f4f8f5 !important; }
+.role-dashboard.dashboard-dark .tenant-workspace-actions button svg { color: #8ce2af !important; }
 .app.theme-dark .role-dashboard-topbar { background: rgba(21, 25, 31,.82); }
 .app.theme-dark .role-dashboard-nav, .app.theme-dark .role-dashboard-sidebar-bottom a, .app.theme-dark .role-dashboard-sidebar-bottom button, .app.theme-dark .role-dashboard-activity article > button { color: var(--dashboard-muted); }
 .app.theme-dark .role-dashboard-nav:hover, .app.theme-dark .role-dashboard-nav.active, .app.theme-dark .role-dashboard-sidebar-bottom a:hover, .app.theme-dark .role-dashboard-sidebar-bottom button:hover { background: rgba(245, 247, 250,.10); color: #f5f7fa; }
@@ -2779,6 +2807,14 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .role-dashboard.dashboard-dark .role-dashboard-eyebrow,
 .role-dashboard.dashboard-dark .role-dashboard-panel small,
 .role-dashboard.dashboard-dark .role-dashboard-metrics small { color: var(--dashboard-muted); }
+.role-dashboard.dashboard-dark .role-dashboard-welcome { padding: 24px 28px; border: 1px solid var(--dashboard-line); border-radius: 14px; background: var(--dashboard-surface) !important; color: var(--dashboard-ink); }
+.role-dashboard.dashboard-dark .role-dashboard-welcome :is(h2, p, .role-dashboard-eyebrow) { color: var(--dashboard-ink) !important; }
+.role-dashboard.dashboard-dark .role-dashboard-metrics em { color: #c7d7cc !important; }
+.role-dashboard.dashboard-dark .tenant-overview-panel a,
+.role-dashboard.dashboard-dark .role-dashboard-panel-heading > button { color: #9ce8b8 !important; }
+.role-dashboard.dashboard-dark .tenant-overview-panel :is(.tenant-overview-row, article) { border-color: var(--dashboard-line); }
+.role-dashboard.dashboard-dark .tenant-overview-panel :is(.tenant-overview-index, .tenant-overview-number) { color: #c7d7cc !important; }
+.role-dashboard.dashboard-dark .tenant-overview-cards .tenant-card-number { color: #9ce8b8 !important; }
 .tenant-message-list { display: grid; gap: 0; margin: 24px 0; }
 .tenant-message-list article { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 13px; min-height: 70px; border-bottom: 1px solid var(--dashboard-line); }
 .tenant-message-list article > div { display: grid; gap: 5px; }

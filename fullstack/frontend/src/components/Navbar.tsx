@@ -334,7 +334,9 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     return () => window.removeEventListener('umutungo:request-sign-in', requestSignIn);
   }, [signedIn]);
 
-  const signOut = () => {
+  const signOut = async () => {
+    const token = window.localStorage.getItem('umutungo-api-token');
+    if (token) { try { await fetch('/api/v1/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch { /* Clear the local credential even if offline. */ } }
     window.localStorage.removeItem('umutungo-demo-user');
     window.localStorage.removeItem('umutungo-api-token');
     ['umutungo-notifications', 'umutungo-landlord-notifications', 'umutungo-commissioner-notifications', 'umutungo-tenant-notifications'].forEach((key) => window.localStorage.removeItem(key));

@@ -61,6 +61,7 @@ export async function verifyOtp(phone: string, code: string) {
 }
 export async function registerAccount(input: { name: string; email: string; phone: string; role: UserRole }) { return request<{ user: ApiUser; message: string; development_code?: string }>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(input) }); }
 export async function getMe() { return request<{ user: ApiUser; profile: ApiProfile }>('/api/v1/me', {}, true); }
+export async function endSession() { try { await request<{ status: string }>('/api/v1/auth/logout', { method: 'POST', body: '{}' }, true); } finally { await clearStoredToken(); } }
 export async function updateProfile(input: { name?: string; email?: string; bio?: string; photo_url?: string; language?: string }) {
   const result = await request<{ user: ApiUser; profile: ApiProfile }>('/api/v1/me', { method: 'PATCH', body: JSON.stringify(input) }, true);
   await cacheSession(result.user, result.profile);
@@ -240,3 +241,16 @@ export async function uploadListingMedia(listingId: string, input: { uri: string
 export async function updateListing(id: string, input: { title?: string; description?: string; price?: number; status?: string }) { return request<{ id: string; status: string }>(`/api/v1/listings/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }, true); }
 export async function deleteListing(id: string) { return request<{ id: string; status: string }>(`/api/v1/listings/${encodeURIComponent(id)}`, { method: 'DELETE' }, true); }
 export async function listOwnerListings() { return request<{ items: ApiListing[]; count: number }>('/api/v1/owner/listings', {}, true); }
+export type OwnerWorkspace = {
+  month: string;
+  summary: { expected: number; collected: number; balance: number; occupied_units: number; total_units: number; active_tenants: number; overdue_count: number };
+  properties: Array<{ id: string; name: string; province: string; district: string; sector: string; unit_count: number; occupied_units: number; units: Array<{ id: string; name: string; monthly_rent: number }> }>;
+  rent: Array<{ id: string; tenant_name: string; tenant_phone: string; property: string; unit: string; amount_due: number; amount_paid: number; balance: number; due_date: string; status: string }>;
+  maintenance: Array<{ id: string; description: string; priority: string; status: string; property: string; unit: string }>;
+  billing: { configured: boolean; message: string };
+};
+export async function getOwnerWorkspace(month?: string) { return request<OwnerWorkspace>(`/api/v1/owner/workspace${month ? `?month=${encodeURIComponent(month)}` : ''}`, { cache: 'no-store' }, true); }
+export async function createOwnerWorkspaceRecord(action: 'property' | 'charge' | 'payment' | 'maintenance', input: Record<string, unknown>) {
+  const query = action === 'property' ? '' : `?action=${action}`;
+  return request<{ id: string; status?: string; duplicate?: boolean; collection?: string }>(`/api/v1/owner/workspace${query}`, { method: 'POST', body: JSON.stringify(input) }, true);
+}

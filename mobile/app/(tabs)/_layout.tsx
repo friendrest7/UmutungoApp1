@@ -21,11 +21,22 @@ export default function TabsLayout() {
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
+  const isOwner = user?.role === 'property_owner';
   return <><Tabs screenOptions={{ headerShown: false, tabBarHideOnKeyboard: true, tabBarActiveTintColor: colors.green, tabBarInactiveTintColor: colors.muted, tabBarStyle: { height: 60 + insets.bottom, paddingBottom: Math.max(8, insets.bottom), paddingTop: 8, borderTopColor: colors.line, backgroundColor: colors.paper }, tabBarLabelStyle: { fontFamily: 'LexendBold', fontSize: 11, fontWeight: '700' }}}>
+    {isOwner ? <>
+      <Tabs.Screen name="owner-home" options={{ title: 'Home', tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="owner-properties" options={{ title: 'Properties', tabBarIcon: ({ color, size }) => <Ionicons name="business-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="owner-rent" options={{ title: 'Rent', tabBarIcon: ({ color, size }) => <Ionicons name="cash-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="owner-inbox" options={{ title: 'Inbox', tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="owner-more" options={{ title: 'More', tabBarIcon: ({ color, size }) => <Ionicons name="ellipsis-horizontal-circle-outline" color={color} size={size} /> }} />
+      <Tabs.Screen name="index" options={{ href: null }} /><Tabs.Screen name="search" options={{ href: null }} /><Tabs.Screen name="saved" options={{ href: null }} /><Tabs.Screen name="dashboard" options={{ href: null }} /><Tabs.Screen name="profile" options={{ href: null }} />
+    </> : <>
     <Tabs.Screen name="index" options={{ title: t('Home'), tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} /> }} />
     <Tabs.Screen name="search" options={{ title: t('Search'), tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" color={color} size={size} /> }} />
     <Tabs.Screen name="saved" options={{ title: t('Saved'), tabBarIcon: ({ color, size }) => <Ionicons name="heart-outline" color={color} size={size} /> }} />
     <Tabs.Screen name="dashboard" options={{ title: user ? t('Dashboard') : t('Join'), tabBarIcon: ({ color, size }) => <Ionicons name={user?.role === 'admin' ? 'shield-checkmark-outline' : 'briefcase-outline'} color={color} size={size} /> }} />
     <Tabs.Screen name="profile" options={{ title: t('Profile'), tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" color={color} size={size} /> }} />
+    <Tabs.Screen name="owner-home" options={{ href: null }} /><Tabs.Screen name="owner-properties" options={{ href: null }} /><Tabs.Screen name="owner-rent" options={{ href: null }} /><Tabs.Screen name="owner-inbox" options={{ href: null }} /><Tabs.Screen name="owner-more" options={{ href: null }} />
+    </>}
   </Tabs>{pathname !== '/chat' && !keyboardVisible && <Pressable accessibilityRole="button" accessibilityLabel="Open Umutungo AI assistant" onPress={() => router.push('/chat' as never)} style={{ position: 'absolute', right: 14, bottom: 60 + insets.bottom + 10, minHeight: 42, paddingHorizontal: 13, borderRadius: 22, backgroundColor: colors.green, flexDirection: 'row', alignItems: 'center', gap: 7, elevation: 5, shadowColor: '#000000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } }}><Ionicons name="sparkles" size={16} color="#000000" /><Text style={{ color: '#000000', fontSize: 12, fontWeight: '700' }}>Ask AI</Text></Pressable>}</>;
 }

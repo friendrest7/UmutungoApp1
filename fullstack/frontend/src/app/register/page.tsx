@@ -48,7 +48,7 @@ export default function RegisterPage() {
     const selected = roleOptions.find((item) => item.role === role) ?? roleOptions[0];
     setBusy(true); setError(''); setNotice('');
     try {
-      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim(), role: selected.role === 'Komisiyoneri' ? 'komisiyoneri' : selected.role === 'Client' ? 'client' : selected.role === 'Tenant' ? 'tenant' : 'property_owner' }) });
+      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim(), role: selected.role === 'Komisiyoneri' ? 'komisiyoneri' : selected.role === 'Client' ? 'client' : selected.role === 'Tenant' ? 'tenant' : 'property_owner', workspace_kind: selected.role === 'Landlord' ? 'landlord' : selected.role === 'Property Owner' ? 'property_owner' : '' }) });
       const result = await response.json() as { error?: string; development_code?: string; message?: string };
       if (!response.ok) throw new Error(result.error ?? 'Account registration could not be completed.');
       setPendingPhone(phone.trim());

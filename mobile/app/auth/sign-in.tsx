@@ -71,7 +71,8 @@ export default function SignInScreen() {
         });
         setUser(result.user);
         setProfile(result.profile);
-        if (router.canGoBack()) router.back();
+        if (result.user.role === 'property_owner') router.replace('/(tabs)/owner-home' as never);
+        else if (router.canGoBack()) router.back();
         else router.replace('/(tabs)');
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Google sign-in could not be completed.');
@@ -104,7 +105,7 @@ export default function SignInScreen() {
     setBusy(true); setError('');
     try {
       const result = await signInWithPassword(loginEmail.trim(), loginPassword);
-      setUser(result.user); setProfile(null); router.replace('/(tabs)');
+      setUser(result.user); setProfile(null); router.replace((result.user.role === 'property_owner' ? '/(tabs)/owner-home' : '/(tabs)') as never);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Email sign-in is unavailable.'); }
     finally { setBusy(false); }
   };
@@ -120,7 +121,7 @@ export default function SignInScreen() {
     try {
       const result = await verifyOtp(phone.trim(), code.trim());
       setUser(result.user);
-      router.replace('/(tabs)');
+      router.replace((result.user.role === 'property_owner' ? '/(tabs)/owner-home' : '/(tabs)') as never);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'That code is not correct.');
     } finally {

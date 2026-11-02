@@ -32,12 +32,13 @@ type Server struct {
 }
 
 type CurrentUser struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Email  string `json:"email,omitempty"`
-	Phone  string `json:"phone"`
-	Role   string `json:"role"`
-	Status string `json:"status"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Email         string `json:"email,omitempty"`
+	Phone         string `json:"phone"`
+	Role          string `json:"role"`
+	Status        string `json:"status"`
+	WorkspaceKind string `json:"workspace_kind,omitempty"`
 }
 
 type profileResponse struct {
@@ -62,6 +63,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/request-otp", s.requestOTP)
 	mux.HandleFunc("/api/v1/auth/verify-otp", s.verifyOTP)
 	mux.HandleFunc("/api/v1/auth/google", s.googleAuth)
+	mux.HandleFunc("/api/v1/auth/logout", s.logout)
 	mux.HandleFunc("/api/v1/me", s.me)
 	mux.HandleFunc("/api/v1/directory", s.directory)
 	mux.HandleFunc("/api/v1/listings", s.listings)
@@ -91,6 +93,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/favorites/", s.favoriteRoute)
 	mux.HandleFunc("/api/v1/owner/dashboard", s.ownerDashboard)
 	mux.HandleFunc("/api/v1/owner/listings", s.ownerListings)
+	mux.HandleFunc("/api/v1/owner/workspace", s.ownerWorkspace)
+	mux.HandleFunc("/api/v1/owner/workspace/", s.ownerWorkspaceItem)
 	mux.HandleFunc("/api/v1/subscription", s.subscriptionLevel)
 	mux.HandleFunc("/api/v1/tenant/dashboard", s.tenantDashboard)
 	mux.HandleFunc("/api/v1/maintenance", s.maintenance)
@@ -143,10 +147,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-		Phone string `json:"phone"`
-		Role  string `json:"role"`
+		Name          string `json:"name"`
+		Email         string `json:"email"`
+		Phone         string `json:"phone"`
+		Role          string `json:"role"`
+		WorkspaceKind string `json:"workspace_kind"`
 	}
 	if !decodeJSON(w, r, &input) || strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.Phone) == "" {
 		errorJSON(w, http.StatusBadRequest, "name and phone are required")
@@ -159,6 +164,12 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if !validRole(input.Role) || input.Role == "admin" {
 		errorJSON(w, http.StatusBadRequest, "invalid registration role")
 		return
+	}
+	if input.Role == "property_owner" {
+		input.WorkspaceKind = strings.ToLower(strings.TrimSpace(input.WorkspaceKind))
+		if input.WorkspaceKind != "landlord" && input.WorkspaceKind != "property_owner" {
+			input.WorkspaceKind = "property_owner"
+		}
 	}
 	phone, err := normalizeRwandaPhone(input.Phone)
 	if err != nil {
@@ -173,10 +184,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 
 	var user CurrentUser
 	err = s.db.QueryRow(r.Context(), `
-		INSERT INTO users(name, email, phone, role) VALUES($1, NULLIF($2, ''), $3, $4)
-		RETURNING id, name, COALESCE(email, ''), phone, role, status`,
-		strings.TrimSpace(input.Name), strings.TrimSpace(input.Email), strings.TrimSpace(input.Phone), input.Role).
-		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+		INSERT INTO users(name, email, phone, role, workspace_kind) VALUES($1, NULLIF($2, ''), $3, $4, $5)
+		RETURNING id, name, COALESCE(email, ''), phone, role, status, workspace_kind`,
+		strings.TrimSpace(input.Name), strings.TrimSpace(input.Email), strings.TrimSpace(input.Phone), input.Role, input.WorkspaceKind).
+		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
 			errorJSON(w, http.StatusConflict, "a user with this phone already exists")
@@ -313,8 +324,14 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1`, email).
-		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	accountKind := ""
+	if email == "landlord@umutungo.test" {
+		accountKind = "landlord"
+	} else if email == "owner@umutungo.test" {
+		accountKind = "property_owner"
+	}
+	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1`, email).
+		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
 	if err == pgx.ErrNoRows {
 		suffix, randomErr := randomDigits(8)
 		if randomErr != nil {
@@ -322,8 +339,8 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		phone := "+2507" + suffix
-		err = s.db.QueryRow(r.Context(), `INSERT INTO users(name,email,phone,role,verified_at) VALUES($1,$2,$3,$4,NOW()) RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status`, account.name, email, phone, account.role).
-			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+		err = s.db.QueryRow(r.Context(), `INSERT INTO users(name,email,phone,role,verified_at,workspace_kind) VALUES($1,$2,$3,$4,NOW(),$5) RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind`, account.name, email, phone, account.role, accountKind).
+			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
 		if err == nil {
 			_, err = s.db.Exec(r.Context(), `INSERT INTO profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, user.ID)
 		}
@@ -334,6 +351,10 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil || user.Role != account.role || user.Status != "active" {
 		errorJSON(w, http.StatusUnauthorized, "development account is unavailable")
 		return
+	}
+	if user.Role == "property_owner" && user.WorkspaceKind == "" {
+		user.WorkspaceKind = accountKind
+		_, _ = s.db.Exec(r.Context(), `UPDATE users SET workspace_kind=$2 WHERE id=$1`, user.ID, accountKind)
 	}
 	if user.Role == "property_owner" && len(input.Listings) > 0 {
 		_, seedErr := s.seedDevelopmentListings(r, user.ID, input.Listings)
@@ -746,24 +767,16 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "a verified Google email is required")
 		return
 	}
-	role := strings.ToLower(strings.TrimSpace(input.Role))
-	switch role {
-	case "", "client", "tenant":
-		role = "client"
-	case "commissioner", "komisiyoneri", "commissioner / komisiyoneri":
-		role = "komisiyoneri"
-	case "landlord", "property owner", "property_owner":
-		role = "property_owner"
-	default:
-		errorJSON(w, http.StatusBadRequest, "Google sign-in role is not supported")
-		return
-	}
+	// A Google request is authentication only. Its optional role field is
+	// intentionally ignored; authorization comes from an existing account or
+	// an explicit, verified account registration flow.
+	role := "client"
 
 	var user CurrentUser
 	err = s.db.QueryRow(r.Context(), `
-		SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status
+		SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind
 		FROM users WHERE LOWER(email)=LOWER($1) LIMIT 1`, strings.TrimSpace(strings.ToLower(googleProfile.Email))).
-		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
 	if err == pgx.ErrNoRows {
 		name := strings.TrimSpace(googleProfile.Name)
 		if name == "" {
@@ -771,25 +784,14 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		}
 		err = s.db.QueryRow(r.Context(), `
 			INSERT INTO users(name,email,phone,role,verified_at) VALUES($1,$2,NULL,$3,NOW())
-			RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status`, name, strings.ToLower(strings.TrimSpace(googleProfile.Email)), role).
-			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+			RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind`, name, strings.ToLower(strings.TrimSpace(googleProfile.Email)), role).
+			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
 		if err == nil {
 			_, err = s.db.Exec(r.Context(), `INSERT INTO profiles(user_id,photo_url) VALUES($1,NULLIF($2,'')) ON CONFLICT(user_id) DO NOTHING`, user.ID, strings.TrimSpace(googleProfile.Picture))
 			if err == nil && (role == "komisiyoneri" || role == "property_owner") {
 				_, err = s.db.Exec(r.Context(), `INSERT INTO business_profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, user.ID)
 			}
 		}
-	}
-	// A landing-page Google One Tap may have created this account as a Client
-	// before the user chose a posting role. An explicit posting sign-in can
-	// promote that Client account to the requested business role. Keep any
-	// existing business role unchanged when the same Google account signs in.
-	if err == nil && strings.EqualFold(user.Role, "client") && role != "client" {
-		err = s.db.QueryRow(r.Context(), `
-			UPDATE users SET role=$1
-			WHERE id=$2
-			RETURNING id,name,COALESCE(email,''),COALESCE(phone,''),role,status`, role, user.ID).
-			Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
 	}
 	if err == nil && (user.Role == "komisiyoneri" || user.Role == "property_owner") {
 		_, err = s.db.Exec(r.Context(), `INSERT INTO business_profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, user.ID)
@@ -875,6 +877,33 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": user, "profile": profile})
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "use POST")
+		return
+	}
+	header := strings.TrimSpace(r.Header.Get("Authorization"))
+	if !strings.HasPrefix(strings.ToLower(header), "bearer ") {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	token := strings.TrimSpace(header[len("Bearer "):])
+	if token == "" {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	result, err := s.db.Exec(r.Context(), `DELETE FROM sessions WHERE token_hash=$1`, hash(token))
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not end session")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		errorJSON(w, http.StatusUnauthorized, "session is already expired")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "signed_out"})
 }
 
 func (s *Server) profileForUser(r *http.Request, userID string) (profileResponse, error) {
@@ -3650,13 +3679,13 @@ func (s *Server) authUser(r *http.Request) (CurrentUser, bool) {
 		return CurrentUser{}, false
 	}
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.token_hash=$1 AND se.expires_at > NOW() AND u.status='active'`, hash(token)).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	err := s.db.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status,u.workspace_kind FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.token_hash=$1 AND se.expires_at > NOW() AND u.status='active'`, hash(token)).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
 	return user, err == nil
 }
 
 func (s *Server) userByID(r *http.Request, id string) (CurrentUser, bool) {
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status FROM users WHERE id=$1`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status)
+	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind FROM users WHERE id=$1`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
 	return user, err == nil
 }
 

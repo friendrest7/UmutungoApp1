@@ -7,6 +7,7 @@ export type ApiUser = {
   phone: string;
   role: UserRole;
   status: string;
+  workspace_kind?: 'landlord' | 'property_owner' | '';
 };
 
 export type ApiProfile = {

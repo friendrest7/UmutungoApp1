@@ -53,9 +53,9 @@ async function developmentListingFixtures() {
   }));
 }
 
-function accountRoleFromApi(role?: string, requestedRole?: AuthRole): AuthRole {
+function accountRoleFromApi(role?: string, workspaceKind?: string): AuthRole {
   if (role === 'komisiyoneri') return 'Commissioner / Komisiyoneri';
-  if (role === 'property_owner') return requestedRole === 'Landlord' ? 'Landlord' : 'Property Owner';
+  if (role === 'property_owner') return workspaceKind === 'landlord' ? 'Landlord' : 'Property Owner';
   if (role === 'admin') return 'Admin';
   if (role === 'tenant') return 'Tenant';
   return 'Client';
@@ -117,14 +117,14 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
       const shouldSeedFixtures = ownerDemo && window.localStorage.getItem(fixtureSeedKey) !== 'true';
       const loginPayload = { email: account.email, password: account.password, ...(shouldSeedFixtures ? { listings: await developmentListingFixtures() } : {}) };
       let response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginPayload) });
-      let result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; name?: string } };
+      let result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; workspace_kind?: string; name?: string } };
       if (account.role === 'Tenant' && response.status === 401) {
         response = await fetch(`${apiBaseUrl()}/api/v1/auth/dev-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'client@umutungo.test', password: 'Client123!' }) });
-        result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; name?: string } };
+        result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; workspace_kind?: string; name?: string } };
       }
       if (response.status === 404) throw new Error('These testing credentials are only enabled on a development backend. On the live site, sign in with your registered account using Google or phone verification.');
       if (!response.ok || !result.access_token) throw new Error(result.error ?? 'A database session could not be created. Use a verified Umutungo account.');
-      const sessionRole = account.role === 'Tenant' ? 'Tenant' : accountRoleFromApi(result.user?.role, account.role);
+      const sessionRole = account.role === 'Tenant' ? 'Tenant' : accountRoleFromApi(result.user?.role, result.user?.workspace_kind);
       if (shouldSeedFixtures) window.localStorage.setItem(fixtureSeedKey, 'true');
       window.localStorage.setItem('umutungo-api-token', result.access_token);
       window.dispatchEvent(new Event('umutungo:listings-changed'));
@@ -155,10 +155,10 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
       const apiUrl = apiBaseUrl();
       if (apiUrl || process.env.NODE_ENV === 'production') {
         const response = await fetch(`${apiUrl}/api/v1/auth/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone.trim(), code: code.trim() }) });
-        const result = await response.json() as { error?: string; access_token?: string; user?: { role?: string } };
+        const result = await response.json() as { error?: string; access_token?: string; user?: { role?: string; workspace_kind?: string } };
         if (!response.ok || !result.access_token) { setError(result.error ?? 'That code is not correct.'); return; }
         window.localStorage.setItem('umutungo-api-token', result.access_token);
-        complete(accountRoleFromApi(result.user?.role, role));
+        complete(accountRoleFromApi(result.user?.role, result.user?.workspace_kind));
         return;
       } else if (code.trim() !== '111111') { setError('That code is not correct. Use 111111 in this testing environment.'); return; }
       complete(role ?? 'Client');
@@ -197,7 +197,7 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
             const response = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: token.access_token, role: requestedRole }) });
             const result = await response.json();
             if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
-            const accountRole = accountRoleFromApi(result.user?.role ?? result.role, requestedRole);
+            const accountRole = accountRoleFromApi(result.user?.role ?? result.role, result.user?.workspace_kind);
             if (result.access_token) window.localStorage.setItem('umutungo-api-token', result.access_token);
             window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...result.user, role: accountRole, signedInAt: new Date().toISOString() }));
             reset(); onSuccess(accountRole);

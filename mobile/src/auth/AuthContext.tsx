@@ -1,5 +1,5 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { ApiError, cacheSession, clearStoredToken, getCachedSession, getMe, getStoredToken } from '../api/client';
+import { ApiError, cacheSession, clearStoredToken, endSession, getCachedSession, getMe, getStoredToken } from '../api/client';
 import type { ApiProfile, ApiUser } from '../api/types';
 
 type AuthContextValue = { user: ApiUser | null; profile: ApiProfile | null; loading: boolean; refresh: () => Promise<void>; signOut: () => Promise<void>; setUser: (user: ApiUser) => void; setProfile: (profile: ApiProfile | null) => void };
@@ -27,7 +27,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } finally { setLoading(false); }
   };
   useEffect(() => { void Promise.resolve().then(refresh); }, []);
-  const value = useMemo(() => ({ user, profile, loading, refresh, signOut: async () => { await clearStoredToken(); setUser(null); setProfile(null); }, setUser, setProfile }), [user, profile, loading]);
+  const value = useMemo(() => ({ user, profile, loading, refresh, signOut: async () => { try { await endSession(); } catch { await clearStoredToken(); } setUser(null); setProfile(null); }, setUser, setProfile }), [user, profile, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

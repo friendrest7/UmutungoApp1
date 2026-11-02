@@ -102,6 +102,14 @@ const directionsTranslations: Record<Language, Record<string, string>> = {
 };
 for (const language of ['en', 'fr', 'rw', 'sw'] as const) Object.assign(translations[language], directionsTranslations[language]);
 
+const navigationTranslations: Record<Language, Record<string, string>> = {
+  en: { 'View more': 'View more', 'For Komisiyoneri': 'For Komisiyoneri', 'For Property Owners': 'For Property Owners', 'For Landlords': 'For Landlords' },
+  fr: { 'View more': 'Voir plus', 'For Komisiyoneri': 'Pour les Komisiyoneri', 'For Property Owners': 'Pour les propriétaires', 'For Landlords': 'Pour les bailleurs' },
+  rw: { 'View more': 'Reba ibindi', 'For Komisiyoneri': 'Ku ba Komisiyoneri', 'For Property Owners': 'Ku ba nyir’imitungo', 'For Landlords': 'Ku bakodesha amazu' },
+  sw: { 'View more': 'Ona zaidi', 'For Komisiyoneri': 'Kwa Komisiyoneri', 'For Property Owners': 'Kwa wamiliki wa mali', 'For Landlords': 'Kwa wapangishaji' },
+};
+for (const language of ['en', 'fr', 'rw', 'sw'] as const) Object.assign(translations[language], navigationTranslations[language]);
+
 export function normalizeLanguage(value?: string | null): Language { return value === 'fr' || value === 'rw' || value === 'sw' ? value : 'en'; }
 export function t(language: Language, key: string) { return translations[language][key] ?? translations.en[key] ?? key; }
 

@@ -78,6 +78,17 @@ export function AuthModal({ open, role, onClose, onSuccess, hideGoogle = false }
   const googleRoleRef = useRef<AuthRole>('Client');
   useEffect(() => { setMounted(true); }, []);
 
+  // Role-specific sign-in buttons should take owners and Komisiyoneri straight
+  // to the verified phone flow. Email/password is only a development demo
+  // flow; registered accounts authenticate with their phone or Google.
+  useEffect(() => {
+    if (!open || !role || role === 'Client' || role === 'Tenant') return;
+    setMethod('phone');
+    setPhone('');
+    setError('');
+    setNotice('');
+  }, [open, role]);
+
   useEffect(() => {
     if (!open || typeof window === 'undefined' || hostedAuthBackendWarmupStarted) return;
     if (['localhost', '127.0.0.1'].includes(window.location.hostname)) return;

@@ -561,57 +561,71 @@ export function LandlordWorkspace({
               <>
                 {!workspace.onboarding.completed && (
                   <section className="owner-panel owner-onboarding">
-                    <div>
-                      <span className="owner-eyebrow">A FEW SIMPLE STEPS</span>
-                      <h2>Set up your property workspace</h2>
-                      <p>
-                        Your progress saves as you go. You can skip these steps
-                        and finish later.
-                      </p>
-                    </div>
-                    <div className="owner-onboarding-step">
-                      <span>1</span>
+                    <div className="owner-onboarding-header">
                       <div>
-                        <strong>
-                          {workspace.onboarding.step <= 1
-                            ? "Add your first property and unit"
-                            : "Property added"}
-                        </strong>
-                        <small>
-                          Keep property details private until you choose to
-                          publish a marketplace listing.
-                        </small>
+                        <span className="owner-eyebrow">A FEW SIMPLE STEPS</span>
+                        <h2>Set up your property workspace</h2>
+                        <p>
+                          Your progress saves as you go. You can skip these steps
+                          and finish later.
+                        </p>
                       </div>
-                      {workspace.onboarding.step <= 1 && (
-                        <button onClick={() => setModal("property")}>
-                          Add property
-                        </button>
-                      )}
+                      <span className="owner-onboarding-progress">
+                        {workspace.onboarding.step <= 1 ? "STEP 1 OF 2" : "STEP 2 OF 2"}
+                      </span>
                     </div>
-                    <div className="owner-onboarding-step">
-                      <span>2</span>
-                      <div>
-                        <strong>
-                          {workspace.onboarding.step >= 5
-                            ? "Tenant and rent charge added"
-                            : "Add a tenant and rent charge"}
-                        </strong>
-                        <small>
-                          Create a charge with a due date. You can start
-                          recording the rent they owe.
-                        </small>
+                    <div className="owner-onboarding-steps">
+                      <div className={`owner-onboarding-step ${workspace.onboarding.step > 1 ? "is-complete" : "is-current"}`}>
+                        <span className="owner-onboarding-number">01</span>
+                        <div className="owner-onboarding-copy">
+                          <strong>
+                            {workspace.onboarding.step <= 1
+                              ? "Add your first property and unit"
+                              : "Property added"}
+                          </strong>
+                          <small>
+                            Keep property details private until you choose to
+                            publish a marketplace listing.
+                          </small>
+                        </div>
+                        {workspace.onboarding.step <= 1 && (
+                          <button className="owner-primary owner-onboarding-action" onClick={() => setModal("property")}>
+                            Add property
+                          </button>
+                        )}
                       </div>
-                      {workspace.properties.some(
-                        (item) => item.units.length > 0,
-                      ) ? (
-                        <button onClick={() => setModal("charge")}>
-                          Add tenant and charge
-                        </button>
-                      ) : (
-                        <button onClick={() => setModal("property")}>
-                          Add a property unit
-                        </button>
-                      )}
+                      <div className={`owner-onboarding-step ${workspace.onboarding.step >= 5 ? "is-complete" : "is-current"}`}>
+                        <span className="owner-onboarding-number">02</span>
+                        <div className="owner-onboarding-copy">
+                          <strong>
+                            {workspace.onboarding.step >= 5
+                              ? "Tenant and rent charge added"
+                              : "Add a tenant and rent charge"}
+                          </strong>
+                          <small>
+                            Create a charge with a due date. You can start
+                            recording the rent they owe.
+                          </small>
+                        </div>
+                        {workspace.properties.some(
+                          (item) => item.units.length > 0,
+                        ) ? (
+                          <button className="owner-primary owner-onboarding-action" onClick={() => setModal("charge")}>
+                            Add tenant and charge
+                          </button>
+                        ) : workspace.properties.length > 0 ? (
+                          <button className="owner-primary owner-onboarding-action" onClick={() => {
+                            setUnitForm({ property_id: workspace.properties[0].id, name: "", monthly_rent: "" });
+                            setModal("unit");
+                          }}>
+                            Add first unit
+                          </button>
+                        ) : (
+                          <button className="owner-primary owner-onboarding-action" onClick={() => setModal("property")}>
+                            Add property and unit
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <button
                       className="owner-onboarding-skip"

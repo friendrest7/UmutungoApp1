@@ -35,3 +35,5 @@ coverage/
 /.gradle-fresh/
 /client_secret_*.json
 /mobile/assets/ogland1.mp4
+**/android/**
+**/results/**

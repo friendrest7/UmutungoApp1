@@ -293,7 +293,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const toggleAmenity = (amenity: string) => setAmenities((current) => current.includes(amenity) ? current.filter((item) => item !== amenity) : [...current, amenity]);
   const continueToForm = () => {
     if (!postingRole) { setSaveError('Choose a posting role before continuing.'); return; }
-    if (!accessRole || !apiToken()) { setAuthOpen(true); return; }
+    if (!accessRole) { setAuthOpen(true); return; }
     const roleMatches = (postingRole === 'Komisiyoneri' && accessRole === 'Commissioner / Komisiyoneri') || (postingRole !== 'Komisiyoneri' && (accessRole === 'Landlord' || accessRole === 'Property Owner'));
     if (!roleMatches) { setSaveError(`This account is signed in as ${accessRole}. Choose the matching posting role or sign in with another account.`); return; }
     setSaveError('');

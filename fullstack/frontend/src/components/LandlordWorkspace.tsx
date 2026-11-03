@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AuthModal, type AuthRole } from "./AuthModal";
 import { Icon } from "./Icons";
+import { Logo } from "./Logo";
+import { PostPropertyComposer } from "./PostPropertyComposer";
 import { apiToken, umutungoApi } from "../lib/umutungoApi";
 import {
   rwandaLocations,
@@ -135,20 +137,24 @@ export function LandlordWorkspace({
   const [session, setSession] = useState<
     "checking" | "allowed" | "guest" | "denied"
   >("checking");
-  const [moreOpen, setMoreOpen] = useState(false);
   const [ownerName, setOwnerName] = useState("there");
   const [role, setRole] = useState<AuthRole>("Property Owner");
+  const [activePage, setActivePage] = useState("Overview");
+  useEffect(() => {
+    const section = new URLSearchParams(window.location.search).get("section");
+    if (section === "Properties" || section === "Tenants" || section === "Enquiries") setActivePage(section);
+  }, []);
   const [authOpen, setAuthOpen] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [month, setMonth] = useState(monthKigali);
+  const [month] = useState(monthKigali);
   const [modal, setModal] = useState<
     "property" | "unit" | "charge" | "payment" | "maintenance" | ""
   >("");
   const [saving, setSaving] = useState(false);
-  const [propertyFilter, setPropertyFilter] = useState("");
+  const propertyFilter = "";
   const [propertyForm, setPropertyForm] = useState({
     name: "",
     province: "City of Kigali",
@@ -222,6 +228,19 @@ export function LandlordWorkspace({
             setLoading(false);
           }
           return;
+        }
+        if (!ownerRoute && data.user.workspace_kind === "landlord") {
+          let setupComplete = false;
+          try {
+            const account = JSON.parse(localStorage.getItem("umutungo-demo-user") ?? "null") as { landlordSetupComplete?: boolean; landlordListingPriceBand?: string } | null;
+            setupComplete = account?.landlordSetupComplete === true && Boolean(account.landlordListingPriceBand);
+          } catch {
+            setupComplete = false;
+          }
+          if (!setupComplete) {
+            if (!cancelled) window.location.replace("/landlord/setup");
+            return;
+          }
         }
         if (!cancelled) {
           setRole(
@@ -353,22 +372,6 @@ export function LandlordWorkspace({
       );
     }
   };
-  const skipOnboarding = async () => {
-    setError("");
-    try {
-      await umutungoApi("/api/v1/owner/workspace?action=onboarding", {
-        method: "POST",
-        body: JSON.stringify({ step: 5, complete: true }),
-      });
-      await loadWorkspace(month, propertyFilter);
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not save setup progress.",
-      );
-    }
-  };
   const firstName = ownerName;
   const now = new Date();
   const hour = Number(
@@ -420,44 +423,43 @@ export function LandlordWorkspace({
     <main className="owner-workspace">
       {" "}
       <aside className="owner-sidebar">
-        <Link href="/" className="owner-brand">
-          <span>U</span> Umutungo
+        <Link href="/" className="owner-brand" aria-label="Umutungo home">
+          <Logo darkMode />
         </Link>
         <div className="owner-sidebar-label">PROPERTY WORKSPACE</div>
         <nav>
-          <a href="#overview" className="is-active">
+          <button type="button" className={activePage === "Overview" ? "is-active" : ""} onClick={() => setActivePage("Overview")}>
             <Icon name="home" size={17} />
             Overview
-          </a>
-          <a href="#properties">
+          </button>
+          <button type="button" className={activePage === "Properties" ? "is-active" : ""} onClick={() => setActivePage("Properties")}>
             <Icon name="building" size={17} />
             Properties
-          </a>
-          <a href="#rent">
+          </button>
+          <button type="button" className={activePage === "Tenants" ? "is-active" : ""} onClick={() => setActivePage("Tenants")}>
             <Icon name="creditCard" size={17} />
-            Rent
-          </a>
+            Tenants
+          </button>
           <a href="/messages">
             <Icon name="users" size={17} />
             Inbox
           </a>
-          <button
-            className="owner-more-trigger"
-            aria-expanded={moreOpen}
-            onClick={() => setMoreOpen((value) => !value)}
-          >
-            <Icon name="menu" size={17} />
-            More <span>{moreOpen ? "?" : "+"}</span>
+          <button type="button" className={activePage === "Maintenance" ? "is-active" : ""} onClick={() => setActivePage("Maintenance")}>
+            <Icon name="wrench" size={17} />
+            Maintenance
           </button>
-          {moreOpen && (
-            <div className="owner-more-menu">
-              <Link href="#maintenance">Maintenance and repairs</Link>
-              <Link href="#enquiries">Rental enquiries</Link>
-              <Link href="/post-property">Create a marketplace listing</Link>
-              <Link href="/messages">Messages</Link>
-              <Link href="/upgrade/owner">One-time listing upgrades</Link>
-            </div>
-          )}
+          <button type="button" className={activePage === "Enquiries" ? "is-active" : ""} onClick={() => setActivePage("Enquiries")}>
+            <Icon name="users" size={17} />
+            Enquiries
+          </button>
+          <button type="button" className={activePage === "Post a Property" ? "is-active" : ""} onClick={() => setActivePage("Post a Property")}>
+            <Icon name="bookPen" size={17} />
+            Post a Property
+          </button>
+          <Link href="/upgrade/owner">
+            <Icon name="sparkles" size={17} />
+            Upgrades
+          </Link>
         </nav>
         <div className="owner-sidebar-bottom">
           <Link href="/"> Back to marketplace</Link>
@@ -468,7 +470,7 @@ export function LandlordWorkspace({
         <header className="owner-topbar">
           <div>
             <span>Workspace</span>
-            <strong>{role}</strong>
+            <strong>{activePage}</strong>
           </div>
           <div>
             <span>RWF · Africa/Kigali</span>
@@ -477,8 +479,11 @@ export function LandlordWorkspace({
             </span>
           </div>
         </header>{" "}
-        <div className="owner-content" id="overview">
-          <div className="owner-welcome">
+        <div className="owner-content" id="overview" data-page={activePage}>
+          {activePage === "Post a Property" && (
+            <PostPropertyComposer embedded onCancel={() => setActivePage("Overview")} />
+          )}
+          <div className="owner-welcome" hidden={activePage !== "Overview"}>
             <div>
               <span className="owner-eyebrow">
                 YOUR PROPERTY, CLEARLY MANAGED
@@ -495,49 +500,22 @@ export function LandlordWorkspace({
             <div className="owner-actions">
               <button
                 className="owner-primary"
-                onClick={() => setModal("payment")}
-              >
-                {" "}
-                Record payment
-              </button>
-              <button
-                className="owner-secondary"
                 onClick={() => setModal("property")}
               >
                 {" "}
                 Add property
               </button>
-            </div>
-          </div>{" "}
-          <div className="owner-filters">
-            <label>
-              Reporting month
-              <input
-                aria-label="Reporting month"
-                type="month"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-              />
-            </label>
-            <label>
-              Property
-              <select
-                aria-label="Filter by property"
-                value={propertyFilter}
-                onChange={(e) => setPropertyFilter(e.target.value)}
+              <button
+                className="owner-secondary"
+                onClick={() => setModal("payment")}
               >
-                <option value="">All properties</option>
-                {workspace?.properties.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span>
-              Month totals use charges due in the selected period and payments
-              allocated to those charges.
-            </span>
+                {" "}
+                Record payment
+              </button>
+              <Link className="owner-secondary" href="/landlord/setup?edit=1">
+                Back to account setup
+              </Link>
+            </div>
           </div>{" "}
           {error && (
             <div className="owner-alert" role="alert">
@@ -559,83 +537,7 @@ export function LandlordWorkspace({
           ) : (
             workspace && (
               <>
-                {!workspace.onboarding.completed && (
-                  <section className="owner-panel owner-onboarding">
-                    <div className="owner-onboarding-header">
-                      <div>
-                        <span className="owner-eyebrow">A FEW SIMPLE STEPS</span>
-                        <h2>Set up your property workspace</h2>
-                        <p>
-                          Your progress saves as you go. You can skip these steps
-                          and finish later.
-                        </p>
-                      </div>
-                      <span className="owner-onboarding-progress">
-                        {workspace.onboarding.step <= 1 ? "STEP 1 OF 2" : "STEP 2 OF 2"}
-                      </span>
-                    </div>
-                    <div className="owner-onboarding-steps">
-                      <div className={`owner-onboarding-step ${workspace.onboarding.step > 1 ? "is-complete" : "is-current"}`}>
-                        <span className="owner-onboarding-number">01</span>
-                        <div className="owner-onboarding-copy">
-                          <strong>
-                            {workspace.onboarding.step <= 1
-                              ? "Add your first property and unit"
-                              : "Property added"}
-                          </strong>
-                          <small>
-                            Keep property details private until you choose to
-                            publish a marketplace listing.
-                          </small>
-                        </div>
-                        {workspace.onboarding.step <= 1 && (
-                          <button className="owner-primary owner-onboarding-action" onClick={() => setModal("property")}>
-                            Add property
-                          </button>
-                        )}
-                      </div>
-                      <div className={`owner-onboarding-step ${workspace.onboarding.step >= 5 ? "is-complete" : "is-current"}`}>
-                        <span className="owner-onboarding-number">02</span>
-                        <div className="owner-onboarding-copy">
-                          <strong>
-                            {workspace.onboarding.step >= 5
-                              ? "Tenant and rent charge added"
-                              : "Add a tenant and rent charge"}
-                          </strong>
-                          <small>
-                            Create a charge with a due date. You can start
-                            recording the rent they owe.
-                          </small>
-                        </div>
-                        {workspace.properties.some(
-                          (item) => item.units.length > 0,
-                        ) ? (
-                          <button className="owner-primary owner-onboarding-action" onClick={() => setModal("charge")}>
-                            Add tenant and charge
-                          </button>
-                        ) : workspace.properties.length > 0 ? (
-                          <button className="owner-primary owner-onboarding-action" onClick={() => {
-                            setUnitForm({ property_id: workspace.properties[0].id, name: "", monthly_rent: "" });
-                            setModal("unit");
-                          }}>
-                            Add first unit
-                          </button>
-                        ) : (
-                          <button className="owner-primary owner-onboarding-action" onClick={() => setModal("property")}>
-                            Add property and unit
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      className="owner-onboarding-skip"
-                      onClick={() => void skipOnboarding()}
-                    >
-                      Skip setup and open overview
-                    </button>
-                  </section>
-                )}
-                <div className="owner-metrics">
+                <div className="owner-metrics" hidden={activePage !== "Overview"}>
                   {[
                     [
                       "Rent expected",
@@ -676,7 +578,7 @@ export function LandlordWorkspace({
                     </article>
                   ))}
                 </div>{" "}
-                <section className="owner-panel owner-attention">
+                <section className="owner-panel owner-attention" hidden={activePage !== "Overview"}>
                   <div className="owner-panel-heading">
                     <div>
                       <span className="owner-eyebrow">PRIORITY QUEUE</span>
@@ -762,12 +664,12 @@ export function LandlordWorkspace({
                       )}{" "}
                   </div>
                 </section>{" "}
-                <div className="owner-section-grid">
-                  <section className="owner-panel owner-rent-panel" id="rent">
+                <div className="owner-section-grid" hidden={activePage !== "Tenants" && activePage !== "Properties"}>
+                  <section className="owner-panel owner-rent-panel" id="rent" hidden={activePage !== "Tenants"}>
                     <div className="owner-panel-heading">
                       <div>
-                        <span className="owner-eyebrow">MONTHLY LEDGER</span>
-                        <h2>Rent & payments</h2>
+                        <span className="owner-eyebrow">TENANT MANAGEMENT</span>
+                        <h2>Tenants</h2>
                       </div>
                       <button
                         className="owner-link-button"
@@ -865,6 +767,7 @@ export function LandlordWorkspace({
                   <section
                     className="owner-panel owner-portfolio"
                     id="properties"
+                    hidden={activePage !== "Properties"}
                   >
                     <div className="owner-panel-heading">
                       <div>
@@ -926,8 +829,8 @@ export function LandlordWorkspace({
                     )}
                   </section>
                 </div>{" "}
-                <div className="owner-section-grid owner-lower-grid">
-                  <section className="owner-panel" id="maintenance">
+                <div className="owner-section-grid owner-lower-grid" hidden={activePage !== "Overview" && activePage !== "Maintenance"}>
+                  <section className="owner-panel" id="maintenance" hidden={activePage !== "Maintenance"}>
                     <div className="owner-panel-heading">
                       <div>
                         <span className="owner-eyebrow">PROPERTY CARE</span>
@@ -982,7 +885,7 @@ export function LandlordWorkspace({
                       </div>
                     )}
                   </section>{" "}
-                  <section className="owner-panel" id="portfolio">
+                  <section className="owner-panel" id="portfolio" hidden={activePage !== "Overview"}>
                     <div className="owner-panel-heading">
                       <div>
                         <span className="owner-eyebrow">ACCOUNT</span>
@@ -1016,7 +919,7 @@ export function LandlordWorkspace({
                     </Link>
                   </section>
                 </div>
-                <section className="owner-panel owner-enquiries" id="enquiries">
+                <section className="owner-panel owner-enquiries" id="enquiries" hidden={activePage !== "Enquiries"}>
                   <div className="owner-panel-heading">
                     <div>
                       <span className="owner-eyebrow">MARKETPLACE</span>

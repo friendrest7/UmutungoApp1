@@ -1,87 +1,39 @@
-'use client';
+﻿'use client';
 
-import Link from 'next/link';
-import { FormEvent, useEffect, useState } from 'react';
-import { Icon } from '../../components/Icons';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AuthModal, type AuthRole } from '../../components/AuthModal';
-import { InterfacePreferences } from '../../components/InterfacePreferences';
-import { Logo } from '../../components/Logo';
-import { t } from '../../data/translations';
-import { usePersistentLanguage } from '../../lib/language';
-import { apiBaseUrl } from '../../lib/umutungoApi';
 
-type RegistrationRole = 'Client' | 'Tenant' | 'Komisiyoneri' | 'Landlord' | 'Property Owner';
+function roleFromQuery(value: string | null): AuthRole | undefined {
+  if (!value) return undefined;
+  if (value === 'Komisiyoneri' || value === 'Commissioner / Komisiyoneri') return 'Commissioner / Komisiyoneri';
+  if (value === 'Client' || value === 'Tenant' || value === 'Landlord' || value === 'Property Owner' || value === 'Admin') return value;
+  return undefined;
+}
 
-const roleOptions: Array<{ role: RegistrationRole; detail: string; storageRole: 'Client' | 'Tenant' | 'Commissioner / Komisiyoneri' | 'Landlord' | 'Property Owner' }> = [
-  { role: 'Client', detail: 'I want to search, compare, buy, or rent property.', storageRole: 'Client' },
-  { role: 'Tenant', detail: 'I want to find and rent a place to live.', storageRole: 'Tenant' },
-  { role: 'Komisiyoneri', detail: 'I help clients buy, sell, or rent property.', storageRole: 'Commissioner / Komisiyoneri' },
-  { role: 'Landlord', detail: 'I manage rental property and tenants.', storageRole: 'Landlord' },
-  { role: 'Property Owner', detail: 'I own property and want to sell or rent it.', storageRole: 'Property Owner' },
-];
+function destinationFor(role: AuthRole) {
+  if (role === 'Landlord' || role === 'Property Owner' || role === 'Commissioner / Komisiyoneri') return '/landlord/setup';
+  if (role === 'Admin') return '/admin';
+  return '/';
+}
 
 export default function RegisterPage() {
-  const { language } = usePersistentLanguage();
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<RegistrationRole>('Client');
-  const [roleReady, setRoleReady] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [otp, setOtp] = useState('');
-  const [pendingPhone, setPendingPhone] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [signInOpen, setSignInOpen] = useState(false);
+  const router = useRouter();
+  const [role, setRole] = useState<AuthRole | undefined>();
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('role') as RegistrationRole | null;
-    if (requested && roleOptions.some((item) => item.role === requested)) {
-      setRole(requested);
-    }
-    setRoleReady(true);
+    const query = new URLSearchParams(window.location.search);
+    setRole(roleFromQuery(query.get('role')));
   }, []);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (phone.replace(/\D/g, '').length < 9) { setError('Enter a valid Rwanda phone number.'); return; }
-    const selected = roleOptions.find((item) => item.role === role) ?? roleOptions[0];
-    setBusy(true); setError(''); setNotice('');
-    try {
-      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim(), role: selected.role === 'Komisiyoneri' ? 'komisiyoneri' : selected.role === 'Client' ? 'client' : selected.role === 'Tenant' ? 'tenant' : 'property_owner', workspace_kind: selected.role === 'Landlord' ? 'landlord' : selected.role === 'Property Owner' ? 'property_owner' : '' }) });
-      const result = await response.json() as { error?: string; development_code?: string; message?: string };
-      if (!response.ok) throw new Error(result.error ?? 'Account registration could not be completed.');
-      setPendingPhone(phone.trim());
-      if (result.development_code) setOtp(result.development_code);
-      setNotice(result.development_code ? `Enter the development verification code: ${result.development_code}` : 'Enter the verification code sent to your phone.');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The Umutungo service could not be reached.');
-    } finally { setBusy(false); }
-  };
-
-  const verifyRegistration = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!otp.trim()) { setError('Enter the verification code.'); return; }
-    const selected = roleOptions.find((item) => item.role === role) ?? roleOptions[0];
-    setBusy(true); setError('');
-    try {
-      const response = await fetch(`${apiBaseUrl()}/api/v1/auth/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: pendingPhone, code: otp.trim() }) });
-      const result = await response.json() as { error?: string; access_token?: string };
-      if (!response.ok || !result.access_token) throw new Error(result.error ?? 'Phone verification could not be completed.');
-      window.localStorage.setItem('umutungo-api-token', result.access_token);
-      window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ role: selected.storageRole, name: name.trim(), phone: pendingPhone, email: email.trim(), kycStatus: selected.storageRole === 'Client' ? 'not_required' : 'pending', signedInAt: new Date().toISOString() }));
-      window.dispatchEvent(new Event('umutungo:auth-changed'));
-      const dashboardPaths = { Client: '/tenant', Tenant: '/tenant', 'Commissioner / Komisiyoneri': '/commissioner', Landlord: '/landlord', 'Property Owner': '/property-owner' } as const;
-      window.location.assign(dashboardPaths[selected.storageRole]);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Phone verification could not be completed.');
-    } finally { setBusy(false); }
-  };
-
-  const backgroundClass = role === 'Komisiyoneri' ? 'registration-komisiyoneri' : role === 'Landlord' ? 'registration-landlord' : role === 'Property Owner' ? 'registration-property-owner' : '';
-  const visibleRoleOptions = roleReady ? roleOptions.filter((item) => item.role === role) : [];
-  const authRole: AuthRole = role === 'Komisiyoneri' ? 'Commissioner / Komisiyoneri' : role;
-  const dashboardFor = (accountRole: AuthRole) => accountRole === 'Client' || accountRole === 'Tenant' ? '/tenant' : accountRole === 'Commissioner / Komisiyoneri' ? '/commissioner' : accountRole === 'Landlord' ? '/landlord' : accountRole === 'Admin' ? '/admin' : '/property-owner';
-
-  return <main className={`registration-page ${backgroundClass}`}><header className="registration-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><div className="standalone-header-actions"><InterfacePreferences /><Link className="post-home-link" href="/">{t(language, 'Back to marketplace')} <Icon name="arrow" size={14} /></Link></div></header><section className="registration-shell"><div className="registration-intro-column"><div className="registration-intro"><span className="post-eyebrow">Umutungo account selection</span><p>Choose an account that matches how you’ll use Umutungo: search for property, represent clients, or share a property you own or manage.</p></div><button className="registration-signin-link registration-intro-signin" type="button" onClick={() => setSignInOpen(true)}>{t(language, 'Sign in')}</button></div>{pendingPhone ? <form className="registration-form" onSubmit={verifyRegistration}><h2>Verify your phone</h2><p className="auth-notice">{notice} Sent to {pendingPhone}.</p><label>Verification code<input inputMode="numeric" value={otp} onChange={(event) => setOtp(event.target.value)} placeholder="Enter code" maxLength={6} required disabled={busy} /></label>{error && <p className="auth-error" role="alert">{error}</p>}<button className="post-primary-button registration-submit" type="submit" disabled={busy}>{busy ? 'Verifying…' : 'Verify and create account'} <Icon name="arrow" size={15} /></button></form> : <form className="registration-form" onSubmit={submit}><label>{t(language, 'Full name')}<input value={name} onChange={(event) => setName(event.target.value)} placeholder={t(language, 'Your full name')} required disabled={busy} /></label><label>{t(language, 'Phone number')}<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required disabled={busy} /></label><label>{t(language, 'Email address')}<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required disabled={busy} /></label><fieldset><legend>{t(language, 'I am a:')}</legend><div className="registration-role-grid">{visibleRoleOptions.map((item) => <button className={role === item.role ? 'is-selected' : ''} type="button" key={item.role} onClick={() => setRole(item.role)} disabled={busy}><strong>{t(language, item.role)}</strong><small>{t(language, item.detail)}</small></button>)}</div></fieldset>{error && <p className="auth-error" role="alert">{error}</p>}<button className="post-primary-button registration-submit" type="submit" disabled={busy}>{busy ? 'Creating account…' : t(language, 'Create account')} <Icon name="arrow" size={15} /></button></form>}</section><AuthModal open={signInOpen} role={authRole} onClose={() => setSignInOpen(false)} onSuccess={(accountRole) => window.location.assign(dashboardFor(accountRole))} /></main>;
+  return <main className="registration-page registration-auth-only" aria-label="Umutungo sign in">
+    <AuthModal
+      open
+      role={role}
+      onClose={() => router.replace('/')}
+      onSuccess={(accountRole) => router.replace(destinationFor(accountRole))}
+    />
+  </main>;
 }
+
+

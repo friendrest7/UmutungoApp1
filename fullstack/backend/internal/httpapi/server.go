@@ -42,9 +42,10 @@ type CurrentUser struct {
 }
 
 type profileResponse struct {
-	Bio      string `json:"bio"`
-	PhotoURL string `json:"photo_url"`
-	Language string `json:"language"`
+	Bio              string `json:"bio"`
+	PhotoURL         string `json:"photo_url"`
+	Language         string `json:"language"`
+	ListingPriceBand string `json:"listing_price_band"`
 }
 
 func New(db *pgxpool.Pool, cfg config.Config) *Server {
@@ -65,6 +66,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/google", s.googleAuth)
 	mux.HandleFunc("/api/v1/auth/logout", s.logout)
 	mux.HandleFunc("/api/v1/me", s.me)
+	mux.HandleFunc("/api/v1/me/phone", s.mePhone)
 	mux.HandleFunc("/api/v1/directory", s.directory)
 	mux.HandleFunc("/api/v1/listings", s.listings)
 	mux.HandleFunc("/api/v1/listings/", s.listingRoute)
@@ -909,9 +911,9 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) profileForUser(r *http.Request, userID string) (profileResponse, error) {
 	var profile profileResponse
 	err := s.db.QueryRow(r.Context(), `
-		SELECT COALESCE(bio,''), COALESCE(photo_url,''), COALESCE(language,'en')
+		SELECT COALESCE(bio,''), COALESCE(photo_url,''), COALESCE(language,'en'), COALESCE(listing_price_band,'')
 		FROM profiles WHERE user_id=$1`, userID).
-		Scan(&profile.Bio, &profile.PhotoURL, &profile.Language)
+		Scan(&profile.Bio, &profile.PhotoURL, &profile.Language, &profile.ListingPriceBand)
 	if err == pgx.ErrNoRows {
 		return profileResponse{Language: "en"}, nil
 	}
@@ -926,11 +928,12 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	var input struct {
-		Name     *string `json:"name"`
-		Email    *string `json:"email"`
-		Bio      *string `json:"bio"`
-		PhotoURL *string `json:"photo_url"`
-		Language *string `json:"language"`
+		Name             *string `json:"name"`
+		Email            *string `json:"email"`
+		Bio              *string `json:"bio"`
+		PhotoURL         *string `json:"photo_url"`
+		Language         *string `json:"language"`
+		ListingPriceBand *string `json:"listing_price_band"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -985,7 +988,20 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		input.Language = &value
 	}
-	if input.Name == nil && input.Email == nil && input.Bio == nil && input.PhotoURL == nil && input.Language == nil {
+	if input.ListingPriceBand != nil {
+		if user.Role != "property_owner" && user.Role != "komisiyoneri" {
+			errorJSON(w, http.StatusForbidden, "only property posting accounts can set a property price range")
+			return
+		}
+		value := strings.TrimSpace(*input.ListingPriceBand)
+		validBands := map[string]bool{"0-300000": true, "300000-1000000": true, "1000000-10000000": true, "10000000-30000000": true, "30000000-100000000": true, "100000000-plus": true}
+		if !validBands[value] {
+			errorJSON(w, http.StatusBadRequest, "listing_price_band is invalid")
+			return
+		}
+		input.ListingPriceBand = &value
+	}
+	if input.Name == nil && input.Email == nil && input.Bio == nil && input.PhotoURL == nil && input.Language == nil && input.ListingPriceBand == nil {
 		errorJSON(w, http.StatusBadRequest, "at least one profile field is required")
 		return
 	}
@@ -1011,11 +1027,12 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err = tx.Exec(r.Context(), `
-		INSERT INTO profiles(user_id,bio,photo_url,language) VALUES($1,COALESCE($2,''),NULLIF($3,''),COALESCE(NULLIF($4,''),'en'))
+		INSERT INTO profiles(user_id,bio,photo_url,language,listing_price_band) VALUES($1,COALESCE($2,''),NULLIF($3,''),COALESCE(NULLIF($4,''),'en'),COALESCE($5,''))
 		ON CONFLICT(user_id) DO UPDATE SET
 		bio=CASE WHEN $2::text IS NULL THEN profiles.bio ELSE $2 END,
 		photo_url=CASE WHEN $3::text IS NULL THEN profiles.photo_url ELSE NULLIF($3,'') END,
-		language=CASE WHEN $4::text IS NULL THEN profiles.language ELSE $4 END`, user.ID, input.Bio, input.PhotoURL, input.Language)
+		language=CASE WHEN $4::text IS NULL THEN profiles.language ELSE $4 END,
+		listing_price_band=CASE WHEN $5::text IS NULL THEN profiles.listing_price_band ELSE $5 END`, user.ID, input.Bio, input.PhotoURL, input.Language, input.ListingPriceBand)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not update profile details")
 		return
@@ -1043,6 +1060,7 @@ type listingInput struct {
 	Title           string     `json:"title"`
 	Description     string     `json:"description"`
 	Price           float64    `json:"price"`
+	PriceRange      string     `json:"price_range"`
 	Currency        string     `json:"currency"`
 	Province        string     `json:"province"`
 	District        string     `json:"district"`
@@ -1291,6 +1309,29 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "category, title, and transaction_type are required")
 		return
 	}
+	input.PriceRange = strings.TrimSpace(input.PriceRange)
+	monthlyFee, validPriceRange := listingMonthlyFee(input.Price, input.PriceRange)
+	if !validPriceRange {
+		errorJSON(w, http.StatusBadRequest, "listing price does not match the selected price range")
+		return
+	}
+	if user.Role == "property_owner" || user.Role == "komisiyoneri" {
+		var accountPriceBand string
+		if err := s.db.QueryRow(r.Context(), `SELECT COALESCE(listing_price_band,'') FROM profiles WHERE user_id=$1`, user.ID).Scan(&accountPriceBand); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not check your account price range")
+			return
+		}
+		accountRank, accountBandValid := listingPriceBandRank(accountPriceBand)
+		listingRank, listingBandValid := listingPriceBandRank(input.PriceRange)
+		if !accountBandValid {
+			errorJSON(w, http.StatusConflict, "set your property price range in account setup before posting")
+			return
+		}
+		if !listingBandValid || listingRank > accountRank {
+			errorJSON(w, http.StatusBadRequest, "listing price is above your selected range; return to account setup and select a higher price range")
+			return
+		}
+	}
 	if requiresDetailedLocation[input.Category] && (input.Province == "" || input.District == "" || input.Sector == "") {
 		errorJSON(w, http.StatusBadRequest, "province, district, and sector are required for this category")
 		return
@@ -1336,11 +1377,11 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 
 	var id string
 	err = tx.QueryRow(r.Context(), `
-		INSERT INTO listings(owner_id, category, transaction_type, title, description, price, currency,
+		INSERT INTO listings(owner_id, category, transaction_type, title, description, price, currency, price_range, monthly_fee,
 		province, district, sector, cell, village, latitude, longitude, status, publish_at, expires_at,
 		tags, amenities, contact_method)
-		VALUES($1,$2,$3,$4,$5,$6,COALESCE(NULLIF($7,''),'RWF'),$8,$9,$10,NULLIF($11,''),NULLIF($12,''),$13,$14,$15,$16,$17,$18,$19,COALESCE(NULLIF($20,''),'message')) RETURNING id`,
-		user.ID, input.Category, input.TransactionType, input.Title, input.Description, input.Price, input.Currency,
+		VALUES($1,$2,$3,$4,$5,$6,COALESCE(NULLIF($7,''),'RWF'),$8,$9,$10,$11,$12,NULLIF($13,''),NULLIF($14,''),$15,$16,$17,$18,$19,$20,$21,COALESCE(NULLIF($22,''),'message')) RETURNING id`,
+		user.ID, input.Category, input.TransactionType, input.Title, input.Description, input.Price, input.Currency, input.PriceRange, monthlyFee,
 		input.Province, input.District, input.Sector, input.Cell, input.Village, input.Latitude, input.Longitude,
 		status, input.PublishAt, expires, tags, amenities, input.ContactMethod).Scan(&id)
 	if err != nil {
@@ -1388,7 +1429,7 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		media = append(media, map[string]any{"type": entry.Type, "url": strings.TrimSpace(entry.URL), "sort_order": index})
 		images = append(images, strings.TrimSpace(entry.URL))
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "category": input.Category, "title": input.Title, "description": input.Description, "price": input.Price, "currency": input.Currency, "owner": map[string]string{"id": user.ID, "name": ownerName, "role": ownerRole}, "status": status, "created_at": createdAt, "publish_at": input.PublishAt, "expires_at": expires, "media": media, "images": images})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "category": input.Category, "title": input.Title, "description": input.Description, "price": input.Price, "currency": input.Currency, "price_range": input.PriceRange, "monthly_fee": monthlyFee, "monthly_fee_currency": "RWF", "owner": map[string]string{"id": user.ID, "name": ownerName, "role": ownerRole}, "status": status, "created_at": createdAt, "publish_at": input.PublishAt, "expires_at": expires, "media": media, "images": images})
 }
 
 func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
@@ -1824,8 +1865,8 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	var ownerID string
-	if err := s.db.QueryRow(r.Context(), `SELECT owner_id FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID); err != nil {
+	var ownerID, priceRange string
+	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,price_range FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &priceRange); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -1850,7 +1891,16 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		errorJSON(w, http.StatusBadRequest, "price cannot be negative")
 		return
 	}
-	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=COALESCE($3,price), status=COALESCE(NULLIF($4,''),status), updated_at=NOW() WHERE id=$5`, input.Title, input.Description, input.Price, input.Status, id)
+	var monthlyFee *float64
+	if input.Price != nil {
+		fee, valid := listingMonthlyFee(*input.Price, priceRange)
+		if !valid {
+			errorJSON(w, http.StatusBadRequest, "updated price does not match the listing's selected price range")
+			return
+		}
+		monthlyFee = &fee
+	}
+	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=COALESCE($3,price), monthly_fee=COALESCE($4,monthly_fee), status=COALESCE(NULLIF($5,''),status), updated_at=NOW() WHERE id=$6`, input.Title, input.Description, input.Price, monthlyFee, input.Status, id)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not update listing")
 		return

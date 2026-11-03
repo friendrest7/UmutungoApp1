@@ -22,6 +22,15 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
   const listingUrl = typeof window === 'undefined' ? detailHref : `${window.location.origin}${detailHref}`;
   const contactLabel = property.poster?.role === 'Komisiyoneri' ? t(language, 'Contact advertiser') : t(language, 'Contact owner');
   const type = property.type.toLowerCase();
+  const genericCategory = ['property', 'properties', 'asset', 'assets'].includes(type);
+  const title = property.title.toLowerCase();
+  const cardCategory = genericCategory
+    ? /refrigerator|fridge|washer|washing machine|appliance|kitchen appliance/.test(title) ? 'Appliance'
+      : /furniture|sofa|couch|dining set|bedroom set/.test(title) ? 'Furniture'
+        : /vehicle|car|sedan|suv|bicycle|bike|motorcycle|truck/.test(title) ? 'Vehicle'
+          : /guest room|guest stay|lodge|hotel|short stay/.test(title) ? 'Hospitality'
+            : property.type
+    : property.type;
   const residential = /house|home|apartment|residential|villa|room/.test(type);
   const vehicle = /vehicle|car|motorcycle|truck/.test(type);
   const land = /land|plot/.test(type);
@@ -68,7 +77,7 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
         return <div className="property-image-slide" key={`${image}-${index}`}><Image src={displayedImage} alt={`${t(language, property.title)} ${t(language, 'property image')} ${index + 1}`} fill sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 33vw" unoptimized={displayedImage.startsWith('http')} className="property-image-art" onError={() => setImageFallbacks((current) => ({ ...current, [index]: '/properties/listing-placeholder.svg' }))} /></div>;
       })}</div>
       <Link className="property-card-photo-link" href={`${detailHref}${detailHref.includes('?') ? '&' : '?'}gallery=1`} aria-label={`${t(language, 'Open photo gallery for')} ${property.title}`} />
-      <div className="property-card-photo-labels"><span className="property-category-badge">{t(language, property.type)}</span>{property.featured && <span className="property-card-recommended-badge"><Icon name="sparkles" size={12} /> {t(language, 'Recommended')}</span>}</div>
+      <div className="property-card-photo-labels"><span className="property-category-badge">{t(language, cardCategory)}</span>{property.featured && <span className="property-card-recommended-badge"><Icon name="sparkles" size={12} /> {t(language, 'Recommended')}</span>}</div>
     </div>
     <div className="property-card-body">
       <div className="property-card-title-row"><h3>{t(language, property.title)}</h3><div className="property-card-title-actions"><span className={`property-availability-tag ${property.availableFor === 'rent' ? 'is-rent' : ''}`}>{property.availableFor === 'rent' ? t(language, 'For rent') : property.availableFor === 'both' ? t(language, 'For sale or rent') : property.availableFor === 'book' ? t(language, 'For booking') : t(language, 'For sale')}</span></div></div>

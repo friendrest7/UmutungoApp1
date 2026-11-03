@@ -23,7 +23,7 @@ export default function HomePage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [selectedListingCategory, setSelectedListingCategory] = useState<string | null>(null);
-  const [signedIn, setSignedIn] = useState(false);
+  const [landlordSignedIn, setLandlordSignedIn] = useState(false);
   const copy = (key: string) => t(language, key);
 
   useEffect(() => {
@@ -70,8 +70,10 @@ export default function HomePage() {
   useEffect(() => {
     const syncSignIn = () => {
       try {
-        setSignedIn(Boolean(JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null')));
-      } catch { setSignedIn(false); }
+        const user = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as { role?: string; workspace_kind?: string } | null;
+        const role = user?.role?.toLowerCase().replace(/[\s-]+/g, '_');
+        setLandlordSignedIn(role === 'landlord' || (role === 'property_owner' && user?.workspace_kind?.toLowerCase() === 'landlord'));
+      } catch { setLandlordSignedIn(false); }
     };
     syncSignIn();
     window.addEventListener('umutungo:auth-changed', syncSignIn);
@@ -137,16 +139,27 @@ export default function HomePage() {
   const landingListings = propertyCategories.flatMap((category) => category.listings).sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)));
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
-    <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
+    <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} onSignOut={() => setLandlordSignedIn(false)} />
     <AiChatbot language={language} />
     <main>
       <section className="hero-section" id="home">
-        <div className="hero-image hero-has-video"><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
-          <h1 className="landing-search-heading">{t(language, 'You are on Umutungo, you can find different properties')} <a className="button landing-properties-cta" href="/categories/properties">{t(language, 'here')}</a>.</h1>
-          <div className="landing-conversational-search"><ConversationalPropertySearch language={language} compact /></div>
+        <div className={`hero-image hero-has-video${landlordSignedIn ? ' landlord-home-hero' : ''}`}><video className="hero-video" autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video><div className="hero-image-overlay" /><div className="container hero-content"><div className="hero-copy">
+          {landlordSignedIn ? <>
+            <div className="landlord-hero-panel">
+              <p className="landlord-home-eyebrow">PROPERTY MANAGEMENT, MADE CLEAR</p>
+              <p className="landlord-home-description">You are on Umutungo for landlords. Post properties, manage tenants, track rent, and keep everyday tasks organized in one workspace.</p>
+              <div className="landlord-home-actions"><a className="landlord-home-primary" href="/landlord">Open landlord dashboard <Icon name="arrow" size={16} /></a><a className="landlord-home-secondary" href="/categories/properties">Open marketplace</a></div>
+            </div>
+            <div className="landlord-home-preview" aria-label="Landlord workspace features"><a className="landlord-preview-heading" href="/landlord"><span className="landlord-preview-label">YOUR WORKSPACE</span><strong>Everything in one place</strong></a><a className="landlord-preview-row" href="/landlord?section=Properties#properties"><Icon name="building" size={16} /><span>Properties and units</span><Icon name="arrow" size={14} /></a><a className="landlord-preview-row" href="/landlord?section=Tenants"><Icon name="users" size={16} /><span>Tenants and enquiries</span><Icon name="arrow" size={14} /></a><a className="landlord-preview-row" href="/landlord?section=Tenants#rent"><Icon name="creditCard" size={16} /><span>Rent and payments</span><Icon name="arrow" size={14} /></a></div>
+          </> : <>
+            <h1 className="landing-search-heading">{t(language, 'You are on Umutungo, you can find different properties')} <a className="button landing-properties-cta" href="/categories/properties">{t(language, 'here')}</a>.</h1>
+            <div className="landing-conversational-search"><ConversationalPropertySearch language={language} compact /></div>
+          </>}
         </div></div>
         </div>
       </section>
+
+      {landlordSignedIn && <section className="landlord-home-features" id="landlord-features"><div className="container"><article><span className="landlord-feature-icon"><Icon name="home" size={21} /></span><h2>Manage your properties</h2><p>Keep your buildings and units organized, with the key details together in one place.</p><a href="/landlord">View properties <Icon name="arrow" size={14} /></a></article><article><span className="landlord-feature-icon"><Icon name="creditCard" size={21} /></span><h2>Keep rent records clear</h2><p>Track rent charges, record payments, and see what is outstanding at a glance.</p><a href="/landlord">Manage rent <Icon name="arrow" size={14} /></a></article><article><span className="landlord-feature-icon"><Icon name="users" size={21} /></span><h2>Stay close to your tenants</h2><p>Manage tenant details, respond to enquiries, and keep property requests moving.</p><a href="/landlord">Manage tenants <Icon name="arrow" size={14} /></a></article></div></section>}
 
       <section className="section section-property container" id="properties">
         <div className="landing-discovery-panel">

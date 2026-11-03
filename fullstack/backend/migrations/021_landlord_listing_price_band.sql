@@ -1,0 +1,2 @@
+ALTER TABLE profiles
+ADD COLUMN IF NOT EXISTS listing_price_band TEXT NOT NULL DEFAULT '';

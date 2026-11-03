@@ -6,8 +6,10 @@ const backend = configuredBackend && !(process.env.NODE_ENV === 'production' && 
 const backendUrl = new URL(backend);
 
 const nextConfig = {
+  agentRules: false,
   images: {
     formats: ['image/webp'],
+    qualities: [75, 100],
     remotePatterns: [{
       protocol: backendUrl.protocol.slice(0, -1),
       hostname: backendUrl.hostname,

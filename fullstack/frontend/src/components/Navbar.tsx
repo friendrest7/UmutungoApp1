@@ -1,4 +1,4 @@
-import { ReactElement, useEffect, useRef, useState } from 'react';
+﻿import { ReactElement, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Language, t } from '../data/translations';
@@ -21,6 +21,16 @@ type NavbarProps = {
 };
 
 const authRoles = ['Client', 'Tenant', 'Commissioner / Komisiyoneri', 'Landlord', 'Property Owner', 'Admin'];
+const accountAuthRole = (role?: string, workspaceKind?: string): AuthRole | null => {
+  const normalized = role?.toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'client') return 'Client';
+  if (normalized === 'tenant') return 'Tenant';
+  if (normalized?.includes('komisiyoneri')) return 'Commissioner / Komisiyoneri';
+  if (normalized === 'landlord' || (normalized === 'property_owner' && workspaceKind?.toLowerCase() === 'landlord')) return 'Landlord';
+  if (normalized === 'property_owner') return 'Property Owner';
+  if (normalized === 'admin') return 'Admin';
+  return null;
+};
 const joinOptions: Array<{ label: AuthRole; registerAs: string; description: string; icon: IconName }> = [
   { label: 'Client', registerAs: 'Client', description: 'Explore and compare properties.', icon: 'search' },
   { label: 'Tenant', registerAs: 'Tenant', description: 'Find a place to rent and manage applications.', icon: 'home' },
@@ -156,9 +166,12 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
   const favoritesRef = useRef<HTMLDivElement>(null);
   const signedIn = isSignedIn || demoSignedIn;
+  useEffect(() => {
+    if (signedIn) setViewMoreOpen(false);
+  }, [signedIn]);
   const isTenant = roleKey === 'Tenant' || roleKey === 'Client';
-  const postActionLabel = isTenant ? 'Upgrade to Post' : 'Post a Property';
-  const postActionHint = isTenant ? 'Choose an account type that can publish property listings.' : 'Share a property with people looking.';
+  const postActionLabel = 'Post a Property';
+  const postActionHint = 'Share a property with people looking.';
   const dashboardPath = dashboardPathForRole(roleKey);
   const goTo = (id: string) => { setMobileOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); };
   const openFavorites = () => { setFavoritesPanelOpen((open) => !open); setAccountMenuOpen(false); setMobileOpen(false); };
@@ -170,10 +183,11 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     const storedUser = window.localStorage.getItem('umutungo-demo-user');
     if (storedUser) {
       try {
-        const parsed = JSON.parse(storedUser) as { role?: string };
-        if (authRoles.includes(parsed.role ?? '')) {
+        const parsed = JSON.parse(storedUser) as { role?: string; workspace_kind?: string };
+        const normalizedRole = accountAuthRole(parsed.role, parsed.workspace_kind);
+        if (normalizedRole && authRoles.includes(normalizedRole)) {
           setDemoSignedIn(true);
-          setRoleKey(parsed.role === 'Tenant' ? 'Client' : parsed.role ?? '');
+          setRoleKey(normalizedRole === 'Tenant' ? 'Client' : normalizedRole);
         }
       } catch {
         window.localStorage.removeItem('umutungo-demo-user');
@@ -309,14 +323,20 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
 
   const chooseJoinRole = (registerAs: string) => {
     setGetStartedOpen(false);
+    setViewMoreOpen(false);
     setMobileOpen(false);
     router.push(`/register?role=${encodeURIComponent(registerAs)}`);
   };
 
-  const getStartedPanel = <div className="get-started-panel" role="dialog" aria-label="Choose an account type">
-    <div className="get-started-panel-heading"><span>GET STARTED</span><strong>Choose your account</strong></div>
-    <div className="get-started-options">{joinOptions.map((option) => <button className="get-started-option" type="button" key={option.label} onClick={() => chooseJoinRole(option.registerAs)}><span className="get-started-option-icon"><Icon name={option.icon} size={17} /></span><span><strong>Join as {option.label === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : option.label}</strong><small>{option.description}</small></span><Icon name="arrow" size={14} /></button>)}</div>
-    <div className="get-started-signin">Already have an account? <button type="button" onClick={() => { setGetStartedOpen(false); openSignIn('Client'); }}>Sign in</button></div>
+  const getStartedPanel = <div className="get-started-panel" role="dialog" aria-label="Explore the marketplace">
+    <div className="get-started-panel-heading"><span>GET STARTED</span><strong>Explore Umutungo</strong></div>
+    <div className="get-started-options">
+      <a className="get-started-option" href="/categories/properties?intent=Rent" onClick={() => setGetStartedOpen(false)}><span className="get-started-option-icon"><Icon name="home" size={17} /></span><span><strong>Rent a property</strong><small>Browse homes and other listings to rent.</small></span><Icon name="arrow" size={14} /></a>
+      <a className="get-started-option" href="/categories/properties?intent=Buy" onClick={() => setGetStartedOpen(false)}><span className="get-started-option-icon"><Icon name="building" size={17} /></span><span><strong>Buy a property</strong><small>Explore properties available for sale.</small></span><Icon name="arrow" size={14} /></a>
+      <a className="get-started-option" href="/categories/commercial" onClick={() => setGetStartedOpen(false)}><span className="get-started-option-icon"><Icon name="building" size={17} /></span><span><strong>Commercial properties</strong><small>Find shops, offices, and business spaces.</small></span><Icon name="arrow" size={14} /></a>
+      <button className="get-started-option" type="button" onClick={() => { setGetStartedOpen(false); setCategoryMenuOpen(true); }}><span className="get-started-option-icon"><Icon name="building" size={17} /></span><span><strong>Browse categories</strong><small>See every type of property and product.</small></span><Icon name="arrow" size={14} /></button>
+    </div>
+    <div className="get-started-signin">Need help? <a href="/#contact" onClick={() => setGetStartedOpen(false)}>Contact Umutungo</a></div>
   </div>;
 
   useEffect(() => {
@@ -418,7 +438,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     router.push(`${dashboardPath}?section=${encodeURIComponent(requestedSection)}`);
   };
 
-  const postAction = <a className={`nav-link nav-post ${isTenant ? 'nav-post-upgrade' : ''}`} href={isTenant ? '/upgrade/post' : '/post-property'} onClick={() => setMobileOpen(false)} aria-label={t(language, postActionHint)}><span className="nav-post-label">{t(language, postActionLabel)}</span></a>;
+  const postAction = <a className="nav-link nav-post" href="/post-property" onClick={() => setMobileOpen(false)} aria-label={t(language, postActionHint)}><span className="nav-post-label">{t(language, postActionLabel)}</span></a>;
 
   return <>
     <aside className={`site-header ${scrolled ? 'is-scrolled' : ''} ${landingVisible ? '' : 'is-hidden'}`}>
@@ -430,38 +450,37 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     <header className={`topbar ${scrolled ? 'is-scrolled' : ''}`} ref={categoryMenuRootRef}>
       <div className="topbar-inner">
         <div className="topbar-brand-group">
-          <a className="topbar-brand" href="/" aria-label="Umutungo home"><Logo darkMode={darkMode} /></a>
+          <a className="topbar-brand" href="/" aria-label="Umutungo home"><Logo darkMode /></a>
         </div>
-        <nav className="desktop-nav" aria-label="Primary navigation">
+        <nav className={`desktop-nav${signedIn && dashboardPath ? ' is-signed-in' : ''}`} aria-label="Primary navigation">
           <a className="nav-link topbar-home-link" href="/"><span>{t(language, 'Home')}</span></a>
-          <button className={`nav-link nav-view-more-trigger ${viewMoreOpen ? 'is-open' : ''}`} type="button" aria-expanded={viewMoreOpen} aria-controls="nav-view-more-panel" onClick={() => { setCategoryMenuOpen(false); setViewMoreOpen((open) => !open); }}><span>{t(language, 'View more')}</span><Icon name="chevron" size={13} /></button>
-          {!signedIn && <><a className="nav-join-role" href="/register?role=Komisiyoneri">For Komisiyoneri</a><a className="nav-join-role" href="/register?role=Property%20Owner">For Property Owners</a><a className="nav-join-role" href="/register?role=Landlord">For Landlords</a></>}
+          {!signedIn && <div className="account-menu-wrap nav-get-started-nav" ref={accountMenuRef}>
+            <button className="nav-link nav-sign-in" type="button" title="Get started" aria-label="Get started" aria-haspopup="dialog" aria-expanded={getStartedOpen} onClick={() => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>Get started<Icon name="chevron" size={13} /></button>
+            {getStartedOpen && getStartedPanel}
+          </div>}
+          {!signedIn && <><a className="nav-join-role" href="/register?role=Komisiyoneri">For Komisiyoneri</a><a className="nav-join-role" href="/register?role=Property%20Owner">For Property Owners</a><a className="nav-join-role" href="/register?role=Landlord">For Landlords</a><a className="nav-join-role" href="/about">{t(language, 'About us')}</a></>}
           {signedIn && dashboardPath && <a className="nav-dashboard-link" href={dashboardPath} onClick={() => setMobileOpen(false)}>{t(language, 'Dashboard')}</a>}
         </nav>
 
         <div className="nav-actions">
-          <HoverHint text={t(language, postActionHint)} placement="bottom">{postAction}</HoverHint>
+          {!isTenant && <HoverHint text={t(language, postActionHint)} placement="bottom">{postAction}</HoverHint>}
           <div className="nav-favorites-wrap" ref={favoritesRef}><button className="nav-saved" type="button" title={t(language, 'Favorites')} aria-label={t(language, 'Favorites')} aria-expanded={favoritesPanelOpen} onClick={openFavorites}><Icon name="heart" size={17} />{favoriteItems.length > 0 && <b>{favoriteItems.length > 9 ? '9+' : favoriteItems.length}</b>}</button>{favoritesPanelOpen && <FavoritesPanel language={language} items={favoriteItems} onRemove={removeFromFavorites} onClose={() => setFavoritesPanelOpen(false)} />}</div>
            <div className="nav-notifications-wrap"><button className="nav-notifications" type="button" title={t(language, 'Notifications')} aria-label={t(language, 'Notifications')} aria-expanded={notificationPanelOpen} onClick={() => setNotificationPanelOpen((open) => !open)}><Icon name="bell" size={17} /><b>0</b></button>{notificationPanelOpen && <NotificationsPanel language={language} items={notifications} onSelect={openNotification} />}</div>
           <div className="nav-utility-group" aria-label="Site preferences"><Dropdown label={languageCodes[language]} items={languages} active={language} onSelect={(value) => onLanguageChange(value as Language)} icon="globe" /><ThemeToggle darkMode={darkMode} onToggle={onToggleTheme} language={language} /></div>
-          <div className="account-menu-wrap" ref={accountMenuRef}>
-            <button className={`nav-sign-in ${signedIn ? 'nav-account' : ''}`} type="button" title={t(language, signedIn ? 'Account' : 'Get started')} aria-label={t(language, signedIn ? 'Account' : 'Get started')} aria-haspopup={signedIn ? undefined : 'dialog'} aria-expanded={signedIn ? accountMenuOpen : getStartedOpen} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>{signedIn && <Icon name="user" size={16} />}{t(language, signedIn ? 'Account' : 'Get started')}{signedIn && <Icon name="chevron" size={12} />}</button>
-            {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} />}
-            {!signedIn && getStartedOpen && getStartedPanel}
-          </div>
-          <span className="mobile-post-action">{postAction}</span>
+          {!signedIn && <button className={`nav-link nav-view-more-trigger ${viewMoreOpen ? 'is-open' : ''}`} type="button" aria-expanded={viewMoreOpen} aria-controls="nav-view-more-panel" onClick={() => { setCategoryMenuOpen(false); setViewMoreOpen((open) => !open); }}><span>Log in</span><Icon name="chevron" size={13} /></button>}
+          {signedIn ? <div className="account-menu-wrap" ref={accountMenuRef}>
+            <button className="nav-sign-in nav-account" type="button" title={t(language, 'Account')} aria-label={t(language, 'Account')} aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)}><Icon name="user" size={16} />{t(language, 'Account')}<Icon name="chevron" size={12} /></button>
+            {accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} />}
+          </div> : null}
+          {!isTenant && <span className="mobile-post-action">{postAction}</span>}
           <button className="mobile-menu-button" type="button" aria-expanded={mobileOpen} aria-controls="mobile-menu" aria-label={mobileOpen ? 'Close menu' : 'Open menu'} onClick={() => setMobileOpen(!mobileOpen)}><Icon name={mobileOpen ? 'x' : 'menu'} size={22} /></button>
         </div>
       </div>
 
-      {viewMoreOpen && <nav className="nav-view-more-panel" id="nav-view-more-panel" aria-label={t(language, 'More navigation')}>
-        <a href="/categories/houses?intent=Rent" onClick={() => setViewMoreOpen(false)}><Icon name="home" size={14} /><span>{t(language, 'Rent')}</span></a>
-        <a href="/categories/houses?intent=Buy" onClick={() => setViewMoreOpen(false)}><Icon name="building" size={14} /><span>{t(language, 'Buy')}</span></a>
-        <a href="/categories/commercial" onClick={() => setViewMoreOpen(false)}><Icon name="building" size={14} /><span>{t(language, 'Commercial')}</span></a>
-        <button type="button" onClick={() => { setViewMoreOpen(false); setCategoryMenuOpen(true); }}><Icon name="building" size={14} /><span>{t(language, 'Categories')}</span></button>
-        <a href="/about" onClick={() => setViewMoreOpen(false)}><Icon name="sparkles" size={14} /><span>{t(language, 'About us')}</span></a>
-        <a href="/#contact" onClick={() => setViewMoreOpen(false)}><Icon name="users" size={14} /><span>{t(language, 'Contact us')}</span></a>
-        <button type="button" onClick={() => { setViewMoreOpen(false); setNotificationPanelOpen((open) => !open); }}><Icon name="bell" size={14} /><span>{t(language, 'Notifications')}</span></button>
+      {viewMoreOpen && <nav className="nav-view-more-panel nav-join-panel" id="nav-view-more-panel" aria-label="Choose an account type">
+        <div className="nav-join-panel-heading"><span>JOIN UMUTUNGO</span><strong>Choose your account</strong></div>
+        {joinOptions.map((option) => <button type="button" key={option.label} onClick={() => chooseJoinRole(option.registerAs)}><Icon name={option.icon} size={14} /><span>{option.label === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : option.label}</span></button>)}
+        <div className="nav-join-panel-signin">Already have an account? <button type="button" onClick={() => { setViewMoreOpen(false); openSignIn('Client'); }}>Sign in</button></div>
       </nav>}
 
       {categoryMenuOpen && <nav className="nav-category-panel" id="nav-category-panel" aria-label={t(language, 'Property categories')}>
@@ -473,16 +492,17 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <a className="mobile-menu-link" href="/" onClick={() => setMobileOpen(false)}>{t(language, 'Home')}<Icon name="home" size={15} /></a>
         {signedIn && dashboardPath && <a className="mobile-menu-link" href={dashboardPath} onClick={() => setMobileOpen(false)}>{t(language, 'Dashboard')}<Icon name="user" size={15} /></a>}
         <button className="mobile-menu-link" type="button" aria-expanded={categoryMenuOpen} aria-controls="nav-category-panel" onClick={() => { setMobileOpen(false); setCategoryMenuOpen((open) => !open); }}>{t(language, 'Categories')}<Icon name={categoryMenuOpen ? 'chevron' : 'arrow'} size={14} /></button>
-        <button className="mobile-menu-link" type="button" aria-expanded={viewMoreOpen} aria-controls="nav-view-more-panel" onClick={() => setViewMoreOpen((open) => !open)}>{t(language, 'View more')}<Icon name={viewMoreOpen ? 'chevron' : 'arrow'} size={14} /></button>
+        {!signedIn && <button className="mobile-menu-link" type="button" aria-expanded={viewMoreOpen} aria-controls="nav-view-more-panel" onClick={() => setViewMoreOpen((open) => !open)}>Log in<Icon name="chevron" size={14} /></button>}
         <a className="mobile-menu-link" href="/about" onClick={() => setMobileOpen(false)}>{t(language, 'About us')}</a>
         <a className="mobile-menu-link mobile-contact-link" href="/#contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>
-          <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-haspopup={signedIn ? undefined : 'dialog'} aria-expanded={signedIn ? accountMenuOpen : getStartedOpen} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>{t(language, signedIn ? 'Account' : 'Get started')}<Icon name={signedIn && accountMenuOpen ? 'chevron' : signedIn ? 'user' : 'chevron'} size={15} /></button>
+          <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-haspopup={signedIn ? undefined : 'dialog'} aria-expanded={signedIn ? accountMenuOpen : getStartedOpen} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>{signedIn ? t(language, 'Account') : 'Get started'}<Icon name={signedIn && accountMenuOpen ? 'chevron' : signedIn ? 'user' : 'chevron'} size={15} /></button>
           {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} showSettings={false} />}
           {!signedIn && getStartedOpen && getStartedPanel}
         </div>
       </div>}
     </header>
-    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed')); const destination = intendedPath ?? dashboardPaths[accountRole]; setIntendedPath(undefined); router.push(destination); }} />
+    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed')); const isMarketplaceAudience = accountRole === 'Client' || accountRole === 'Tenant'; const destination = accountRole === 'Landlord' ? '/landlord/setup' : intendedPath ?? (isMarketplaceAudience ? '/' : dashboardPaths[accountRole]); setIntendedPath(undefined); router.push(destination); }} />
   </>;
 }
+

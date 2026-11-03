@@ -229,19 +229,6 @@ export function LandlordWorkspace({
           }
           return;
         }
-        if (!ownerRoute && data.user.workspace_kind === "landlord") {
-          let setupComplete = false;
-          try {
-            const account = JSON.parse(localStorage.getItem("umutungo-demo-user") ?? "null") as { landlordSetupComplete?: boolean; landlordListingPriceBand?: string } | null;
-            setupComplete = account?.landlordSetupComplete === true && Boolean(account.landlordListingPriceBand);
-          } catch {
-            setupComplete = false;
-          }
-          if (!setupComplete) {
-            if (!cancelled) window.location.replace("/landlord/setup");
-            return;
-          }
-        }
         if (!cancelled) {
           setRole(
             data.user.workspace_kind === "landlord"
@@ -512,9 +499,6 @@ export function LandlordWorkspace({
                 {" "}
                 Record payment
               </button>
-              <Link className="owner-secondary" href="/landlord/setup?edit=1">
-                Back to account setup
-              </Link>
             </div>
           </div>{" "}
           {error && (

@@ -12,7 +12,9 @@ function roleFromQuery(value: string | null): AuthRole | undefined {
 }
 
 function destinationFor(role: AuthRole) {
-  if (role === 'Landlord' || role === 'Property Owner' || role === 'Commissioner / Komisiyoneri') return '/landlord/setup';
+  if (role === 'Landlord') return '/landlord';
+  if (role === 'Property Owner') return '/property-owner';
+  if (role === 'Commissioner / Komisiyoneri') return '/commissioner';
   if (role === 'Admin') return '/admin';
   return '/';
 }
@@ -35,5 +37,6 @@ export default function RegisterPage() {
     />
   </main>;
 }
+
 
 

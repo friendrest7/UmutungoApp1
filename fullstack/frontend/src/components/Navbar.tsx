@@ -502,7 +502,8 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         </div>
       </div>}
     </header>
-    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed')); const isMarketplaceAudience = accountRole === 'Client' || accountRole === 'Tenant'; const destination = accountRole === 'Landlord' ? '/landlord/setup' : intendedPath ?? (isMarketplaceAudience ? '/' : dashboardPaths[accountRole]); setIntendedPath(undefined); router.push(destination); }} />
+    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed')); const isMarketplaceAudience = accountRole === 'Client' || accountRole === 'Tenant'; const destination = accountRole === 'Landlord' ? '/landlord' : intendedPath ?? (isMarketplaceAudience ? '/' : dashboardPaths[accountRole]); setIntendedPath(undefined); router.push(destination); }} />
   </>;
 }
+
 

@@ -183,7 +183,8 @@ export default function LandlordAccountSetupPage() {
       }
       window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...account, name: cleanName, email: cleanEmail, landlordListingPriceBand: listingPriceBand, landlordSetupComplete: true }));
       window.dispatchEvent(new Event('umutungo:auth-changed'));
-      router.replace(setupDashboardPath(account));
+      const editingSetup = new URLSearchParams(window.location.search).get('edit') === '1';
+      router.replace(editingSetup ? setupDashboardPath(account) : '/post-property');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Your account details could not be saved. Try again.');
       setSaving(false);

@@ -1376,14 +1376,15 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 
 	var id string
+	var createdAt time.Time
 	err = tx.QueryRow(r.Context(), `
 		INSERT INTO listings(owner_id, category, transaction_type, title, description, price, currency, price_range, monthly_fee,
 		province, district, sector, cell, village, latitude, longitude, status, publish_at, expires_at,
 		tags, amenities, contact_method)
-		VALUES($1,$2,$3,$4,$5,$6,COALESCE(NULLIF($7,''),'RWF'),$8,$9,$10,$11,$12,NULLIF($13,''),NULLIF($14,''),$15,$16,$17,$18,$19,$20,$21,COALESCE(NULLIF($22,''),'message')) RETURNING id`,
+		VALUES($1,$2,$3,$4,$5,$6,COALESCE(NULLIF($7,''),'RWF'),$8,$9,$10,$11,$12,NULLIF($13,''),NULLIF($14,''),$15,$16,$17,$18,$19,$20,$21,COALESCE(NULLIF($22,''),'message')) RETURNING id, created_at`,
 		user.ID, input.Category, input.TransactionType, input.Title, input.Description, input.Price, input.Currency, input.PriceRange, monthlyFee,
 		input.Province, input.District, input.Sector, input.Cell, input.Village, input.Latitude, input.Longitude,
-		status, input.PublishAt, expires, tags, amenities, input.ContactMethod).Scan(&id)
+		status, input.PublishAt, expires, tags, amenities, input.ContactMethod).Scan(&id, &createdAt)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create listing")
 		return
@@ -1417,19 +1418,13 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "could not finish listing creation")
 		return
 	}
-	var ownerName, ownerRole string
-	var createdAt time.Time
-	if err := s.db.QueryRow(r.Context(), `SELECT u.name,u.role,l.created_at FROM listings l JOIN users u ON u.id=l.owner_id WHERE l.id=$1`, id).Scan(&ownerName, &ownerRole, &createdAt); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "listing was created but its details could not be loaded")
-		return
-	}
 	media := make([]map[string]any, 0, len(input.Media))
 	images := make([]string, 0, len(input.Media))
 	for index, entry := range input.Media {
 		media = append(media, map[string]any{"type": entry.Type, "url": strings.TrimSpace(entry.URL), "sort_order": index})
 		images = append(images, strings.TrimSpace(entry.URL))
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "category": input.Category, "title": input.Title, "description": input.Description, "price": input.Price, "currency": input.Currency, "price_range": input.PriceRange, "monthly_fee": monthlyFee, "monthly_fee_currency": "RWF", "owner": map[string]string{"id": user.ID, "name": ownerName, "role": ownerRole}, "status": status, "created_at": createdAt, "publish_at": input.PublishAt, "expires_at": expires, "media": media, "images": images})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "category": input.Category, "title": input.Title, "description": input.Description, "price": input.Price, "currency": input.Currency, "price_range": input.PriceRange, "monthly_fee": monthlyFee, "monthly_fee_currency": "RWF", "owner": map[string]string{"id": user.ID, "name": user.Name, "role": user.Role}, "status": status, "created_at": createdAt, "publish_at": input.PublishAt, "expires_at": expires, "media": media, "images": images})
 }
 
 func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {

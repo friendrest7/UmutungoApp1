@@ -11,7 +11,6 @@ import { t } from '../data/translations';
 import { getDistrictNames, getSectorNames, provinceNames } from '../data/rwandaLocations';
 import { usePersistentLanguage } from '../lib/language';
 import { apiToken, uploadListingImage, umutungoApi } from '../lib/umutungoApi';
-import { listingPriceBands, priceBandForAmount, priceBandIndex } from '../lib/listingPricing';
 
 type PropertyType = 'House' | 'Apartment' | 'Land' | 'Commercial' | 'Office' | 'Hospitality' | 'Vehicle' | 'Furniture' | 'Appliance' | 'Equipment' | 'Other';
 type PostingRole = 'Komisiyoneri' | 'Landlord' | 'Property Owner';
@@ -112,14 +111,10 @@ function PostingSelection({ role, category, signedInRole, onRoleChange, onCatego
   return <main className="posting-selection-page"><header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><InterfacePreferences /><Link className="post-home-link" href="/"><Icon name="x" size={14} /> {t(language, 'Exit')}</Link></header><section className="posting-selection-shell"><div className="posting-selection-intro"><h1>{isRoleLocked ? <>{t(language, 'Post as')}<br /><em>{t(language, roleOptions[0])}.</em></> : <>{t(language, 'Choose a role')}<br /><em className="posting-selection-continue">{t(language, 'to continue.')}</em></>}</h1><p className="posting-selection-description">{t(language, 'Choose the type of property you want to upload and the role you want to post as. Weâ€™ll give you tools to manage your listings and a platform experience tailored to your needs and premium level.')}</p><p className="posting-selection-description">{t(language, 'Weâ€™re happy to help you find a market for your property. Everything you need to promote it is on our platform.')}</p><p className="posting-selection-description">{t(language, 'We help everyone bring their offerings to market and reach people beyond their usual reach in milliseconds.')}</p></div><div className="posting-selection-card"><div className="posting-selection-card-heading"><div><span>{t(language, 'STEP 1 OF 2')}</span><h2>{t(language, 'Set the direction')}</h2></div></div><fieldset><legend>{t(language, isRoleLocked ? 'Your posting role' : 'Who are you posting as?')}</legend><div className={`posting-role-grid ${isRoleLocked ? 'posting-role-locked' : ''}`}>{roleOptions.map((item) => <button type="button" key={item} className={role === item ? 'is-selected' : ''} aria-pressed={role === item} onClick={() => isRoleLocked ? undefined : onRoleChange(role === item ? null : item)}><strong>{t(language, item)}</strong><small>{t(language, item === 'Komisiyoneri' ? 'List properties for clients.' : item === 'Landlord' ? 'Manage rental listings and tenants.' : 'Manage your property listings.')}</small></button>)}</div></fieldset><fieldset><legend>{t(language, 'What are you listing?')}</legend><div className="posting-category-grid">{typeOptions.map((item) => <button type="button" key={item.key} className={category === item.key ? 'is-selected' : ''} onClick={() => onCategoryChange(item.key)}><Icon name={item.icon} size={18} /><span>{t(language, item.label)}</span></button>)}</div></fieldset>{error && <p className="post-location-error" role="alert">{t(language, error)}</p>}<button className="post-primary-button" type="button" onClick={onContinue}>{t(language, 'Continue to listing form')} <Icon name="arrow" size={15} /></button></div></section></main>;
 }
 
-function ListingPricingFields({ price, onPriceChange, priceLabel, priceNote, enteredPrice, selectedPriceBand, landlordPriceBand, onLandlordPriceBandChange, enforceLandlordPriceBand }: { price: string; onPriceChange: (value: string) => void; priceLabel: string; priceNote: string; enteredPrice: number; selectedPriceBand: (typeof listingPriceBands)[number] | null; landlordPriceBand: string; onLandlordPriceBandChange: (value: string) => void; enforceLandlordPriceBand: boolean }) {
+function ListingPricingFields({ price, onPriceChange, priceLabel, priceNote }: { price: string; onPriceChange: (value: string) => void; priceLabel: string; priceNote: string }) {
   return <section className="post-pricing-panel" aria-label="Listing price and monthly subscription">
-    <div className="post-pricing-heading"><strong>Price and monthly subscription</strong><p>Choose your highest product price range, then enter this listingâ€™s price. Its monthly fee is calculated automatically.</p></div>
-    {enforceLandlordPriceBand && <label className="post-field post-price-range-select"><span>Select your highest product price range</span><select value={landlordPriceBand} onChange={(event) => onLandlordPriceBandChange(event.target.value)} required><option value="">Choose a price range</option>{listingPriceBands.map((band) => <option key={band.id} value={band.id}>{band.label}</option>)}</select></label>}
+    <div className="post-pricing-heading"><strong>Price and monthly subscription</strong><p>Enter the product price. The monthly listing fee is calculated automatically.</p></div>
     <div className="post-price-field"><label className="post-field"><span>{priceLabel}</span><div className="post-input-prefix"><b>RWF</b><input value={price} onChange={(event) => onPriceChange(event.target.value)} inputMode="numeric" /></div></label><span className="post-price-note">{priceNote}</span></div>
-    {enforceLandlordPriceBand && selectedPriceBand && priceBandIndex(landlordPriceBand) < 0 && <p className="post-location-error" role="alert">Select the highest product price range you expect to list.</p>}
-    {enforceLandlordPriceBand && selectedPriceBand && priceBandIndex(landlordPriceBand) >= 0 && priceBandIndex(selectedPriceBand.id) > priceBandIndex(landlordPriceBand) && <p className="post-location-error" role="alert">This price is above your selected range. Choose a higher product price range to continue.</p>}
-    {selectedPriceBand && <p className="post-price-note" aria-live="polite">Price range: <strong>{selectedPriceBand.label}</strong>. Calculated monthly subscription: <strong>RWF {Math.round(enteredPrice * selectedPriceBand.rate).toLocaleString('en-US')}</strong> ({selectedPriceBand.percent} rate).</p>}
   </section>;
 }
 export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?: boolean; onCancel?: () => void }) {
@@ -146,7 +141,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [ownerTier, setOwnerTier] = useState('Silver Ã‚Â· 90 days');
   const [address, setAddress] = useState('');
   const [price, setPrice] = useState('1,250,000');
-  const [landlordPriceBand, setLandlordPriceBand] = useState('');
   const [bedrooms, setBedrooms] = useState('4');
   const [bathrooms, setBathrooms] = useState('3');
   const [area, setArea] = useState('220');
@@ -183,26 +177,8 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const intentOptions = getIntentOptions(propertyType);
   const selectedIntent = intentOptions.find((option) => option.label === intent) ?? intentOptions[0];
   const districtOptions = getDistrictNames(location);
-  const enteredPrice = Number(price.replace(/[^0-9.]/g, '')) || 0;
-  const actualPriceBand = enteredPrice > 0 ? priceBandForAmount(enteredPrice) : null;
-  const selectedPriceBand = actualPriceBand;
-  const priceBand = actualPriceBand?.id ?? '';
   const priceLabel = selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? 'Sale or lease price' : 'Sale or rent price' : selectedIntent.transactionType === 'sell' ? 'Asking price' : propertyType === 'Hospitality' ? 'Nightly rate' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'Hire price' : propertyType === 'Land' ? 'Lease price' : 'Monthly price';
   const priceNote = selectedIntent.transactionType === 'both' ? 'Enter the price for either option' : selectedIntent.transactionType === 'sell' ? 'total asking price' : propertyType === 'Hospitality' ? 'per night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'per day' : propertyType === 'Land' ? 'lease terms' : 'per month';
-
-  useEffect(() => {
-    let cancelled = false;
-    try {
-      const account = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as { landlordListingPriceBand?: string } | null;
-      if (account?.landlordListingPriceBand) setLandlordPriceBand(account.landlordListingPriceBand);
-    } catch { /* The authenticated profile request below remains the source of truth. */ }
-    if (apiToken()) {
-      void umutungoApi<{ profile?: { listing_price_band?: string } }>('/api/v1/me')
-        .then((result) => { if (!cancelled && result?.profile?.listing_price_band) setLandlordPriceBand(result.profile.listing_price_band); })
-        .catch(() => undefined);
-    }
-    return () => { cancelled = true; };
-  }, []);
 
   useEffect(() => {
     const nextDistricts = getDistrictNames(location);
@@ -255,7 +231,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
 
   useEffect(() => {
     try {
-      const user = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as { role?: string; landlordListingPriceBand?: string } | null;
+      const user = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as { role?: string } | null;
       const userRole = user?.role;
       setAccessRole(userRole === 'Landlord' || userRole === 'Property Owner' || userRole === 'Commissioner / Komisiyoneri' ? userRole : null);
       if (userRole === 'Landlord' || userRole === 'Property Owner' || userRole === 'Commissioner / Komisiyoneri') {
@@ -300,15 +276,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const validateListingPrice = () => {
     const amount = Number(price.replace(/[^0-9.]/g, '')) || 0;
     if (amount <= 0) { setSaveError('Enter a listing price greater than RWF 0.'); return false; }
-    const actualBand = priceBandForAmount(amount);
-    if (priceBandIndex(landlordPriceBand) < 0) {
-      setSaveError('Select the highest product price range you expect to list.');
-      return false;
-    }
-    if (priceBandIndex(actualBand.id) > priceBandIndex(landlordPriceBand)) {
-      setSaveError('This price is above the range you selected. Choose a higher product price range to continue.');
-      return false;
-    }
     return true;
   };
   const previous = () => setStep((current) => Math.max(1, current - 1));
@@ -330,12 +297,8 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     try {
       await umutungoApi('/api/v1/me', {
         method: 'PATCH',
-        body: JSON.stringify({ name: fullName.trim(), listing_price_band: landlordPriceBand }),
+        body: JSON.stringify({ name: fullName.trim() }),
       });
-      try {
-        const account = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as Record<string, unknown> | null;
-        if (account) window.localStorage.setItem('umutungo-demo-user', JSON.stringify({ ...account, landlordListingPriceBand: landlordPriceBand }));
-      } catch { /* The saved account range is also enforced by the API profile. */ }
       let photoFiles = uploadFiles;
       if (!photoFiles.length) {
         const photoResponse = await fetch(cover);
@@ -352,7 +315,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
           title: listingTitle,
           description,
           price: amount,
-          price_range: priceBand,
           currency: 'RWF',
           province: location,
           district,
@@ -420,7 +382,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
       <section className="post-property-main">{saveError && <p className="post-save-error" role="alert">{saveError}</p>}
         <div className="post-main-heading"><div><p className="post-eyebrow">Step 0{step} of 03</p><h2>{steps[step - 1].label}</h2></div><span className="post-save-status"><Icon name="check" size={13} /> Saved locally</span></div>
         <div className="post-builder-grid"><div className="post-form-card">{step === 2 && <RwandaLocationFields province={location} onProvinceChange={(value) => { setLocation(value); setLocationError(''); }} district={district} districtOptions={districtOptions} onDistrictChange={(value) => { setDistrict(value); setSector(''); setCell(''); setVillage(''); }} sector={sector} sectorOptions={locationOptions} onSectorChange={(value) => { setSector(value); setCell(''); setVillage(''); }} cell={cell} cellOptions={cellOptions} onCellChange={(value) => { setCell(value); setVillage(''); }} village={village} villageOptions={villageOptions} onVillageChange={setVillage} loading={locationLoading} error={locationError} gpsPin={gpsPin} onCaptureGps={() => navigator.geolocation?.getCurrentPosition((position) => { const pin = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`; setGpsPin(pin); setMapLocationText(pin); setLocationError(''); }, () => setLocationError('Location access was not available. You can continue with the administrative location.'))} />}
-          {step === 1 && <div className="post-form-section"><div className="post-section-intro"><h3>Listing details</h3></div><label className="post-field"><span>Your full name</span><input value={fullName} onChange={(event) => { setFullName(event.target.value); setSaveError(''); }} placeholder="Enter your full name" autoComplete="name" required /></label><label className="post-field"><span>Property</span><select value={propertyType} onChange={(event) => { const nextType = event.target.value as PropertyType; setPropertyType(nextType); if (!getIntentOptions(nextType).some((option) => option.label === intent)) setIntent(getIntentOptions(nextType)[0].label); setAmenities(['Vehicle', 'Furniture', 'Appliance', 'Equipment', 'Other'].includes(nextType) || nextType === 'Land' ? [] : ['Parking', 'Security']); }} aria-label="Property">{typeOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><div className="post-field-group"><span className="post-field-label">Listing intent</span><div className="post-segmented" role="group" aria-label="Listing intent">{intentOptions.map((option) => <button className={intent === option.label ? 'is-selected' : ''} type="button" key={option.label} onClick={() => setIntent(option.label)}>{option.label}</button>)}</div></div><ListingPricingFields price={price} onPriceChange={(value) => { setPrice(value); setSaveError(''); }} priceLabel={priceLabel} priceNote={priceNote} enteredPrice={enteredPrice} selectedPriceBand={selectedPriceBand} landlordPriceBand={landlordPriceBand} onLandlordPriceBandChange={(value) => { setLandlordPriceBand(value); setSaveError(''); }} enforceLandlordPriceBand={Boolean(postingRole)} /><label className="post-field"><span>Listing Title</span><input value={title} onChange={(event) => { setTitle(event.target.value); setSaveError(''); }} placeholder="Enter a listing title" required /></label><label className="post-field"><span>Short description <small>Optional</small></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the property and its features." rows={4} /></label></div>}
+          {step === 1 && <div className="post-form-section"><div className="post-section-intro"><h3>Listing details</h3></div><label className="post-field"><span>Your full name</span><input value={fullName} onChange={(event) => { setFullName(event.target.value); setSaveError(''); }} placeholder="Enter your full name" autoComplete="name" required /></label><label className="post-field"><span>Property</span><select value={propertyType} onChange={(event) => { const nextType = event.target.value as PropertyType; setPropertyType(nextType); if (!getIntentOptions(nextType).some((option) => option.label === intent)) setIntent(getIntentOptions(nextType)[0].label); setAmenities(['Vehicle', 'Furniture', 'Appliance', 'Equipment', 'Other'].includes(nextType) || nextType === 'Land' ? [] : ['Parking', 'Security']); }} aria-label="Property">{typeOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><div className="post-field-group"><span className="post-field-label">Listing intent</span><div className="post-segmented" role="group" aria-label="Listing intent">{intentOptions.map((option) => <button className={intent === option.label ? 'is-selected' : ''} type="button" key={option.label} onClick={() => setIntent(option.label)}>{option.label}</button>)}</div></div><ListingPricingFields price={price} onPriceChange={(value) => { setPrice(value); setSaveError(''); }} priceLabel={priceLabel} priceNote={priceNote} /><label className="post-field"><span>Listing Title</span><input value={title} onChange={(event) => { setTitle(event.target.value); setSaveError(''); }} placeholder="Enter a listing title" required /></label><label className="post-field"><span>Short description <small>Optional</small></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the property and its features." rows={4} /></label></div>}
           {step === 2 && <div className="post-form-section">
             <div className="post-section-intro"><h3>{isAsset ? 'Set the collection area and item details' : 'Give it a sense of place'}</h3><p>{isAsset ? 'Add a general area for pickup, then describe the item.' : 'A clear location and honest numbers make a listing feel trustworthy.'}</p></div>
             {isAsset ? <label className="post-field"><span>Pickup area <small>Optional</small></span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="e.g. Kimihurura, Kigali" /></label> : <label className="post-field"><span>{isLand ? 'Area or nearby landmark' : 'Neighbourhood'}</span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder={isLand ? 'e.g. near the main road' : 'e.g. Kacyiru, near the offices'} /></label>}
@@ -458,4 +420,5 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     </div>
 </Container>;
 }
+
 

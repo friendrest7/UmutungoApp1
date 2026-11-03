@@ -2,22 +2,20 @@ package httpapi
 
 import "math"
 
-func listingPriceBandRank(band string) (int, bool) {
-	switch band {
-	case "0-300000":
-		return 0, true
-	case "300000-1000000":
-		return 1, true
-	case "1000000-10000000":
-		return 2, true
-	case "10000000-30000000":
-		return 3, true
-	case "30000000-100000000":
-		return 4, true
-	case "100000000-plus":
-		return 5, true
+func listingPriceBandForAmount(price float64) string {
+	switch {
+	case price <= 300_000:
+		return "0-300000"
+	case price <= 1_000_000:
+		return "300000-1000000"
+	case price <= 10_000_000:
+		return "1000000-10000000"
+	case price <= 30_000_000:
+		return "10000000-30000000"
+	case price <= 100_000_000:
+		return "30000000-100000000"
 	default:
-		return -1, false
+		return "100000000-plus"
 	}
 }
 

@@ -1309,28 +1309,11 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "category, title, and transaction_type are required")
 		return
 	}
-	input.PriceRange = strings.TrimSpace(input.PriceRange)
+	input.PriceRange = listingPriceBandForAmount(input.Price)
 	monthlyFee, validPriceRange := listingMonthlyFee(input.Price, input.PriceRange)
 	if !validPriceRange {
 		errorJSON(w, http.StatusBadRequest, "listing price does not match the selected price range")
 		return
-	}
-	if user.Role == "property_owner" || user.Role == "komisiyoneri" {
-		var accountPriceBand string
-		if err := s.db.QueryRow(r.Context(), `SELECT COALESCE(listing_price_band,'') FROM profiles WHERE user_id=$1`, user.ID).Scan(&accountPriceBand); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not check your account price range")
-			return
-		}
-		accountRank, accountBandValid := listingPriceBandRank(accountPriceBand)
-		listingRank, listingBandValid := listingPriceBandRank(input.PriceRange)
-		if !accountBandValid {
-			errorJSON(w, http.StatusConflict, "set your property price range in account setup before posting")
-			return
-		}
-		if !listingBandValid || listingRank > accountRank {
-			errorJSON(w, http.StatusBadRequest, "listing price is above your selected range; return to account setup and select a higher price range")
-			return
-		}
 	}
 	if requiresDetailedLocation[input.Category] && (input.Province == "" || input.District == "" || input.Sector == "") {
 		errorJSON(w, http.StatusBadRequest, "province, district, and sector are required for this category")

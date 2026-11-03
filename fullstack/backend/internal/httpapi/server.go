@@ -70,6 +70,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/directory", s.directory)
 	mux.HandleFunc("/api/v1/listings", s.listings)
 	mux.HandleFunc("/api/v1/listings/", s.listingRoute)
+	mux.HandleFunc("/api/v1/listing-subscription-payments/", s.listingSubscriptionRoute)
 	mux.HandleFunc("/uploads/", s.mediaFile)
 	mux.HandleFunc("/api/v1/applications", s.applications)
 	mux.HandleFunc("/api/v1/applications/", s.applicationRoute)
@@ -1417,6 +1418,10 @@ func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := parts[0]
+	if len(parts) == 2 && parts[1] == "subscription-payment" {
+		s.listingPayRoute(w, r, id)
+		return
+	}
 	if len(parts) > 1 && parts[1] == "applications" && r.Method == http.MethodPost {
 		s.createApplication(w, r, id)
 		return

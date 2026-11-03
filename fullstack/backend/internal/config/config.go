@@ -16,6 +16,9 @@ type Config struct {
 	MediaUploadDir       string
 	MediaPublicBaseURL   string
 	GoogleClientIDs      string
+	FlutterwaveSecretKey string
+	FrontendBaseURL      string
+	BackendPublicURL     string
 	MTNAPIUser           string
 	MTNAPIKey            string
 	MTNSubscriptionKey   string
@@ -50,6 +53,9 @@ func Load() Config {
 		MediaUploadDir:       env("MEDIA_UPLOAD_DIR", "storage/media"),
 		MediaPublicBaseURL:   env("MEDIA_PUBLIC_BASE_URL", ""),
 		GoogleClientIDs:      env("GOOGLE_CLIENT_IDS", ""),
+		FlutterwaveSecretKey: env("FLUTTERWAVE_SECRET_KEY", ""),
+		FrontendBaseURL:      strings.TrimRight(env("FRONTEND_BASE_URL", "http://localhost:3000"), "/"),
+		BackendPublicURL:     strings.TrimRight(env("BACKEND_PUBLIC_URL", "http://localhost:8080"), "/"),
 		MTNAPIUser:           env("MTN_API_USER", ""),
 		MTNAPIKey:            env("MTN_API_KEY", ""),
 		MTNSubscriptionKey:   env("MTN_SUBSCRIPTION_KEY_PRIMARY", ""),

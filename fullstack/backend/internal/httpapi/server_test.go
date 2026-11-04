@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -47,8 +48,8 @@ func TestRootAndHealthEndpoints(t *testing.T) {
 }
 
 // This test uses a dedicated TEST_DATABASE_URL so it can exercise real SQL,
-// media persistence, schedule promotion, and cross-user public access.
-func TestListingVisibilityAndScheduledPublicationIntegration(t *testing.T) {
+// media persistence, payment gates, paid entitlement use, and public access.
+func TestPaidListingVisibilityAndEntitlementIntegration(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("set TEST_DATABASE_URL to run the database-backed listing integration test")
@@ -68,7 +69,7 @@ func TestListingVisibilityAndScheduledPublicationIntegration(t *testing.T) {
 	}
 	ownerPhone, viewerPhone := "+2507"+suffix[:8], "+2508"+suffix[:8]
 	var ownerID, viewerID string
-	if err := pool.QueryRow(ctx, `INSERT INTO users(name,phone,role) VALUES('Integration Owner',$1,'property_owner') RETURNING id`, ownerPhone).Scan(&ownerID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO users(name,phone,role,verified_at,phone_verified_at,property_owner_enabled) VALUES('Integration Owner',$1,'property_owner',NOW(),NOW(),TRUE) RETURNING id`, ownerPhone).Scan(&ownerID); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `INSERT INTO users(name,phone,role) VALUES('Integration Viewer',$1,'client') RETURNING id`, viewerPhone).Scan(&viewerID); err != nil {
@@ -96,8 +97,23 @@ func TestListingVisibilityAndScheduledPublicationIntegration(t *testing.T) {
 		t.Fatalf("create status = %d, body = %s", created.Code, created.Body.String())
 	}
 	var listing struct{ ID, Status string }
-	if err := json.Unmarshal(created.Body.Bytes(), &listing); err != nil || listing.ID == "" || listing.Status != "scheduled" {
+	if err := json.Unmarshal(created.Body.Bytes(), &listing); err != nil || listing.ID == "" || listing.Status != "draft" {
 		t.Fatalf("create response = %s, err = %v", created.Body.String(), err)
+	}
+	patchPayload, _ := json.Marshal(map[string]any{"status": "published"})
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/v1/listings/"+listing.ID, bytes.NewReader(patchPayload))
+	patchReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	patchRes := httptest.NewRecorder()
+	handler.ServeHTTP(patchRes, patchReq)
+	if patchRes.Code != http.StatusPaymentRequired {
+		t.Fatalf("direct publish status = %d, body=%s; want 402", patchRes.Code, patchRes.Body.String())
+	}
+	noSlotReq := httptest.NewRequest(http.MethodPost, "/api/v1/listings/"+listing.ID+"/publish", nil)
+	noSlotReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	noSlotRes := httptest.NewRecorder()
+	handler.ServeHTTP(noSlotRes, noSlotReq)
+	if noSlotRes.Code != http.StatusPaymentRequired {
+		t.Fatalf("publish without paid entitlement status = %d, body=%s; want 402", noSlotRes.Code, noSlotRes.Body.String())
 	}
 	viewerGet := func(path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -113,7 +129,7 @@ func TestListingVisibilityAndScheduledPublicationIntegration(t *testing.T) {
 		}
 	}
 	if response := viewerGet("/api/v1/listings/" + listing.ID); response.Code != http.StatusNotFound {
-		t.Fatalf("scheduled detail status = %d; want 404", response.Code)
+		t.Fatalf("draft detail status = %d; want 404", response.Code)
 	}
 	var invalidUpload bytes.Buffer
 	invalidWriter := multipart.NewWriter(&invalidUpload)
@@ -148,8 +164,26 @@ func TestListingVisibilityAndScheduledPublicationIntegration(t *testing.T) {
 	if imageRes.Code != http.StatusCreated {
 		t.Fatalf("image upload status = %d body=%s", imageRes.Code, imageRes.Body.String())
 	}
-	if _, err := pool.Exec(ctx, `UPDATE listings SET publish_at=NOW()-INTERVAL '1 second' WHERE id=$1`, listing.ID); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO listing_upload_packages(package_key,label,slot_count,price) VALUES('integration-slot','Integration slot',1,25000) ON CONFLICT(package_key) DO NOTHING`); err != nil {
 		t.Fatal(err)
+	}
+	var purchaseID string
+	if err := pool.QueryRow(ctx, `INSERT INTO listing_upload_purchases(owner_id,package_key,slot_count,amount,provider_reference,idempotency_key,status) VALUES($1,'integration-slot',1,25000,$2,$3,'active') RETURNING id`, ownerID, "TEST-"+suffix[:16], "KEY-"+suffix[:16]).Scan(&purchaseID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO listing_upload_slots(purchase_id,owner_id) VALUES($1,$2)`, purchaseID, ownerID); err != nil {
+		t.Fatal(err)
+	}
+	publishReq := httptest.NewRequest(http.MethodPost, "/api/v1/listings/"+listing.ID+"/publish", nil)
+	publishReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	publishRes := httptest.NewRecorder()
+	handler.ServeHTTP(publishRes, publishReq)
+	if publishRes.Code != http.StatusOK {
+		t.Fatalf("publish with paid slot status = %d, body=%s", publishRes.Code, publishRes.Body.String())
+	}
+	var slotState string
+	if err := pool.QueryRow(ctx, `SELECT status FROM listing_upload_slots WHERE purchase_id=$1`, purchaseID).Scan(&slotState); err != nil || slotState != "consumed" {
+		t.Fatalf("slot status = %q, err=%v; want consumed", slotState, err)
 	}
 	public := viewerGet("/api/v1/listings?search=" + urlQuery("Integration listing"))
 	if public.Code != http.StatusOK || !strings.Contains(public.Body.String(), listing.ID) || !strings.Contains(public.Body.String(), "created_at") {
@@ -172,6 +206,102 @@ func TestListingVisibilityAndScheduledPublicationIntegration(t *testing.T) {
 }
 
 func urlQuery(value string) string { return strings.ReplaceAll(strings.TrimSpace(value), " ", "+") }
+
+func TestDeleteListingSoftlyAcrossMarketplaceRolesIntegration(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set TEST_DATABASE_URL to run the database-backed deletion integration test")
+	}
+	ctx := context.Background()
+	pool, err := db.NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	if err := db.Migrate(ctx, pool, filepath.Join("..", "..", "migrations")); err != nil {
+		t.Fatal(err)
+	}
+	suffix, err := randomToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	type account struct{ id, token, role, workspace string }
+	accounts := []account{{token: "delete-commissioner-" + suffix, role: "komisiyoneri"}, {token: "delete-owner-" + suffix, role: "property_owner"}, {token: "delete-landlord-" + suffix, role: "property_owner", workspace: "landlord"}, {token: "delete-viewer-" + suffix, role: "client"}}
+	for i := range accounts {
+		phone := fmt.Sprintf("+2507%07d", i+1000000)
+		if err := pool.QueryRow(ctx, `INSERT INTO users(name,phone,role,workspace_kind,phone_verified_at,property_owner_enabled) VALUES($1,$2,$3,$4,NOW(),$5) RETURNING id`, "Delete Test", phone, accounts[i].role, accounts[i].workspace, accounts[i].workspace == "landlord").Scan(&accounts[i].id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '1 hour')`, accounts[i].id, hash(accounts[i].token)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() {
+		for _, a := range accounts {
+			_, _ = pool.Exec(ctx, `DELETE FROM rental_agreements WHERE tenant_id=$1 OR landlord_id=$1`, a.id)
+			_, _ = pool.Exec(ctx, `DELETE FROM listings WHERE owner_id=$1`, a.id)
+			_, _ = pool.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, a.id)
+			_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, a.id)
+		}
+	}()
+	handler := New(pool, config.Config{CorsOrigins: "http://localhost:3000"}).Handler()
+	createListing := func(ownerID, title string) string {
+		var id string
+		err := pool.QueryRow(ctx, `INSERT INTO listings(owner_id,category,transaction_type,title,province,district,sector,status) VALUES($1,'house','sell',$2,'City of Kigali','Gasabo','Kacyiru','draft') RETURNING id`, ownerID, title).Scan(&id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	for i := 0; i < 3; i++ {
+		id := createListing(accounts[i].id, "Delete role listing")
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/listings/"+id, nil)
+		req.Header.Set("Authorization", "Bearer "+accounts[i].token)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		if res.Code != http.StatusOK {
+			t.Fatalf("role %s delete status=%d body=%s", accounts[i].role, res.Code, res.Body.String())
+		}
+		var deleted time.Time
+		if err := pool.QueryRow(ctx, `SELECT deleted_at FROM listings WHERE id=$1`, id).Scan(&deleted); err != nil {
+			t.Fatalf("role %s row was physically removed: %v", accounts[i].role, err)
+		}
+		if deleted.IsZero() {
+			t.Fatalf("role %s listing did not get soft deleted", accounts[i].role)
+		}
+		detail := httptest.NewRecorder()
+		handler.ServeHTTP(detail, httptest.NewRequest(http.MethodGet, "/api/v1/listings/"+id, nil))
+		if detail.Code != http.StatusNotFound {
+			t.Fatalf("deleted listing detail status=%d; want 404", detail.Code)
+		}
+	}
+	protectedID := createListing(accounts[1].id, "Active rental listing")
+	if _, err := pool.Exec(ctx, `INSERT INTO rental_agreements(listing_id,tenant_id,landlord_id,status) VALUES($1,$2,$3,'active')`, protectedID, accounts[3].id, accounts[1].id); err != nil {
+		t.Fatal(err)
+	}
+	protectedReq := httptest.NewRequest(http.MethodDelete, "/api/v1/listings/"+protectedID, nil)
+	protectedReq.Header.Set("Authorization", "Bearer "+accounts[1].token)
+	protectedRes := httptest.NewRecorder()
+	handler.ServeHTTP(protectedRes, protectedReq)
+	if protectedRes.Code != http.StatusConflict {
+		t.Fatalf("active agreement deletion status=%d body=%s; want 409", protectedRes.Code, protectedRes.Body.String())
+	}
+	var deletedAt *time.Time
+	if err := pool.QueryRow(ctx, `SELECT deleted_at FROM listings WHERE id=$1`, protectedID).Scan(&deletedAt); err != nil || deletedAt != nil {
+		t.Fatalf("active agreement listing was deleted: deleted_at=%v err=%v", deletedAt, err)
+	}
+	unauthorizedID := createListing(accounts[0].id, "Other user's listing")
+	unauthorized := httptest.NewRequest(http.MethodDelete, "/api/v1/listings/"+unauthorizedID, nil)
+	unauthorized.Header.Set("Authorization", "Bearer "+accounts[3].token)
+	unauthorizedRes := httptest.NewRecorder()
+	handler.ServeHTTP(unauthorizedRes, unauthorized)
+	if unauthorizedRes.Code != http.StatusNotFound {
+		t.Fatalf("cross-account deletion status=%d body=%s; want 404", unauthorizedRes.Code, unauthorizedRes.Body.String())
+	}
+	if err := pool.QueryRow(ctx, `SELECT deleted_at FROM listings WHERE id=$1`, unauthorizedID).Scan(&deletedAt); err != nil || deletedAt != nil {
+		t.Fatalf("cross-account delete changed listing: deleted_at=%v err=%v", deletedAt, err)
+	}
+}
 
 func TestCORSPreflight(t *testing.T) {
 	handler := New(nil, config.Config{CorsOrigins: "https://app.example"}).Handler()

@@ -10,6 +10,106 @@ import (
 	"time"
 )
 
+// demoListingPayment completes a visibly marked, development-only checkout.
+func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, listingID string) {
+	if !s.cfg.DemoPaymentsEnabled {
+		errorJSON(w, http.StatusNotFound, "demo payments are disabled")
+		return
+	}
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "use POST to complete the demo payment")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "sign in to continue")
+		return
+	}
+	if user.Role != "property_owner" && user.Role != "komisiyoneri" && user.Role != "admin" {
+		errorJSON(w, http.StatusForbidden, "marketplace posting access required")
+		return
+	}
+	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
+		errorJSON(w, http.StatusForbidden, "activate Property Owner access before posting")
+		return
+	}
+	var input struct {
+		Email          string     `json:"email"`
+		RequestedState string     `json:"requested_status"`
+		PublishAt      *time.Time `json:"publish_at"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if _, err := mail.ParseAddress(strings.TrimSpace(input.Email)); err != nil {
+		errorJSON(w, http.StatusBadRequest, "enter a valid email address for the receipt")
+		return
+	}
+	if input.RequestedState != "published" && input.RequestedState != "scheduled" {
+		errorJSON(w, http.StatusBadRequest, "choose when to publish the listing")
+		return
+	}
+	if user.Role == "property_owner" {
+		var verified bool
+		if err := s.db.QueryRow(r.Context(), `SELECT phone_verified_at IS NOT NULL FROM users WHERE id=$1`, user.ID).Scan(&verified); err != nil || !verified {
+			errorJSON(w, http.StatusForbidden, "verify your phone number with OTP before posting")
+			return
+		}
+	}
+	var currency, status string
+	var price float64
+	if err := s.db.QueryRow(r.Context(), `SELECT price,currency,status FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&price, &currency, &status); err != nil {
+		errorJSON(w, http.StatusNotFound, "listing not found")
+		return
+	}
+	if status != "draft" || currency != "RWF" {
+		errorJSON(w, http.StatusConflict, "only an active RWF draft can use demo checkout")
+		return
+	}
+	_, fee, err := s.configuredListingFee(r.Context(), user, price)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if input.RequestedState == "scheduled" && (input.PublishAt == nil || !input.PublishAt.After(time.Now())) {
+		errorJSON(w, http.StatusBadRequest, "choose a future publish date")
+		return
+	}
+	token, err := randomToken()
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create demo payment reference")
+		return
+	}
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not start demo checkout")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var paymentID string
+	txRef := "UM-DEMO-LISTING-" + strings.ToUpper(token[:20])
+	if err := tx.QueryRow(r.Context(), `INSERT INTO payments(user_id,related_type,related_id,amount,currency,provider,provider_reference,status,expires_at) VALUES($1,'listing_subscription',$2,$3,'RWF','demo',$4,'pending',NOW()+INTERVAL '10 minutes') RETURNING id`, user.ID, listingID, math.Round(fee), txRef).Scan(&paymentID); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create demo payment record")
+		return
+	}
+	rate := math.Round((fee/price)*10000) / 100
+	if _, err := tx.Exec(r.Context(), `INSERT INTO listing_subscriptions(listing_id,owner_id,payment_id,monthly_amount,rate_percent,status,requested_status,publish_at) VALUES($1,$2,$3,$4,$5,'pending',$6,$7)`, listingID, user.ID, paymentID, math.Round(fee), rate, input.RequestedState, input.PublishAt); err != nil {
+		errorJSON(w, http.StatusConflict, "a payment is already in progress for this listing")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not record demo payment")
+		return
+	}
+	if err := s.activateListingSubscription(r, paymentID, listingID, 0); err != nil {
+		_, _ = s.db.Exec(r.Context(), `UPDATE payments SET status='failed' WHERE id=$1 AND status='pending'`, paymentID)
+		_, _ = s.db.Exec(r.Context(), `UPDATE listing_subscriptions SET status='failed' WHERE payment_id=$1 AND status='pending'`, paymentID)
+		errorJSON(w, http.StatusConflict, "demo payment could not complete this listing")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "successful", "provider": "demo", "is_demo": true, "amount": math.Round(fee), "currency": "RWF", "listing_id": listingID, "message": "Demo payment successful. This is not a real charge."})
+}
+
 func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.Request, listingID string) {
 	user, ok := s.authUser(r)
 	if !ok {
@@ -20,6 +120,10 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusForbidden, "only a property owner or Komisiyoneri can pay for a listing")
 		return
 	}
+	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
+		errorJSON(w, http.StatusForbidden, "activate Property Owner access before paying to publish")
+		return
+	}
 	if r.Method != http.MethodPost {
 		errorJSON(w, http.StatusMethodNotAllowed, "use POST to start listing payment")
 		return
@@ -27,6 +131,7 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 	var input struct {
 		Method         string     `json:"payment_method"`
 		Email          string     `json:"email"`
+		Phone          string     `json:"phone"`
 		RequestedState string     `json:"requested_status"`
 		PublishAt      *time.Time `json:"publish_at"`
 	}
@@ -42,14 +147,30 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusBadRequest, "enter a valid email address for the payment receipt")
 		return
 	}
+	phone := ""
+	if input.Method == "mobilemoneyrwanda" {
+		normalizedPhone, phoneErr := normalizeRwandaPhone(input.Phone)
+		if phoneErr != nil {
+			errorJSON(w, http.StatusBadRequest, "enter a valid Rwanda phone number for mobile money")
+			return
+		}
+		phone = normalizedPhone
+	}
 	if input.RequestedState != "published" && input.RequestedState != "scheduled" {
 		errorJSON(w, http.StatusBadRequest, "listing must be published or scheduled after payment")
 		return
 	}
-	var title, priceRange, currency string
+	var title, currency string
 	var price, storedFee float64
 	var status string
-	if err := s.db.QueryRow(r.Context(), `SELECT title,price,price_range,monthly_fee,currency,status FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&title, &price, &priceRange, &storedFee, &currency, &status); err != nil {
+	if user.Role == "property_owner" {
+		var verified bool
+		if err := s.db.QueryRow(r.Context(), `SELECT phone_verified_at IS NOT NULL FROM users WHERE id=$1`, user.ID).Scan(&verified); err != nil || !verified {
+			errorJSON(w, http.StatusForbidden, "verify your phone number with OTP before paying to publish")
+			return
+		}
+	}
+	if err := s.db.QueryRow(r.Context(), `SELECT title,price,monthly_fee,currency,status FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&title, &price, &storedFee, &currency, &status); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -57,8 +178,8 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusConflict, "only a saved draft can start its first listing payment")
 		return
 	}
-	fee, valid := listingUploadFee(price, priceRange)
-	if !valid || math.Round(fee) < 1 || math.Abs(fee-storedFee) > 0.02 || currency != "RWF" {
+	_, fee, feeErr := s.configuredListingFee(r.Context(), user, price)
+	if feeErr != nil || math.Round(fee) < 1 || math.Abs(fee-storedFee) > 0.02 || currency != "RWF" {
 		errorJSON(w, http.StatusConflict, "listing price or one-time upload fee is not valid")
 		return
 	}
@@ -103,7 +224,7 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		return
 	}
 	redirectURL := s.cfg.BackendPublicURL + "/api/v1/listing-subscription-payments/verify"
-	checkoutURL, err := newFlutterwaveClient(s.cfg.FlutterwaveSecretKey).startCheckout(r.Context(), txRef, strings.TrimSpace(input.Email), user.Name, redirectURL, input.Method, amount, listingID)
+	checkoutURL, err := newFlutterwaveClient(s.cfg.FlutterwaveSecretKey).startCheckout(r.Context(), txRef, strings.TrimSpace(input.Email), user.Name, redirectURL, input.Method, phone, amount, listingID)
 	if err != nil {
 		_, _ = s.db.Exec(r.Context(), `UPDATE payments SET status='failed' WHERE id=$1 AND status='pending'`, paymentID)
 		_, _ = s.db.Exec(r.Context(), `UPDATE listing_subscriptions SET status='failed' WHERE payment_id=$1 AND status='pending'`, paymentID)
@@ -165,6 +286,14 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 		return err
 	}
 	defer tx.Rollback(r.Context())
+	var listingStatus string
+	var deletedAt *time.Time
+	if err := tx.QueryRow(r.Context(), `SELECT status,deleted_at FROM listings WHERE id=$1 FOR UPDATE`, listingID).Scan(&listingStatus, &deletedAt); err != nil {
+		return err
+	}
+	if deletedAt != nil || listingStatus != "draft" {
+		return fmt.Errorf("deleted or inactive listings cannot be published")
+	}
 	var requestedStatus string
 	var publishAt *time.Time
 	if err := tx.QueryRow(r.Context(), `SELECT requested_status,publish_at FROM listing_subscriptions WHERE payment_id=$1 AND listing_id=$2 AND status='pending' FOR UPDATE`, paymentID, listingID).Scan(&requestedStatus, &publishAt); err != nil {
@@ -177,13 +306,22 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 		requestedStatus = "published"
 		publishAt = nil
 	}
+	var owner CurrentUser
+	if err := tx.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status,u.workspace_kind,u.property_owner_enabled FROM listings l JOIN users u ON u.id=l.owner_id WHERE l.id=$1`, listingID).Scan(&owner.ID, &owner.Name, &owner.Email, &owner.Phone, &owner.Role, &owner.Status, &owner.WorkspaceKind, &owner.PropertyOwnerEnabled); err != nil {
+		return err
+	}
+	var expiryDays int
+	if err := tx.QueryRow(r.Context(), `SELECT MAX(default_expiry_days) FROM marketplace_listing_fee_rules WHERE role=$1 AND enabled`, postingRole(owner)).Scan(&expiryDays); err != nil || expiryDays < 1 {
+		return fmt.Errorf("no listing expiry policy is configured for this account")
+	}
+	expiresAt := start.Add(time.Duration(expiryDays) * 24 * time.Hour)
 	if _, err := tx.Exec(r.Context(), `UPDATE payments SET status='successful',provider_transaction_id=$2 WHERE id=$1 AND status='pending'`, paymentID, fmt.Sprint(providerTransactionID)); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(r.Context(), `UPDATE listing_subscriptions SET status='active',period_start=$2,period_end=NULL WHERE payment_id=$1`, paymentID, start); err != nil {
 		return err
 	}
-	result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$2,publish_at=$3,expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='draft'`, listingID, requestedStatus, publishAt)
+	result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$2,publish_at=$3,expires_at=$4,updated_at=NOW() WHERE id=$1 AND status='draft' AND deleted_at IS NULL`, listingID, requestedStatus, publishAt, expiresAt)
 	if err != nil {
 		return err
 	}

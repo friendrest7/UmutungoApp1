@@ -32,13 +32,14 @@ type Server struct {
 }
 
 type CurrentUser struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Email         string `json:"email,omitempty"`
-	Phone         string `json:"phone"`
-	Role          string `json:"role"`
-	Status        string `json:"status"`
-	WorkspaceKind string `json:"workspace_kind,omitempty"`
+	ID                   string `json:"id"`
+	Name                 string `json:"name"`
+	Email                string `json:"email,omitempty"`
+	Phone                string `json:"phone"`
+	Role                 string `json:"role"`
+	Status               string `json:"status"`
+	WorkspaceKind        string `json:"workspace_kind,omitempty"`
+	PropertyOwnerEnabled bool   `json:"property_owner_enabled"`
 }
 
 type profileResponse struct {
@@ -66,11 +67,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/google", s.googleAuth)
 	mux.HandleFunc("/api/v1/auth/logout", s.logout)
 	mux.HandleFunc("/api/v1/me", s.me)
+	mux.HandleFunc("/api/v1/me/property-owner-access", s.activatePropertyOwnerAccess)
 	mux.HandleFunc("/api/v1/me/phone", s.mePhone)
 	mux.HandleFunc("/api/v1/directory", s.directory)
 	mux.HandleFunc("/api/v1/listings", s.listings)
 	mux.HandleFunc("/api/v1/listings/", s.listingRoute)
 	mux.HandleFunc("/api/v1/listing-subscription-payments/", s.listingSubscriptionRoute)
+	mux.HandleFunc("/api/v1/listing-upload-payments/verify", s.verifyUploadSlotPurchase)
+	mux.HandleFunc("/api/v1/owner/listing-entitlements", s.listingEntitlements)
+	mux.HandleFunc("/api/v1/owner/listing-upload-purchases", s.createUploadSlotPurchase)
+	mux.HandleFunc("/api/v1/listing-fee", s.listingFeeQuote)
+	mux.HandleFunc("/api/v1/admin/marketplace-pricing", s.adminMarketplacePricing)
 	mux.HandleFunc("/uploads/", s.mediaFile)
 	mux.HandleFunc("/api/v1/applications", s.applications)
 	mux.HandleFunc("/api/v1/applications/", s.applicationRoute)
@@ -629,7 +636,7 @@ func (s *Server) verifyOTP(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
 		return
 	}
-	if _, err := tx.Exec(r.Context(), `UPDATE users SET verified_at=COALESCE(verified_at,NOW()) WHERE id=$1`, userID); err != nil {
+	if _, err := tx.Exec(r.Context(), `UPDATE users SET verified_at=COALESCE(verified_at,NOW()),phone_verified_at=NOW() WHERE id=$1`, userID); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not verify account")
 		return
 	}
@@ -880,6 +887,28 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": user, "profile": profile})
+}
+
+func (s *Server) activatePropertyOwnerAccess(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errorJSON(w, http.StatusMethodNotAllowed, "use POST")
+		return
+	}
+	user, ok := s.authUser(r)
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if user.Role != "property_owner" || user.WorkspaceKind != "landlord" {
+		errorJSON(w, http.StatusForbidden, "Landlord account required")
+		return
+	}
+	if _, err := s.db.Exec(r.Context(), `UPDATE users SET property_owner_enabled=TRUE,updated_at=NOW() WHERE id=$1`, user.ID); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not activate Property Owner access")
+		return
+	}
+	user.PropertyOwnerEnabled = true
+	writeJSON(w, http.StatusOK, map[string]any{"user": user, "status": "active"})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -1220,7 +1249,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) publishDueListings(ctx context.Context) error {
-	_, err := s.db.Exec(ctx, `UPDATE listings SET status='published', updated_at=NOW() WHERE status='scheduled' AND publish_at IS NOT NULL AND publish_at <= NOW() AND deleted_at IS NULL`)
+	_, err := s.db.Exec(ctx, `UPDATE listings l SET status='published', updated_at=NOW() WHERE l.status='scheduled' AND l.publish_at IS NOT NULL AND l.publish_at <= NOW() AND l.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM listing_subscriptions ls WHERE ls.listing_id=l.id AND ls.status='active') OR EXISTS(SELECT 1 FROM listing_upload_slots s WHERE s.listing_id=l.id AND s.status='consumed'))`)
 	return err
 }
 
@@ -1295,6 +1324,10 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "only brokers, property owners, or admins can create listings")
 		return
 	}
+	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
+		errorJSON(w, http.StatusForbidden, "activate Property Owner access before creating marketplace listings")
+		return
+	}
 	var input listingInput
 	if !decodeJSON(w, r, &input) {
 		return
@@ -1311,10 +1344,17 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.PriceRange = listingPriceBandForAmount(input.Price)
-	monthlyFee, validPriceRange := listingUploadFee(input.Price, input.PriceRange)
-	if !validPriceRange {
-		errorJSON(w, http.StatusBadRequest, "listing price does not match the selected price range")
+	_, monthlyFee, feeErr := s.configuredListingFee(r.Context(), user, input.Price)
+	if feeErr != nil {
+		errorJSON(w, http.StatusBadRequest, feeErr.Error())
 		return
+	}
+	if user.Role == "property_owner" {
+		var phoneVerified bool
+		if err := s.db.QueryRow(r.Context(), `SELECT phone_verified_at IS NOT NULL FROM users WHERE id=$1`, user.ID).Scan(&phoneVerified); err != nil || !phoneVerified {
+			errorJSON(w, http.StatusForbidden, "verify your phone number with OTP before posting a property")
+			return
+		}
 	}
 	if requiresDetailedLocation[input.Category] && (input.Province == "" || input.District == "" || input.Sector == "") {
 		errorJSON(w, http.StatusBadRequest, "province, district, and sector are required for this category")
@@ -1323,29 +1363,9 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 	if input.Province == "" {
 		input.Province = "Rwanda"
 	}
-	limit := 100
-	if user.Role == "komisiyoneri" {
-		limit = 10
-	}
-	var monthlyCount int
-	if err := s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listings WHERE owner_id=$1 AND created_at >= date_trunc('month', NOW()) AND status <> 'cancelled'`, user.ID).Scan(&monthlyCount); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not check listing quota")
-		return
-	}
-	if monthlyCount >= limit {
-		errorJSON(w, http.StatusConflict, "monthly listing quota reached")
-		return
-	}
-	status := "published"
-	if input.Status == "draft" {
-		status = "draft"
-	} else if input.Status != "" && input.Status != "published" {
-		errorJSON(w, http.StatusBadRequest, "status must be draft or published")
-		return
-	}
-	if input.PublishAt != nil && input.PublishAt.After(time.Now()) {
-		status = "scheduled"
-	}
+	// New marketplace records are always private until a paid entitlement or
+	// verified listing payment activates them server-side.
+	status := "draft"
 	expires := time.Now().Add(90 * 24 * time.Hour)
 	if user.Role == "komisiyoneri" {
 		expires = time.Now().Add(30 * 24 * time.Hour)
@@ -1420,6 +1440,14 @@ func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
 	id := parts[0]
 	if len(parts) == 2 && parts[1] == "subscription-payment" {
 		s.listingPayRoute(w, r, id)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "demo-payment" {
+		s.demoListingPayment(w, r, id)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "publish" {
+		s.publishListingWithEntitlement(w, r, id)
 		return
 	}
 	if len(parts) > 1 && parts[1] == "applications" && r.Method == http.MethodPost {
@@ -1848,8 +1876,8 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	var ownerID, priceRange string
-	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,price_range FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &priceRange); err != nil {
+	var ownerID, currentStatus string
+	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,status FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &currentStatus); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -1870,20 +1898,53 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		errorJSON(w, http.StatusBadRequest, "invalid listing status")
 		return
 	}
+	if input.Status == "cancelled" || input.Status == "removed" {
+		errorJSON(w, http.StatusBadRequest, "use DELETE to remove a property and preserve its audit history")
+		return
+	}
+	if input.Status == "scheduled" && input.Status != currentStatus {
+		errorJSON(w, http.StatusPaymentRequired, "use the secure payment flow to schedule this listing")
+		return
+	}
+	if input.Status == "published" && input.Status != currentStatus {
+		var paidEntitlement bool
+		if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE listing_id=$1 AND status='active') OR EXISTS(SELECT 1 FROM listing_upload_slots WHERE listing_id=$1 AND status='consumed')`, id).Scan(&paidEntitlement); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not verify listing entitlement")
+			return
+		}
+		if !paidEntitlement {
+			errorJSON(w, http.StatusPaymentRequired, "a verified posting payment or unused upload slot is required to publish this listing")
+			return
+		}
+	}
 	if input.Price != nil && *input.Price < 0 {
 		errorJSON(w, http.StatusBadRequest, "price cannot be negative")
 		return
 	}
 	var monthlyFee *float64
 	if input.Price != nil {
-		fee, valid := listingUploadFee(*input.Price, priceRange)
-		if !valid {
-			errorJSON(w, http.StatusBadRequest, "updated price does not match the listing's selected price range")
+		var pendingPayment bool
+		if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE listing_id=$1 AND status='pending')`, id).Scan(&pendingPayment); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not validate listing payment")
+			return
+		}
+		if pendingPayment {
+			errorJSON(w, http.StatusConflict, "the listing price cannot change while a payment is pending")
+			return
+		}
+		var owner CurrentUser
+		if err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind FROM users WHERE id=$1`, ownerID).Scan(&owner.ID, &owner.Name, &owner.Email, &owner.Phone, &owner.Role, &owner.Status, &owner.WorkspaceKind); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not validate listing price")
+			return
+		}
+		_, fee, err := s.configuredListingFee(r.Context(), owner, *input.Price)
+		if err != nil {
+			errorJSON(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		monthlyFee = &fee
 	}
-	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=COALESCE($3,price), monthly_fee=COALESCE($4,monthly_fee), status=COALESCE(NULLIF($5,''),status), updated_at=NOW() WHERE id=$6`, input.Title, input.Description, input.Price, monthlyFee, input.Status, id)
+	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=COALESCE($3,price), monthly_fee=COALESCE($4,monthly_fee), price_range=CASE WHEN $3::numeric IS NULL THEN price_range ELSE CASE WHEN $3<=300000 THEN '0-300000' WHEN $3<=1000000 THEN '300000-1000000' WHEN $3<=10000000 THEN '1000000-10000000' WHEN $3<=30000000 THEN '10000000-30000000' WHEN $3<=100000000 THEN '30000000-100000000' ELSE '100000000-plus' END END, status=COALESCE(NULLIF($5,''),status), updated_at=NOW() WHERE id=$6 AND deleted_at IS NULL`, input.Title, input.Description, input.Price, monthlyFee, input.Status, id)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not update listing")
 		return
@@ -1897,13 +1958,36 @@ func (s *Server) deleteListing(w http.ResponseWriter, r *http.Request, id string
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	result, err := s.db.Exec(r.Context(), `UPDATE listings SET status='cancelled', deleted_at=NOW(), updated_at=NOW() WHERE id=$1 AND (owner_id=$2 OR $3='admin') AND deleted_at IS NULL`, id, user.ID, user.Role)
+	tx, err := s.db.Begin(r.Context())
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not delete listing")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var activeAgreements int
+	if err := tx.QueryRow(r.Context(), `SELECT COUNT(*) FROM rental_agreements WHERE listing_id=$1 AND status='active'`, id).Scan(&activeAgreements); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not check active rental agreements")
+		return
+	}
+	if activeAgreements > 0 {
+		errorJSON(w, http.StatusConflict, "this property has an active rental agreement and cannot be deleted yet")
+		return
+	}
+	result, err := tx.Exec(r.Context(), `UPDATE listings SET status='cancelled', deleted_at=NOW(), updated_at=NOW() WHERE id=$1 AND (owner_id=$2 OR $3='admin') AND deleted_at IS NULL`, id, user.ID, user.Role)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not delete listing")
 		return
 	}
 	if result.RowsAffected() == 0 {
 		errorJSON(w, http.StatusNotFound, "listing not found or not owned by you")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), `UPDATE listing_subscriptions SET status='failed' WHERE listing_id=$1 AND status='pending'`, id); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not close pending listing payments")
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not finish deleting listing")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted", "id": id})
@@ -2245,21 +2329,29 @@ func (s *Server) payments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "status": status, "provider": input.Provider, "provider_reference": providerReference, "amount": input.Amount, "currency": input.Currency})
 }
 
-func (s *Server) ownerUpgradePrices() map[string]float64 {
-	return map[string]float64{"silver": 10000, "gold": 20000, "platinum": 30000, "diamond": 100000}
+func (s *Server) ownerUpgradePrices(ctx context.Context) map[string]float64 {
+	prices := make(map[string]float64)
+	rows, err := s.db.Query(ctx, `SELECT offer_key,price FROM marketplace_premium_offers WHERE enabled`)
+	if err != nil {
+		return prices
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key string
+		var price float64
+		if rows.Scan(&key, &price) == nil {
+			prices[key] = price
+		}
+	}
+	return prices
 }
 
-func ownerPlanDays(plan string) int {
-	switch plan {
-	case "gold":
-		return 180
-	case "platinum":
-		return 365
-	case "diamond":
+func (s *Server) ownerPlanDays(ctx context.Context, plan string) int {
+	var days int
+	if err := s.db.QueryRow(ctx, `SELECT duration_days FROM marketplace_premium_offers WHERE offer_key=$1 AND enabled`, plan).Scan(&days); err != nil {
 		return 0
-	default:
-		return 90
 	}
+	return days
 }
 
 func (s *Server) activateDemoOwnerUpgrade(w http.ResponseWriter, r *http.Request, user CurrentUser, plan, listingID, idempotencyKey string) {
@@ -2276,7 +2368,7 @@ func (s *Server) activateDemoOwnerUpgrade(w http.ResponseWriter, r *http.Request
 	reference := "DEMO-" + token[:16]
 	now := time.Now().UTC()
 	var expiresAt *time.Time
-	if days := ownerPlanDays(plan); days > 0 {
+	if days := s.ownerPlanDays(r.Context(), plan); days > 0 {
 		expires := now.Add(time.Duration(days) * 24 * time.Hour)
 		expiresAt = &expires
 	}
@@ -2315,7 +2407,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	if user.Role != "property_owner" && user.Role != "admin" {
+	if user.Role != "property_owner" && user.Role != "komisiyoneri" && user.Role != "admin" {
 		errorJSON(w, http.StatusForbidden, "property owner access required")
 		return
 	}
@@ -2357,14 +2449,10 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 						status = "active"
 						now := time.Now().UTC()
 						purchasedAt, activatedAt = &now, &now
-						days := 90
-						if plan == "gold" {
-							days = 180
-						} else if plan == "platinum" {
-							days = 365
+						if days := s.ownerPlanDays(r.Context(), plan); days > 0 {
+							expires := now.Add(time.Duration(days) * 24 * time.Hour)
+							expiresAt = &expires
 						}
-						expires := now.Add(time.Duration(days) * 24 * time.Hour)
-						expiresAt = &expires
 						receipt = momoStatus.FinancialTransactionID
 						providerTransactionID = &momoStatus.FinancialTransactionID
 					} else {
@@ -2378,7 +2466,26 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusInternalServerError, "could not read owner upgrades")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"prices": s.ownerUpgradePrices(), "purchases": purchases})
+		offers := make([]map[string]any, 0)
+		offerRows, offerErr := s.db.Query(r.Context(), `SELECT offer_key,label,price,duration_days,benefits FROM marketplace_premium_offers WHERE enabled ORDER BY price`)
+		if offerErr != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not load premium offers")
+			return
+		}
+		for offerRows.Next() {
+			var key, label string
+			var price float64
+			var duration int
+			var benefits []byte
+			if offerRows.Scan(&key, &label, &price, &duration, &benefits) != nil {
+				offerRows.Close()
+				errorJSON(w, http.StatusInternalServerError, "could not read premium offers")
+				return
+			}
+			offers = append(offers, map[string]any{"key": key, "label": label, "price": price, "duration_days": duration, "benefits": json.RawMessage(benefits)})
+		}
+		offerRows.Close()
+		writeJSON(w, http.StatusOK, map[string]any{"prices": s.ownerUpgradePrices(r.Context()), "offers": offers, "purchases": purchases})
 	case http.MethodPost:
 		var input struct {
 			Plan           string `json:"plan"`
@@ -2392,7 +2499,7 @@ func (s *Server) ownerUpgrades(w http.ResponseWriter, r *http.Request) {
 		}
 		input.Plan = strings.ToLower(strings.TrimSpace(input.Plan))
 		input.Provider = strings.ToLower(strings.TrimSpace(input.Provider))
-		price, validPlan := s.ownerUpgradePrices()[input.Plan]
+		price, validPlan := s.ownerUpgradePrices(r.Context())[input.Plan]
 		if !validPlan || (input.Provider != "demo" && (price <= 0 || math.Trunc(price) != price)) {
 			errorJSON(w, http.StatusBadRequest, "choose a plan with a configured server price")
 			return
@@ -3478,7 +3585,7 @@ func (s *Server) ownerDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	var listingsCount, activeListings, applicationsCount, tenantsCount int
 	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listings WHERE owner_id=$1 AND deleted_at IS NULL`, user.ID).Scan(&listingsCount)
-	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listings WHERE owner_id=$1 AND status='published'`, user.ID).Scan(&activeListings)
+	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listings WHERE owner_id=$1 AND status='published' AND deleted_at IS NULL`, user.ID).Scan(&activeListings)
 	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM rental_applications a JOIN listings l ON l.id=a.listing_id WHERE l.owner_id=$1 AND a.status='pending'`, user.ID).Scan(&applicationsCount)
 	_ = s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM rental_agreements WHERE landlord_id=$1 AND status='active'`, user.ID).Scan(&tenantsCount)
 	writeJSON(w, http.StatusOK, map[string]any{"listings": listingsCount, "active_listings": activeListings, "pending_applications": applicationsCount, "active_tenants": tenantsCount})
@@ -3713,13 +3820,13 @@ func (s *Server) authUser(r *http.Request) (CurrentUser, bool) {
 		return CurrentUser{}, false
 	}
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status,u.workspace_kind FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.token_hash=$1 AND se.expires_at > NOW() AND u.status='active'`, hash(token)).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
+	err := s.db.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status,u.workspace_kind,u.property_owner_enabled FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.token_hash=$1 AND se.expires_at > NOW() AND u.status='active'`, hash(token)).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind, &user.PropertyOwnerEnabled)
 	return user, err == nil
 }
 
 func (s *Server) userByID(r *http.Request, id string) (CurrentUser, bool) {
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind FROM users WHERE id=$1`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
+	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind,property_owner_enabled FROM users WHERE id=$1`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind, &user.PropertyOwnerEnabled)
 	return user, err == nil
 }
 
@@ -3833,7 +3940,7 @@ func validMediaURL(value string) bool {
 
 func validListingStatus(value string) bool {
 	switch value {
-	case "draft", "scheduled", "published", "expired", "cancelled":
+	case "draft", "scheduled", "published", "paused", "expired", "cancelled", "removed":
 		return true
 	default:
 		return false

@@ -17,6 +17,7 @@ type Config struct {
 	MediaPublicBaseURL   string
 	GoogleClientIDs      string
 	FlutterwaveSecretKey string
+	DemoPaymentsEnabled  bool
 	FrontendBaseURL      string
 	BackendPublicURL     string
 	MTNAPIUser           string
@@ -40,6 +41,7 @@ type Config struct {
 func Load() Config {
 	loadLocalEnv()
 	appEnv := env("APP_ENV", "development")
+	demoPaymentsDefault := appEnv != "production" && appEnv != "prod"
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" && appEnv == "development" {
 		databaseURL = "postgres://umutungo:umutungo@localhost:5432/umutungo?sslmode=disable"
@@ -54,6 +56,7 @@ func Load() Config {
 		MediaPublicBaseURL:   env("MEDIA_PUBLIC_BASE_URL", ""),
 		GoogleClientIDs:      env("GOOGLE_CLIENT_IDS", ""),
 		FlutterwaveSecretKey: env("FLUTTERWAVE_SECRET_KEY", ""),
+		DemoPaymentsEnabled:  envBoolDefault("DEMO_PAYMENTS_ENABLED", demoPaymentsDefault),
 		FrontendBaseURL:      strings.TrimRight(env("FRONTEND_BASE_URL", "http://localhost:3000"), "/"),
 		BackendPublicURL:     strings.TrimRight(env("BACKEND_PUBLIC_URL", "http://localhost:8080"), "/"),
 		MTNAPIUser:           env("MTN_API_USER", ""),
@@ -113,6 +116,14 @@ func envFloatDefault(key string, fallback float64) float64 {
 		return fallback
 	}
 	return amount
+}
+
+func envBoolDefault(key string, fallback bool) bool {
+	value, exists := os.LookupEnv(key)
+	if !exists || strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.EqualFold(strings.TrimSpace(value), "true") || strings.TrimSpace(value) == "1"
 }
 
 func env(key, fallback string) string {

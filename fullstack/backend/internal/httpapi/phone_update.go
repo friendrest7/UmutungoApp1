@@ -134,7 +134,7 @@ func (s *Server) verifyPhoneUpdateOTP(w http.ResponseWriter, r *http.Request, us
 		errorJSON(w, http.StatusUnauthorized, "invalid or expired verification code")
 		return
 	}
-	if _, err := tx.Exec(r.Context(), `UPDATE users SET phone=$1,verified_at=NOW(),updated_at=NOW() WHERE id=$2`, phone, user.ID); err != nil {
+	if _, err := tx.Exec(r.Context(), `UPDATE users SET phone=$1,verified_at=NOW(),phone_verified_at=NOW(),updated_at=NOW() WHERE id=$2`, phone, user.ID); err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			errorJSON(w, http.StatusConflict, "a user with this phone number already exists")
 			return

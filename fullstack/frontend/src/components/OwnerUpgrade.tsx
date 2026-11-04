@@ -8,7 +8,7 @@ import { umutungoApi } from '../lib/umutungoApi';
 type PlanName = 'silver' | 'gold' | 'platinum' | 'diamond';
 type Purchase = { id: string; plan: PlanName; amount: number; currency: string; status: string; payment_status: string; transaction_reference: string; receipt_number?: string; purchased_at?: string | null; activated_at?: string | null; expires_at?: string | null; is_demo?: boolean; listing_id?: string };
 type OwnerListing = { id: string; category: string; transaction_type: string; title: string; status: string };
-type UpgradeResponse = { prices: Record<PlanName, number>; purchases: Purchase[] };
+type UpgradeResponse = { prices: Partial<Record<PlanName, number>>; offers?: Array<{ key: PlanName; label: string; price: number; duration_days: number; benefits: string[] }>; purchases: Purchase[] };
 const plans: Array<{ id: PlanName; label: string; detail: string }> = [
   { id: 'silver', label: 'Silver', detail: '90 day Owner entitlement' },
   { id: 'gold', label: 'Gold', detail: '180 day Owner entitlement' },
@@ -36,6 +36,7 @@ export function OwnerUpgrade() {
     ]);
     if (result) {
       setData(result);
+      if (!result.prices[selected]) setSelected((Object.keys(result.prices) as PlanName[])[0] ?? 'silver');
       const latest = result.purchases[0];
       if (latest) setPurchase(latest);
       setListings(ownerListings?.items ?? []);
@@ -43,7 +44,7 @@ export function OwnerUpgrade() {
     }
     setMessage('Sign in as a Property Owner to view plans and payment status.');
     return null;
-  }, []);
+  }, [selected]);
 
   useEffect(() => {
     try {
@@ -100,10 +101,10 @@ export function OwnerUpgrade() {
     <header><Link href="/property-owner">Back to Owner dashboard</Link><h1>Owner plans</h1><p>Choose a promotion plan. Silver, Gold, and Platinum renew after their listed period; Diamond is a one-time payment for one published land listing.</p></header>
     {message && <p role="status" className="owner-upgrade-status">{message}</p>}
     <section className="owner-upgrade-plans" aria-label="Choose a plan">
-      {plans.map((plan) => <button type="button" key={plan.id} aria-pressed={selected === plan.id} className={`${selected === plan.id ? 'is-selected' : ''} ${plan.id === 'diamond' ? 'is-diamond' : ''}`} onClick={() => setSelected(plan.id)}>
+      {plans.filter((plan) => data?.prices?.[plan.id] != null).map((plan) => <button type="button" key={plan.id} aria-pressed={selected === plan.id} className={`${selected === plan.id ? 'is-selected' : ''} ${plan.id === 'diamond' ? 'is-diamond' : ''}`} onClick={() => setSelected(plan.id)}>
         <img src={`/premium/${plan.id}.svg`} alt={`${plan.label} plan badge`} />
-        <strong>{plan.label}</strong><span>{plan.detail}</span>
-        <b>RWF {(data?.prices?.[plan.id] ?? (plan.id === 'silver' ? 10000 : plan.id === 'gold' ? 20000 : plan.id === 'platinum' ? 30000 : 100000)).toLocaleString()}</b>
+        <strong>{data?.offers?.find((offer) => offer.key === plan.id)?.label ?? plan.label}</strong><span>{data?.offers?.find((offer) => offer.key === plan.id)?.benefits?.join(' · ') || plan.detail}</span>
+        <b>RWF {data?.prices?.[plan.id]?.toLocaleString()}</b>
       </button>)}
     </section>
     <section className="owner-upgrade-checkout">

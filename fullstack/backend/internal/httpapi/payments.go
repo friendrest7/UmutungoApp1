@@ -68,8 +68,12 @@ func (s *Server) applyVerifiedPayment(ctx context.Context, paymentID, providerSt
 					return err
 				}
 			}
-			if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status='active',purchased_at=NOW(),activated_at=NOW(),expires_at=CASE plan WHEN 'diamond' THEN NULL WHEN 'silver' THEN NOW()+INTERVAL '90 days' WHEN 'gold' THEN NOW()+INTERVAL '180 days' ELSE NOW()+INTERVAL '365 days' END,provider_transaction_id=$2,verified_at=NOW() WHERE payment_id=$1`, paymentID, financialTransactionID); err != nil {
+			result, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases p SET status='active',purchased_at=NOW(),activated_at=NOW(),expires_at=CASE WHEN offer.duration_days=0 THEN NULL ELSE NOW()+make_interval(days=>offer.duration_days) END,provider_transaction_id=$2,verified_at=NOW() FROM marketplace_premium_offers offer WHERE p.payment_id=$1 AND offer.offer_key=p.plan AND offer.enabled`, paymentID, financialTransactionID)
+			if err != nil {
 				return err
+			}
+			if result.RowsAffected() != 1 {
+				return fmt.Errorf("premium offer is no longer enabled")
 			}
 		} else if _, err := tx.Exec(ctx, `UPDATE owner_upgrade_purchases SET status=$2 WHERE payment_id=$1 AND status='pending'`, paymentID, providerStatus); err != nil {
 			return err

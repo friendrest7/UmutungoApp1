@@ -3724,6 +3724,45 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
 .listing-editor-form > label > span { float: right; color: #77847b; font-size: 9px; font-weight: 600; }
 .listing-editor-form > label :is(input, select) { display: block; width: 100%; min-height: 45px; margin-top: 8px; padding: 0 12px; border: 1px solid #dfe6e1; border-radius: 9px; outline: 0; background: #fbfcfb; color: #17231b; font: inherit; font-size: 12px; transition: border-color .18s ease, box-shadow .18s ease, background .18s ease; }
 .listing-editor-form > label :is(input, select):focus { border-color: var(--brand-green); outline: 0; background: #ffffff; box-shadow: 0 0 0 3px rgba(0, 199, 99, .13); }
+.listing-delete-dialog > p { margin: 12px 0 22px; color: var(--dashboard-muted); font-size: 12px; line-height: 1.65; }
+.listing-delete-dialog > p strong { color: var(--dashboard-ink); }
+.listing-delete-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.listing-delete-dialog-actions :is(.role-dashboard-outline, .landlord-delete-button) { min-height: 42px; padding: 0 16px; border-radius: 9px; font: inherit; font-size: 11px; font-weight: 750; cursor: pointer; }
+.listing-delete-dialog-actions .landlord-delete-button { border: 1px solid #b42318; background: #b42318; color: #fff; }
+.post-payment-choice-actions { display: flex; align-items: center; gap: 12px; }
+.post-payment-choice-actions .post-primary-button { width: auto; }
+.post-payment-choice-actions .post-secondary-button { min-height: 48px; padding: 0 20px; }
+@media (max-width: 560px) { .post-payment-choice-actions { width: 100%; flex-direction: column; } .post-payment-choice-actions :is(.post-primary-button, .post-secondary-button) { width: 100%; justify-content: center; } }
+.commissioner-entitlements { margin: 22px 0; }
+.commissioner-slot-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 18px 0; }
+.commissioner-slot-stats article { display: grid; gap: 7px; padding: 15px; border: 1px solid var(--dashboard-line); border-radius: 11px; background: var(--dashboard-paper); }
+.commissioner-slot-stats small { color: var(--dashboard-muted); font-size: 10px; }
+.commissioner-slot-stats strong { color: var(--dashboard-ink); font-size: 24px; }
+.commissioner-entitlement-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.commissioner-slot-packages { margin-top: 22px; padding-top: 19px; border-top: 1px solid var(--dashboard-line); }
+.commissioner-slot-packages h3 { margin: 0 0 12px; }
+.commissioner-slot-packages > label { display: grid; gap: 6px; max-width: 340px; margin-bottom: 12px; color: var(--dashboard-muted); font-size: 11px; }
+.commissioner-slot-packages input { min-height: 40px; padding: 0 11px; border: 1px solid var(--dashboard-line); border-radius: 8px; background: var(--dashboard-surface); color: var(--dashboard-ink); font: inherit; }
+.commissioner-slot-packages > div { display: grid; gap: 9px; }
+.commissioner-slot-packages article { display: flex; align-items: center; gap: 16px; padding: 13px; border: 1px solid var(--dashboard-line); border-radius: 10px; }
+.commissioner-slot-packages article > div { display: grid; gap: 4px; flex: 1; }
+.commissioner-slot-packages article small { color: var(--dashboard-muted); font-size: 10px; }
+.commissioner-slot-packages article b { white-space: nowrap; }
+.commissioner-slot-packages article button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--brand-green); color: white; font: inherit; font-size: 11px; font-weight: 750; cursor: pointer; }
+.commissioner-slot-empty { margin: 16px 0 0; color: var(--dashboard-muted); font-size: 11px; }
+@media (max-width: 560px) { .commissioner-slot-stats { grid-template-columns: 1fr; } .commissioner-slot-packages article { flex-wrap: wrap; } .commissioner-slot-packages article button { width: 100%; } }
+.admin-marketplace-pricing { max-width: 1180px; }
+.admin-pricing-group { display: grid; gap: 12px; margin: 22px 0; padding-top: 18px; border-top: 1px solid var(--dashboard-line); }
+.admin-pricing-group h3 { margin: 0; color: var(--dashboard-ink); }
+.admin-pricing-table-wrap { overflow: auto; border: 1px solid var(--dashboard-line); border-radius: 10px; }
+.admin-pricing-table-wrap table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: left; }
+.admin-pricing-table-wrap th, .admin-pricing-table-wrap td { padding: 10px; border-bottom: 1px solid var(--dashboard-line); white-space: nowrap; }
+.admin-pricing-table-wrap th { background: var(--dashboard-paper); color: var(--dashboard-muted); }
+.admin-pricing-table-wrap td input:not([type="checkbox"]) { width: 110px; min-height: 34px; padding: 0 7px; border: 1px solid var(--dashboard-line); border-radius: 6px; background: var(--dashboard-surface); color: var(--dashboard-ink); font: inherit; }
+.admin-pricing-table-wrap td input[type="checkbox"], .admin-offer-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand-green); }
+.admin-offer-row { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 12px; border: 1px solid var(--dashboard-line); border-radius: 9px; }
+.admin-offer-row > label { display: grid; gap: 5px; color: var(--dashboard-muted); font-size: 9px; }
+.admin-offer-row input:not([type="checkbox"]) { min-height: 34px; padding: 0 7px; border: 1px solid var(--dashboard-line); border-radius: 6px; background: var(--dashboard-surface); color: var(--dashboard-ink); font: inherit; }
 .listing-editor-actions { display: flex; align-items: center; gap: 9px; margin-top: 3px; padding-top: 16px; border-top: 1px solid #edf0ed; }
 .listing-editor-actions .role-dashboard-primary { min-height: 43px; justify-content: center; border-radius: 9px; color: #06150d; }
 .listing-editor-actions .role-dashboard-outline { width: auto; min-height: 43px; margin: 0; padding: 0 15px; border-radius: 9px; color: #425047; }

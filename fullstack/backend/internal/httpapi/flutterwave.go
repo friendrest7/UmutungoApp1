@@ -30,17 +30,21 @@ func newFlutterwaveClient(secret string) flutterwaveClient {
 	return flutterwaveClient{secret: strings.TrimSpace(secret), http: &http.Client{Timeout: 20 * time.Second}}
 }
 
-func (f flutterwaveClient) startCheckout(ctx context.Context, txRef, email, name, redirectURL, method string, amount float64, listingID string) (string, error) {
+func (f flutterwaveClient) startCheckout(ctx context.Context, txRef, email, name, redirectURL, method, phone string, amount float64, listingID string) (string, error) {
 	if f.secret == "" {
 		return "", fmt.Errorf("Flutterwave is not configured. Set FLUTTERWAVE_SECRET_KEY on the backend")
 	}
 	if method != "card" && method != "mobilemoneyrwanda" {
 		return "", fmt.Errorf("choose card or Rwanda mobile money")
 	}
+	customer := map[string]string{"email": email, "name": name}
+	if strings.TrimSpace(phone) != "" {
+		customer["phone_number"] = strings.TrimSpace(phone)
+	}
 	body, err := json.Marshal(map[string]any{
 		"tx_ref": txRef, "amount": amount, "currency": "RWF", "redirect_url": redirectURL,
 		"payment_options": method,
-		"customer":        map[string]string{"email": email, "name": name},
+		"customer":        customer,
 		"customizations":  map[string]string{"title": "Umutungo property upload", "description": "One-time property listing upload fee"},
 		"meta":            map[string]string{"listing_id": listingID, "payment_type": "listing_upload"},
 	})

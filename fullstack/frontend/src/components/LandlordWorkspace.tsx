@@ -981,7 +981,7 @@ export function LandlordWorkspace({
                         </small>
                       </div>
                     </div>
-                    <div className="owner-setup-row">
+                    {!ownerRoute && <div className="owner-setup-row">
                       <span className="owner-setup-pending"> </span>
                       <div>
                         <strong>Subscription billing</strong>
@@ -992,7 +992,7 @@ export function LandlordWorkspace({
                           no subscription charge will be made here.
                         </small>
                       </div>
-                    </div>
+                    </div>}
                     <Link className="owner-muted-link" href="/upgrade/owner">
                       View existing one-time listing upgrades <span> </span>
                     </Link>

@@ -10,9 +10,9 @@ type Purchase = { id: string; plan: PlanName; amount: number; currency: string; 
 type OwnerListing = { id: string; category: string; transaction_type: string; title: string; status: string };
 type UpgradeResponse = { prices: Partial<Record<PlanName, number>>; offers?: Array<{ key: PlanName; label: string; price: number; duration_days: number; benefits: string[] }>; purchases: Purchase[] };
 const plans: Array<{ id: PlanName; label: string; detail: string }> = [
-  { id: 'silver', label: 'Silver', detail: '90 day Owner entitlement' },
-  { id: 'gold', label: 'Gold', detail: '180 day Owner entitlement' },
-  { id: 'platinum', label: 'Platinum', detail: '365 day Owner entitlement' },
+  { id: 'silver', label: 'Silver', detail: 'One-time purchase · 90 day promotion' },
+  { id: 'gold', label: 'Gold', detail: 'One-time purchase · 180 day promotion' },
+  { id: 'platinum', label: 'Platinum', detail: 'One-time purchase · 365 day promotion' },
   { id: 'diamond', label: 'Diamond', detail: 'One-time promotion for one land listing' },
 ];
 const localDate = (value?: string | null) => value ? new Date(value).toLocaleString() : 'No expiry';
@@ -98,7 +98,7 @@ export function OwnerUpgrade() {
   const canSubmit = isDemoAccount || (selectedPrice > 0 && (selected === 'diamond' || phone.trim().length > 0));
 
   return <main className="owner-upgrade-page">
-    <header><Link href="/property-owner">Back to Owner dashboard</Link><h1>Owner plans</h1><p>Choose a promotion plan. Silver, Gold, and Platinum renew after their listed period; Diamond is a one-time payment for one published land listing.</p></header>
+    <header><Link href="/property-owner">Back to Owner dashboard</Link><h1>One-time promotions</h1><p>Property Owners do not have subscriptions. Listing payments are charged once per property. Optional Silver, Gold, Platinum, and Diamond promotions are also paid once; none renew automatically.</p></header>
     {message && <p role="status" className="owner-upgrade-status">{message}</p>}
     <section className="owner-upgrade-plans" aria-label="Choose a plan">
       {plans.filter((plan) => data?.prices?.[plan.id] != null).map((plan) => <button type="button" key={plan.id} aria-pressed={selected === plan.id} className={`${selected === plan.id ? 'is-selected' : ''} ${plan.id === 'diamond' ? 'is-diamond' : ''}`} onClick={() => setSelected(plan.id)}>
@@ -108,7 +108,7 @@ export function OwnerUpgrade() {
       </button>)}
     </section>
     <section className="owner-upgrade-checkout">
-      <h2>{selected === 'diamond' ? 'Diamond land promotion' : isDemoAccount ? 'Activate Owner plan' : 'One-time plan payment'}</h2>
+      <h2>{selected === 'diamond' ? 'Diamond land promotion' : isDemoAccount ? 'Preview Owner promotion' : 'One-time promotion payment'}</h2>
       {isDemoAccount ? <p>Activate premium tools for your property workspace.</p> : <p>Payment method: MTN MoMo</p>}
       {requiresLandSelection && <label>Published land listing<select value={selectedListing} onChange={(event) => setSelectedListing(event.target.value)} required><option value="">Choose a land listing</option>{diamondListings.map((listing) => <option key={listing.id} value={listing.id}>{listing.title}</option>)}</select>{diamondListings.length === 0 && <small>Diamond is for published land listings that are available for sale. Publish a land listing first.</small>}</label>}
       {!isDemoAccount && selected !== 'diamond' && <label>MTN Rwanda number<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+250 7XX XXX XXX" required /></label>}

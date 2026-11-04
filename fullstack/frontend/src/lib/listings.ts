@@ -108,6 +108,18 @@ export function fallbackListingImages(item: ApiListing) {
   return listingImageFallbacks[category] ?? listingImageFallbacks.other;
 }
 
+function listingCustomDetails(value: unknown): Array<{ label: string; value: string }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const detail = entry as { label?: unknown; value?: unknown };
+    if (typeof detail.label !== 'string' || typeof detail.value !== 'string') return [];
+    const label = detail.label.trim();
+    const detailValue = detail.value.trim();
+    return label && detailValue ? [{ label, value: detailValue }] : [];
+  });
+}
+
 export function toProperty(item: ApiListing): PropertyPlaceholder {
   const images = listingImages(item);
   const category = item.category.toLowerCase();
@@ -137,6 +149,7 @@ export function toProperty(item: ApiListing): PropertyPlaceholder {
     photoCount: images.length,
     amenities: item.amenities ?? [],
     tags: item.tags ?? [],
+    customDetails: listingCustomDetails(item.measurements?.additional_details),
     listed: listingDate,
     featured: item.is_featured ?? false,
     availableFor: both ? 'both' : rent ? 'rent' : 'sale',

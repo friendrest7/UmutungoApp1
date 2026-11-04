@@ -25,8 +25,12 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusUnauthorized, "sign in to continue")
 		return
 	}
-	if user.Role != "property_owner" && user.Role != "komisiyoneri" && user.Role != "admin" {
+	if user.Role != "property_owner" && user.Role != "admin" {
 		errorJSON(w, http.StatusForbidden, "marketplace posting access required")
+		return
+	}
+	if postingRole(user) == "komisiyoneri" {
+		errorJSON(w, http.StatusForbidden, "Komisiyoneri publishing uses purchased upload slots")
 		return
 	}
 	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
@@ -66,7 +70,7 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusConflict, "only an active RWF draft can use demo checkout")
 		return
 	}
-	_, fee, err := s.configuredListingFee(r.Context(), user, price)
+	rate, fee, err := s.configuredListingFee(r.Context(), user, price)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, err.Error())
 		return
@@ -92,7 +96,6 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusInternalServerError, "could not create demo payment record")
 		return
 	}
-	rate := math.Round((fee/price)*10000) / 100
 	if _, err := tx.Exec(r.Context(), `INSERT INTO listing_subscriptions(listing_id,owner_id,payment_id,monthly_amount,rate_percent,status,requested_status,publish_at) VALUES($1,$2,$3,$4,$5,'pending',$6,$7)`, listingID, user.ID, paymentID, math.Round(fee), rate, input.RequestedState, input.PublishAt); err != nil {
 		errorJSON(w, http.StatusConflict, "a payment is already in progress for this listing")
 		return
@@ -122,6 +125,10 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 	}
 	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
 		errorJSON(w, http.StatusForbidden, "activate Property Owner access before paying to publish")
+		return
+	}
+	if postingRole(user) == "komisiyoneri" {
+		errorJSON(w, http.StatusForbidden, "Komisiyoneri publishing uses purchased upload slots; buy an upload package to continue")
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -160,8 +167,8 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusBadRequest, "listing must be published or scheduled after payment")
 		return
 	}
-	var title, currency string
-	var price, storedFee float64
+	var currency string
+	var price float64
 	var status string
 	if user.Role == "property_owner" {
 		var verified bool
@@ -170,7 +177,7 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 			return
 		}
 	}
-	if err := s.db.QueryRow(r.Context(), `SELECT title,price,monthly_fee,currency,status FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&title, &price, &storedFee, &currency, &status); err != nil {
+	if err := s.db.QueryRow(r.Context(), `SELECT price,currency,status FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&price, &currency, &status); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -178,8 +185,8 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusConflict, "only a saved draft can start its first listing payment")
 		return
 	}
-	_, fee, feeErr := s.configuredListingFee(r.Context(), user, price)
-	if feeErr != nil || math.Round(fee) < 1 || math.Abs(fee-storedFee) > 0.02 || currency != "RWF" {
+	rate, fee, feeErr := s.configuredListingFee(r.Context(), user, price)
+	if feeErr != nil || math.Round(fee) < 1 || currency != "RWF" {
 		errorJSON(w, http.StatusConflict, "listing price or one-time upload fee is not valid")
 		return
 	}
@@ -213,7 +220,6 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusInternalServerError, "could not save payment request")
 		return
 	}
-	rate := math.Round((fee/price)*10000) / 100
 	_, err = tx.Exec(r.Context(), `INSERT INTO listing_subscriptions(listing_id,owner_id,payment_id,monthly_amount,rate_percent,status,requested_status,publish_at) VALUES($1,$2,$3,$4,$5,'pending',$6,$7)`, listingID, user.ID, paymentID, amount, rate, input.RequestedState, input.PublishAt)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not save listing payment")
@@ -309,6 +315,9 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 	var owner CurrentUser
 	if err := tx.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status,u.workspace_kind,u.property_owner_enabled FROM listings l JOIN users u ON u.id=l.owner_id WHERE l.id=$1`, listingID).Scan(&owner.ID, &owner.Name, &owner.Email, &owner.Phone, &owner.Role, &owner.Status, &owner.WorkspaceKind, &owner.PropertyOwnerEnabled); err != nil {
 		return err
+	}
+	if postingRole(owner) == "komisiyoneri" {
+		return fmt.Errorf("Komisiyoneri listings must use purchased upload slots")
 	}
 	var expiryDays int
 	if err := tx.QueryRow(r.Context(), `SELECT MAX(default_expiry_days) FROM marketplace_listing_fee_rules WHERE role=$1 AND enabled`, postingRole(owner)).Scan(&expiryDays); err != nil || expiryDays < 1 {

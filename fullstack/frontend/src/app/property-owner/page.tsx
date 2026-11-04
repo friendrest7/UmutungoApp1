@@ -1,7 +1,7 @@
 'use client';
 
-import { LandlordWorkspace } from '../../components/LandlordWorkspace';
+import { RoleDashboard } from '../../components/RoleDashboard';
 
 export default function PropertyOwnerPage() {
-  return <LandlordWorkspace ownerRoute />;
+  return <RoleDashboard role="landlord" />;
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AuthModal, type AuthRole } from "./AuthModal";
 import { Icon } from "./Icons";
 import { Logo } from "./Logo";
-import { PostPropertyComposer } from "./PostPropertyComposer";
+import { LandlordAdvertisePropertiesSection, type AdvertiseListing } from "./LandlordAdvertisePropertiesSection";
 import { apiToken, umutungoApi } from "../lib/umutungoApi";
 import {
   rwandaLocations,
@@ -66,6 +66,40 @@ type Workspace = {
   billing: { configured: boolean; message: string };
   onboarding: { step: number; completed: boolean };
 };
+type MarketplaceListingRecord = {
+  id: string;
+  category: string;
+  transaction_type: string;
+  title: string;
+  price: number;
+  currency: string;
+  province: string;
+  district: string;
+  sector: string;
+  status: string;
+  cover?: string;
+  images?: string[];
+  media?: Array<{ type?: string; url: string; sort_order?: number }>;
+  created_at: string;
+  is_featured?: boolean;
+};
+const mapMarketplaceListing = (item: MarketplaceListingRecord): AdvertiseListing => {
+  const intent = item.transaction_type === "rent_out" || item.transaction_type === "rent" ? "For rent" : item.transaction_type === "book" ? "Book" : "For sale";
+  const mediaImages = item.media?.filter((media) => media.url && (!media.type || media.type.toLowerCase() === "photo")).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((media) => media.url) ?? [];
+  const cover = item.cover || mediaImages[0] || item.images?.[0] || "/properties/house-01.jpg";
+  return {
+    id: item.id,
+    title: item.title,
+    type: item.category,
+    intent,
+    location: [item.sector, item.district, item.province].filter(Boolean).join(" - "),
+    price: `${item.currency || "RWF"} ${item.price.toLocaleString("en-RW")}`,
+    priceNote: intent === "For rent" ? "/ month" : "",
+    cover,
+    status: item.status,
+    featured: item.is_featured ?? false,
+  };
+};
 const money = (amount: number) =>
   new Intl.NumberFormat("en-RW", {
     style: "currency",
@@ -90,45 +124,6 @@ const monthKigali = () =>
     year: "numeric",
     month: "2-digit",
   }).format(new Date());
-function exportRentCSV(rows: Workspace["rent"], month: string) {
-  const columns = [
-    "Tenant",
-    "Phone",
-    "Property",
-    "Unit",
-    "Due RWF",
-    "Paid RWF",
-    "Balance RWF",
-    "Due date",
-    "Status",
-  ];
-  const csv = [
-    columns,
-    ...rows.map((row) => [
-      row.tenant_name,
-      row.tenant_phone,
-      row.property,
-      row.unit,
-      row.amount_due,
-      row.amount_paid,
-      row.balance,
-      row.due_date,
-      row.status,
-    ]),
-  ]
-    .map((row) =>
-      row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","),
-    )
-    .join("\r\n");
-  const url = URL.createObjectURL(
-    new Blob([csv], { type: "text/csv;charset=utf-8" }),
-  );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `umutungo-rent-${month}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 export function LandlordWorkspace({
   ownerRoute = false,
 }: {
@@ -142,10 +137,14 @@ export function LandlordWorkspace({
   const [activePage, setActivePage] = useState("Overview");
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
-    if (section === "Properties" || section === "Tenants" || section === "Enquiries") setActivePage(section);
+    if (section === "Properties" || section === "Tenants" || section === "Enquiries" || section === "Reports" || section === "Advertise property") setActivePage(section);
   }, []);
   const [authOpen, setAuthOpen] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [marketplaceListings, setMarketplaceListings] = useState<AdvertiseListing[]>([]);
+  const [canAdvertiseListings, setCanAdvertiseListings] = useState(false);
+  const [advertiseNotice, setAdvertiseNotice] = useState("");
+  const [selectedTenantPhone, setSelectedTenantPhone] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -254,6 +253,55 @@ export function LandlordWorkspace({
   useEffect(() => {
     if (session === "allowed") void loadWorkspace(month, propertyFilter);
   }, [session, month, propertyFilter, loadWorkspace]);
+  useEffect(() => {
+    if (session !== "allowed") return;
+    let cancelled = false;
+    const loadAdvertising = async () => {
+      try {
+        const [listingResponse, upgradeResponse] = await Promise.all([
+          umutungoApi<{ items: MarketplaceListingRecord[] }>("/api/v1/owner/listings"),
+          umutungoApi<{ purchases?: Array<{ plan?: string; status: string; expires_at?: string | null }> }>("/api/v1/owner/upgrades"),
+        ]);
+        if (cancelled) return;
+        setMarketplaceListings((listingResponse?.items ?? []).map(mapMarketplaceListing));
+        const now = Date.now();
+        const activePlan = upgradeResponse?.purchases?.some((purchase) =>
+          ["silver", "gold", "platinum"].includes(purchase.plan ?? "") &&
+          purchase.status === "active" && purchase.expires_at && Date.parse(purchase.expires_at) > now,
+        ) ?? false;
+        setCanAdvertiseListings(activePlan);
+      } catch {
+        if (!cancelled) {
+          setMarketplaceListings([]);
+          setCanAdvertiseListings(false);
+        }
+      }
+    };
+    const refresh = () => { void loadAdvertising(); };
+    refresh();
+    window.addEventListener("umutungo:landlord-data-changed", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("umutungo:landlord-data-changed", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [session]);
+  const toggleMarketplacePromotion = async (listing: AdvertiseListing) => {
+    const featured = !listing.featured;
+    setAdvertiseNotice(featured ? `Recommending ${listing.title}…` : `Removing ${listing.title} from recommendations…`);
+    try {
+      const result = await umutungoApi<{ is_featured: boolean }>(`/api/v1/listings/${encodeURIComponent(listing.id)}/featured`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_featured: featured }),
+      });
+      if (!result) throw new Error("Could not update this property promotion.");
+      setMarketplaceListings((current) => current.map((item) => item.id === listing.id ? { ...item, featured: result.is_featured } : item));
+      setAdvertiseNotice(result.is_featured ? `${listing.title} is recommended on the home page.` : `${listing.title} was removed from home page recommendations.`);
+    } catch (cause) {
+      setAdvertiseNotice(cause instanceof Error ? cause.message : "Could not update this property promotion.");
+    }
+  };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
@@ -370,6 +418,21 @@ export function LandlordWorkspace({
   );
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const tenantContacts = new Map<string, { name: string; phone: string; context: string }>();
+  workspace?.rent.forEach((row) => {
+    const phone = row.tenant_phone.trim();
+    if (phone) tenantContacts.set(phone, { name: row.tenant_name, phone, context: `${row.property}${row.unit ? ` · ${row.unit}` : ""}` });
+  });
+  workspace?.applications.forEach((application) => {
+    const phone = application.phone.trim();
+    if (phone && !tenantContacts.has(phone)) tenantContacts.set(phone, { name: application.applicant_name || "Tenant applicant", phone, context: application.listing_title });
+  });
+  const selectedTenant = Array.from(tenantContacts.values()).find((tenant) => tenant.phone === selectedTenantPhone);
+  const tenantPhoneDigits = selectedTenant?.phone.replace(/\D/g, "").replace(/^0/, "") ?? "";
+  const whatsappNumber = tenantPhoneDigits && !tenantPhoneDigits.startsWith("250") ? `250${tenantPhoneDigits}` : tenantPhoneDigits;
+  const tenantMessageLink = selectedTenant && whatsappNumber.length >= 11
+    ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(`Hello ${selectedTenant.name}, I am contacting you about ${selectedTenant.context || "your rental"}.`)}`
+    : "";
   if (session === "checking")
     return (
       <main className="owner-workspace-access">
@@ -423,6 +486,10 @@ export function LandlordWorkspace({
             <Icon name="building" size={17} />
             Properties
           </button>
+          <button type="button" className={activePage === "Advertise property" ? "is-active" : ""} onClick={() => setActivePage("Advertise property")}>
+            <Icon name="sparkles" size={17} />
+            Advertise property
+          </button>
           <button type="button" className={activePage === "Tenants" ? "is-active" : ""} onClick={() => setActivePage("Tenants")}>
             <Icon name="creditCard" size={17} />
             Tenants
@@ -439,9 +506,9 @@ export function LandlordWorkspace({
             <Icon name="users" size={17} />
             Enquiries
           </button>
-          <button type="button" className={activePage === "Post a Property" ? "is-active" : ""} onClick={() => setActivePage("Post a Property")}>
-            <Icon name="bookPen" size={17} />
-            Post a Property
+          <button type="button" className={activePage === "Reports" ? "is-active" : ""} onClick={() => setActivePage("Reports")}>
+            <Icon name="area" size={17} />
+            Reports
           </button>
           <Link href="/upgrade/owner">
             <Icon name="sparkles" size={17} />
@@ -467,9 +534,6 @@ export function LandlordWorkspace({
           </div>
         </header>{" "}
         <div className="owner-content" id="overview" data-page={activePage}>
-          {activePage === "Post a Property" && (
-            <PostPropertyComposer embedded onCancel={() => setActivePage("Overview")} />
-          )}
           <div className="owner-welcome" hidden={activePage !== "Overview"}>
             <div>
               <span className="owner-eyebrow">
@@ -485,13 +549,9 @@ export function LandlordWorkspace({
               </p>
             </div>
             <div className="owner-actions">
-              <button
-                className="owner-primary"
-                onClick={() => setModal("property")}
-              >
-                {" "}
+              <Link className="owner-primary" href="/post-property">
                 Add property
-              </button>
+              </Link>
               <button
                 className="owner-secondary"
                 onClick={() => setModal("payment")}
@@ -648,6 +708,53 @@ export function LandlordWorkspace({
                       )}{" "}
                   </div>
                 </section>{" "}
+                <section className="owner-panel owner-overview-portfolio" hidden={activePage !== "Overview"}>
+                  <div className="owner-panel-heading">
+                    <div>
+                      <span className="owner-eyebrow">TENANT CONTACTS</span>
+                      <h2>Talk to a tenant</h2>
+                    </div>
+                  </div>
+                  <div className="owner-tenant-contact">
+                    <label htmlFor="owner-tenant-contact-select">Select a tenant</label>
+                    <select id="owner-tenant-contact-select" value={selectedTenantPhone} onChange={(event) => setSelectedTenantPhone(event.target.value)}>
+                      <option value="">Choose a tenant to contact</option>
+                      {Array.from(tenantContacts.values()).map((tenant) => (
+                        <option key={tenant.phone} value={tenant.phone}>{tenant.name}{tenant.context ? ` · ${tenant.context}` : ""}</option>
+                      ))}
+                    </select>
+                    {tenantMessageLink ? (
+                      <a className="owner-primary" href={tenantMessageLink} target="_blank" rel="noreferrer">
+                        <Icon name="whatsapp" size={16} /> Message {selectedTenant?.name}
+                      </a>
+                    ) : (
+                      <p>{tenantContacts.size ? "Choose a tenant with a valid phone number to start a WhatsApp conversation." : "Tenant contacts appear here when a rent charge or application includes their phone number."}</p>
+                    )}
+                  </div>
+                </section>{" "}
+                <section className="owner-panel owner-report-panel" hidden={activePage !== "Reports"}>
+                  <div className="owner-panel-heading">
+                    <div><span className="owner-eyebrow">PROPERTY PERFORMANCE</span><h2>Portfolio report</h2></div>
+                    <span className="owner-report-period">{month}</span>
+                  </div>
+                  <p className="owner-report-intro">A snapshot of your assigned properties and rental activity for this month.</p>
+                  <div className="owner-report-grid">
+                    <article><span>Assigned properties</span><strong>{workspace.properties.length}</strong><small>Private portfolio</small></article>
+                    <article><span>Rent expected</span><strong>{money(workspace.summary.expected)}</strong><small>This month</small></article>
+                    <article><span>Rent collected</span><strong>{money(workspace.summary.collected)}</strong><small>This month</small></article>
+                    <article><span>Outstanding</span><strong>{money(workspace.summary.balance)}</strong><small>{workspace.summary.overdue_count} overdue charges</small></article>
+                  </div>
+                </section>{" "}
+                <div className="owner-advertise-page" hidden={activePage !== "Advertise property"}>
+                  <LandlordAdvertisePropertiesSection
+                    listings={marketplaceListings}
+                    onFeature={(listing) => void toggleMarketplacePromotion(listing)}
+                    notice={advertiseNotice}
+                    canAdvertise={canAdvertiseListings}
+                    audience="Owner"
+                    upgradeHref="/upgrade/owner"
+                  />
+                </div>
                 <div className="owner-section-grid" hidden={activePage !== "Tenants" && activePage !== "Properties"}>
                   <section className="owner-panel owner-rent-panel" id="rent" hidden={activePage !== "Tenants"}>
                     <div className="owner-panel-heading">
@@ -655,18 +762,6 @@ export function LandlordWorkspace({
                         <span className="owner-eyebrow">TENANT MANAGEMENT</span>
                         <h2>Tenants</h2>
                       </div>
-                      <button
-                        className="owner-link-button"
-                        onClick={() => exportRentCSV(workspace.rent, month)}
-                      >
-                        Export CSV
-                      </button>
-                      <button
-                        className="owner-link-button"
-                        onClick={() => exportRentCSV(workspace.rent, month)}
-                      >
-                        Export CSV
-                      </button>
                       <button
                         className="owner-link-button"
                         onClick={() => setModal("charge")}

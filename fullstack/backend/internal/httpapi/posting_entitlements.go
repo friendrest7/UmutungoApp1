@@ -26,6 +26,24 @@ func calculatePostingFee(price, ratePercent, fixedFee float64) float64 {
 	return math.Round((price*ratePercent/100+fixedFee)*100) / 100
 }
 
+func calculateRolePostingFee(role string, price, ratePercent, fixedFee float64) (float64, float64, error) {
+	switch role {
+	case "property_owner":
+		fee := calculatePostingFee(price, ratePercent, fixedFee)
+		if fee <= 0 {
+			return 0, 0, fmt.Errorf("configured property-owner posting fee must be greater than zero")
+		}
+		return ratePercent, fee, nil
+	case "landlord":
+		if fixedFee <= 0 {
+			return 0, 0, fmt.Errorf("no fixed marketplace posting fee is configured for this landlord account")
+		}
+		return 0, fixedFee, nil
+	default:
+		return 0, 0, fmt.Errorf("this account publishes using purchased upload slots")
+	}
+}
+
 func (s *Server) configuredListingFee(ctx context.Context, user CurrentUser, price float64) (float64, float64, error) {
 	if price <= 0 || math.IsNaN(price) || math.IsInf(price, 0) {
 		return 0, 0, fmt.Errorf("listing price must be greater than zero")
@@ -36,11 +54,7 @@ func (s *Server) configuredListingFee(ctx context.Context, user CurrentUser, pri
 	if err != nil {
 		return 0, 0, fmt.Errorf("no enabled marketplace posting price is configured for this account")
 	}
-	fee := calculatePostingFee(price, rate, fixed)
-	if fee <= 0 {
-		return 0, 0, fmt.Errorf("configured posting price must be greater than zero")
-	}
-	return rate, fee, nil
+	return calculateRolePostingFee(role, price, rate, fixed)
 }
 
 func (s *Server) listingExpiryDays(ctx context.Context, user CurrentUser) (int, error) {
@@ -100,6 +114,15 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
+	if postingRole(user) == "komisiyoneri" {
+		var slots int
+		if err := s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listing_upload_slots WHERE owner_id=$1 AND status='available'`, user.ID).Scan(&slots); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not check upload slots")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"payment_type": "paid_upload_slot", "payment_model": "upload_slot", "available_slots": slots, "currency": "RWF", "demo_mode": false})
+		return
+	}
 	price, err := strconv.ParseFloat(strings.TrimSpace(r.URL.Query().Get("price")), 64)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, "enter a valid listing price")
@@ -110,7 +133,13 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"price": price, "fee": math.Round(fee), "rate_percent": rate, "currency": "RWF", "payment_type": "one_time_listing_upload", "demo_mode": s.cfg.DemoPaymentsEnabled})
+	paymentType := "one_time_listing_upload"
+	paymentModel := "percentage"
+	if postingRole(user) == "landlord" {
+		paymentType = "one_time_marketplace_posting_fee"
+		paymentModel = "fixed"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"price": price, "fee": math.Round(fee), "rate_percent": rate, "currency": "RWF", "payment_type": paymentType, "payment_model": paymentModel, "demo_mode": s.cfg.DemoPaymentsEnabled})
 }
 
 func (s *Server) createUploadSlotPurchase(w http.ResponseWriter, r *http.Request) {

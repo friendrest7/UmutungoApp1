@@ -221,6 +221,7 @@ export default function PropertyDetailPage() {
               {property.type === 'House' && <><span><b>{property.bedrooms}</b> beds</span><span><b>{property.bathrooms}</b> baths</span></>}
               {property.area > 0 && <span><b>{property.area}</b> m²</span>}
             </div>}
+            {property.customDetails?.length ? <section className="property-detail-custom-fields" aria-label="Additional property details"><h2>Additional details</h2><dl>{property.customDetails.map((detail) => <div key={`${detail.label}-${detail.value}`}><dt>{detail.label}</dt><dd>{detail.value}</dd></div>)}</dl></section> : null}
             <div className="property-detail-meta"><span className="property-detail-listed">{property.listed}</span><span className="property-detail-availability">{property.availableFor === 'rent' ? 'Available to rent' : property.availableFor === 'both' ? 'Available to buy or rent' : 'Available to buy'}</span></div>
             <div className="property-detail-after-negotiability">
             {property.poster && <div className="property-detail-meta"><span>Advertiser: {property.poster.businessName || property.poster.name} ({property.poster.role})</span></div>}

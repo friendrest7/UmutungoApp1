@@ -1182,7 +1182,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 		COALESCE(l.cell,''), COALESCE(l.village,''), l.latitude, l.longitude, l.status,
 		l.tags, l.amenities, l.created_at, l.publish_at
 		, COALESCE((SELECT json_agg(json_build_object('type', lm.media_type, 'url', lm.url) ORDER BY lm.sort_order, lm.created_at) FROM listing_media lm WHERE lm.listing_id=l.id), '[]'::json) AS media
-		, COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) AS measurements
+		, COALESCE((SELECT (jsonb_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) || COALESCE(m.room_dimensions, '{}'::jsonb))::json FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) AS measurements
 		, (l.is_featured AND (EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.status='active' AND p.expires_at > NOW()) OR EXISTS (SELECT 1 FROM owner_upgrade_purchases p WHERE p.owner_id=l.owner_id AND p.listing_id=l.id AND p.plan='diamond' AND p.status='active') OR EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id=l.owner_id AND s.status='active' AND s.tier IN ('silver','gold','platinum') AND (s.starts_at IS NULL OR s.starts_at <= NOW()) AND (s.ends_at IS NULL OR s.ends_at > NOW())))) AS is_featured
 		FROM listings l JOIN users u ON u.id=l.owner_id
 		WHERE l.deleted_at IS NULL AND l.status='published'
@@ -1344,10 +1344,12 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.PriceRange = listingPriceBandForAmount(input.Price)
-	_, monthlyFee, feeErr := s.configuredListingFee(r.Context(), user, input.Price)
-	if feeErr != nil {
-		errorJSON(w, http.StatusBadRequest, feeErr.Error())
-		return
+	monthlyFee := 0.0
+	if postingRole(user) != "komisiyoneri" {
+		_, configuredFee, feeErr := s.configuredListingFee(r.Context(), user, input.Price)
+		if feeErr == nil {
+			monthlyFee = configuredFee
+		}
 	}
 	if user.Role == "property_owner" {
 		var phoneVerified bool
@@ -1826,7 +1828,7 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request, id string) {
 	var publishAt *time.Time
 	var ownerVerifiedAt *time.Time
 	var measurements []byte
-	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,COALESCE(bp.business_name,''),COALESCE(pr.photo_url,''),COALESCE(u.phone,''),u.verified_at,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.publish_at,l.expires_at,COALESCE((SELECT json_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) FROM listings l JOIN users u ON u.id=l.owner_id LEFT JOIN business_profiles bp ON bp.user_id=u.id LEFT JOIN profiles pr ON pr.user_id=u.id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
+	err := s.db.QueryRow(r.Context(), `SELECT l.owner_id,u.name,u.role,COALESCE(bp.business_name,''),COALESCE(pr.photo_url,''),COALESCE(u.phone,''),u.verified_at,l.category,l.transaction_type,l.title,l.description,l.price,l.currency,l.province,l.district,l.sector,COALESCE(l.cell,''),COALESCE(l.village,''),l.latitude,l.longitude,l.status,l.tags,l.amenities,l.created_at,l.publish_at,l.expires_at,COALESCE((SELECT (jsonb_build_object('building_size', m.building_size, 'land_size', m.land_size, 'bedrooms', m.bedrooms, 'bathrooms', m.bathrooms, 'parking', m.parking) || COALESCE(m.room_dimensions, '{}'::jsonb))::json FROM measurements m WHERE m.listing_id=l.id ORDER BY m.id LIMIT 1), '{}'::json) FROM listings l JOIN users u ON u.id=l.owner_id LEFT JOIN business_profiles bp ON bp.user_id=u.id LEFT JOIN profiles pr ON pr.user_id=u.id WHERE l.id=$1 AND l.deleted_at IS NULL AND l.status='published'`, id).
 		Scan(&ownerID, &ownerName, &ownerRole, &businessName, &photoURL, &ownerPhone, &ownerVerifiedAt, &category, &transactionType, &title, &description, &price, &currency, &province, &district, &sector, &cell, &village, &latitude, &longitude, &status, &tags, &amenities, &createdAt, &publishAt, &expiresAt, &measurements)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1937,12 +1939,15 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 			errorJSON(w, http.StatusInternalServerError, "could not validate listing price")
 			return
 		}
-		_, fee, err := s.configuredListingFee(r.Context(), owner, *input.Price)
-		if err != nil {
-			errorJSON(w, http.StatusBadRequest, err.Error())
-			return
+		if postingRole(owner) == "komisiyoneri" {
+			fee := float64(0)
+			monthlyFee = &fee
+		} else if _, fee, err := s.configuredListingFee(r.Context(), owner, *input.Price); err == nil {
+			monthlyFee = &fee
+		} else {
+			fee := float64(0)
+			monthlyFee = &fee
 		}
-		monthlyFee = &fee
 	}
 	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=COALESCE($3,price), monthly_fee=COALESCE($4,monthly_fee), price_range=CASE WHEN $3::numeric IS NULL THEN price_range ELSE CASE WHEN $3<=300000 THEN '0-300000' WHEN $3<=1000000 THEN '300000-1000000' WHEN $3<=10000000 THEN '1000000-10000000' WHEN $3<=30000000 THEN '10000000-30000000' WHEN $3<=100000000 THEN '30000000-100000000' ELSE '100000000-plus' END END, status=COALESCE(NULLIF($5,''),status), updated_at=NOW() WHERE id=$6 AND deleted_at IS NULL`, input.Title, input.Description, input.Price, monthlyFee, input.Status, id)
 	if err != nil {

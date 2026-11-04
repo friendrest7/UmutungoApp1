@@ -13,7 +13,7 @@ import (
 func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.Request, listingID string) {
 	user, ok := s.authUser(r)
 	if !ok {
-		errorJSON(w, http.StatusUnauthorized, "sign in to pay the listing subscription")
+		errorJSON(w, http.StatusUnauthorized, "sign in to pay the one-time listing upload fee")
 		return
 	}
 	if user.Role != "property_owner" && user.Role != "komisiyoneri" && user.Role != "admin" {
@@ -57,9 +57,9 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusConflict, "only a saved draft can start its first listing payment")
 		return
 	}
-	fee, valid := listingMonthlyFee(price, priceRange)
+	fee, valid := listingUploadFee(price, priceRange)
 	if !valid || math.Round(fee) < 1 || math.Abs(fee-storedFee) > 0.02 || currency != "RWF" {
-		errorJSON(w, http.StatusConflict, "listing price or monthly fee is not valid")
+		errorJSON(w, http.StatusConflict, "listing price or one-time upload fee is not valid")
 		return
 	}
 	if input.RequestedState == "scheduled" && (input.PublishAt == nil || !input.PublishAt.After(time.Now())) {
@@ -95,7 +95,7 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 	rate := math.Round((fee/price)*10000) / 100
 	_, err = tx.Exec(r.Context(), `INSERT INTO listing_subscriptions(listing_id,owner_id,payment_id,monthly_amount,rate_percent,status,requested_status,publish_at) VALUES($1,$2,$3,$4,$5,'pending',$6,$7)`, listingID, user.ID, paymentID, amount, rate, input.RequestedState, input.PublishAt)
 	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not save listing subscription")
+		errorJSON(w, http.StatusInternalServerError, "could not save listing payment")
 		return
 	}
 	if err := tx.Commit(r.Context()); err != nil {
@@ -127,29 +127,35 @@ func (s *Server) verifyListingSubscriptionPayment(w http.ResponseWriter, r *http
 	if txRef != "" {
 		_ = s.db.QueryRow(r.Context(), `SELECT related_id::text FROM payments WHERE provider='flutterwave' AND provider_reference=$1 AND related_type='listing_subscription'`, txRef).Scan(&listingID)
 	}
-	if txRef != "" && transactionID != "" && statusParam == "successful" {
+	if txRef != "" && transactionID != "" && (statusParam == "successful" || statusParam == "pending") {
 		verified, err := newFlutterwaveClient(s.cfg.FlutterwaveSecretKey).verify(r.Context(), transactionID)
-		if err == nil && strings.EqualFold(verified.Status, "successful") && verified.TxRef == txRef && verified.Currency == "RWF" {
+		if err == nil && verified.TxRef == txRef && verified.Currency == "RWF" {
 			var paymentID, storedListingID, paymentStatus string
 			var amount float64
 			if err := s.db.QueryRow(r.Context(), `SELECT p.id::text,p.related_id::text,p.amount,p.status FROM payments p JOIN listing_subscriptions ls ON ls.payment_id=p.id WHERE p.provider='flutterwave' AND p.provider_reference=$1 AND p.related_type='listing_subscription'`, txRef).Scan(&paymentID, &storedListingID, &amount, &paymentStatus); err == nil && math.Abs(verified.Amount-amount) < 0.01 {
-				if paymentStatus == "successful" {
+				if strings.EqualFold(verified.Status, "successful") && paymentStatus == "successful" {
 					var active bool
 					_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE payment_id=$1 AND status='active')`, paymentID).Scan(&active)
 					if active {
 						resultStatus = "successful"
 					}
-				} else if paymentStatus == "pending" && s.activateListingSubscription(r, paymentID, storedListingID, verified.ID) == nil {
+				} else if strings.EqualFold(verified.Status, "successful") && paymentStatus == "pending" && s.activateListingSubscription(r, paymentID, storedListingID, verified.ID) == nil {
 					resultStatus = "successful"
+				} else if strings.EqualFold(verified.Status, "pending") && paymentStatus == "pending" {
+					resultStatus = "pending"
+					_, _ = s.db.Exec(r.Context(), `UPDATE payments SET provider_transaction_id=$2 WHERE id=$1 AND status='pending'`, paymentID, fmt.Sprint(verified.ID))
 				}
 			}
 		}
 	}
-	if resultStatus != "successful" && txRef != "" {
+	if resultStatus == "failed" && txRef != "" {
 		_, _ = s.db.Exec(r.Context(), `UPDATE payments SET status='failed' WHERE provider='flutterwave' AND provider_reference=$1 AND status='pending'`, txRef)
 		_, _ = s.db.Exec(r.Context(), `UPDATE listing_subscriptions SET status='failed' WHERE payment_id IN (SELECT id FROM payments WHERE provider='flutterwave' AND provider_reference=$1) AND status='pending'`, txRef)
 	}
 	returnURL := s.cfg.FrontendBaseURL + "/listing-payment?status=" + url.QueryEscape(resultStatus) + "&listing_id=" + url.QueryEscape(listingID)
+	if resultStatus == "pending" {
+		returnURL += "&tx_ref=" + url.QueryEscape(txRef) + "&transaction_id=" + url.QueryEscape(transactionID)
+	}
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
 
@@ -171,14 +177,13 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 		requestedStatus = "published"
 		publishAt = nil
 	}
-	expires := start.AddDate(0, 1, 0)
 	if _, err := tx.Exec(r.Context(), `UPDATE payments SET status='successful',provider_transaction_id=$2 WHERE id=$1 AND status='pending'`, paymentID, fmt.Sprint(providerTransactionID)); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(r.Context(), `UPDATE listing_subscriptions SET status='active',period_start=$2,period_end=$3 WHERE payment_id=$1`, paymentID, start, expires); err != nil {
+	if _, err := tx.Exec(r.Context(), `UPDATE listing_subscriptions SET status='active',period_start=$2,period_end=NULL WHERE payment_id=$1`, paymentID, start); err != nil {
 		return err
 	}
-	result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$2,publish_at=$3,expires_at=$4,updated_at=NOW() WHERE id=$1 AND status='draft'`, listingID, requestedStatus, publishAt, expires)
+	result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$2,publish_at=$3,expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='draft'`, listingID, requestedStatus, publishAt)
 	if err != nil {
 		return err
 	}

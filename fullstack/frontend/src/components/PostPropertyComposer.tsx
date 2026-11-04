@@ -71,7 +71,7 @@ const vehicleHighlightOptions = ['Air conditioning', 'Automatic transmission', '
 const landHighlightOptions = ['Utilities nearby', 'Survey available', 'Title ready', 'Road access'];
 
 function RwandaLocationFields({ province, onProvinceChange, district, districtOptions, onDistrictChange, sector, sectorOptions, onSectorChange, cell, cellOptions, onCellChange, village, villageOptions, onVillageChange, loading, error, gpsPin, onCaptureGps }: { province: string; onProvinceChange: (value: string) => void; district: string; districtOptions: string[]; onDistrictChange: (value: string) => void; sector: string; sectorOptions: string[]; onSectorChange: (value: string) => void; cell: string; cellOptions: string[]; onCellChange: (value: string) => void; village: string; villageOptions: string[]; onVillageChange: (value: string) => void; loading: boolean; error: string; gpsPin: string; onCaptureGps: () => void }) {
-  return <><div className="post-location-hierarchy"><label className="post-field"><span>Province</span><select value={province} onChange={(event) => onProvinceChange(event.target.value)}>{provinceNames.map((item) => <option key={item}>{item}</option>)}</select></label><label className="post-field"><span>District</span><select value={district} onChange={(event) => onDistrictChange(event.target.value)} disabled={!districtOptions.length}>{districtOptions.map((item) => <option key={item}>{item}</option>)}</select></label><label className="post-field"><span>Sector</span><select value={sector} onChange={(event) => onSectorChange(event.target.value)} disabled={loading || !sectorOptions.length}><option value="">{loading ? 'Loading sectorsÃ¢â‚¬Â¦' : 'Select sector'}</option>{sectorOptions.map((item) => <option key={item}>{item}</option>)}</select></label><label className="post-field"><span>Cell <small>Optional</small></span><select value={cell} onChange={(event) => onCellChange(event.target.value)} disabled={!cellOptions.length}><option value="">Select cell</option>{cellOptions.map((item) => <option key={item}>{item}</option>)}</select></label><label className="post-field"><span>Village <small>Optional</small></span><select value={village} onChange={(event) => onVillageChange(event.target.value)} disabled={!villageOptions.length}><option value="">Select village</option>{villageOptions.map((item) => <option key={item}>{item}</option>)}</select></label></div>{error && <p className="post-location-error" role="alert">{error}</p>}<div className="post-location-tools"><button className="post-secondary-button" type="button" onClick={onCaptureGps}><Icon name="pin" size={14} /> {gpsPin ? 'GPS pin saved' : 'Use current location'}</button>{gpsPin && <small>{gpsPin}</small>}</div></>;
+  return <><div className="post-location-hierarchy"><label className="post-field"><span>Province</span><select value={province} onChange={(event) => onProvinceChange(event.target.value)}>{provinceNames.map((item) => <option key={item}>{item}</option>)}</select></label><label className="post-field"><span>District</span><select value={district} onChange={(event) => onDistrictChange(event.target.value)} disabled={!districtOptions.length}>{districtOptions.map((item) => <option key={item}>{item}</option>)}</select></label><label className="post-field"><span>Sector</span><select value={sector} onChange={(event) => onSectorChange(event.target.value)} disabled={loading || !sectorOptions.length}><option value="">{loading ? 'Loading sectorsÃ¢â‚¬Â¦' : 'Select sector'}</option>{sectorOptions.map((item) => <option key={item}>{item}</option>)}</select></label><label className="post-field"><span>Cell <small>Optional</small></span><input list="rwanda-cell-options" value={cell} onChange={(event) => onCellChange(event.target.value)} placeholder="Enter or choose a cell" /><datalist id="rwanda-cell-options">{cellOptions.map((item) => <option key={item} value={item} />)}</datalist></label><label className="post-field"><span>Village <small>Optional</small></span><input list="rwanda-village-options" value={village} onChange={(event) => onVillageChange(event.target.value)} placeholder="Enter or choose a village" /><datalist id="rwanda-village-options">{villageOptions.map((item) => <option key={item} value={item} />)}</datalist></label></div>{error && <p className="post-location-error" role="alert">{error}</p>}<div className="post-location-tools"><button className="post-secondary-button" type="button" onClick={onCaptureGps}><Icon name="pin" size={14} /> {gpsPin ? 'GPS pin saved' : 'Use current location'}</button>{gpsPin && <small>{gpsPin}</small>}</div></>;
 }
 
 export type LandlordListing = {
@@ -122,13 +122,12 @@ function listingFeeFor(price: string) {
   return { rate, fee: Math.round(amount * rate) };
 }
 
-function ListingPricingFields({ price, onPriceChange, priceLabel, priceNote, paymentMethod, onPaymentMethodChange, paymentEmail, onPaymentEmailChange }: { price: string; onPriceChange: (value: string) => void; priceLabel: string; priceNote: string; paymentMethod: 'mobilemoneyrwanda' | 'card'; onPaymentMethodChange: (value: 'mobilemoneyrwanda' | 'card') => void; paymentEmail: string; onPaymentEmailChange: (value: string) => void }) {
+function ListingPricingFields({ price, onPriceChange, priceLabel, priceNote }: { price: string; onPriceChange: (value: string) => void; priceLabel: string; priceNote: string }) {
   const { rate, fee } = listingFeeFor(price);
-  return <section className="post-pricing-panel" aria-label="Listing price and monthly subscription">
-    <div className="post-pricing-heading"><strong>Price and monthly subscription</strong><p>Enter the product price to see your monthly listing fee.</p></div>
+  return <section className="post-pricing-panel" aria-label="Listing price and one-time upload fee">
+    <div className="post-pricing-heading"><strong>Price and one-time upload fee</strong><p>Enter the product price to see the one-time fee for uploading this listing.</p></div>
     <div className="post-price-field"><label className="post-field"><span>{priceLabel}</span><div className="post-input-prefix"><b>RWF</b><input value={price} onChange={(event) => onPriceChange(event.target.value)} inputMode="numeric" /></div></label><span className="post-price-note">{priceNote}</span></div>
-    <div className="post-monthly-fee" aria-live="polite"><span>Monthly listing fee</span><strong>RWF {fee.toLocaleString('en-RW')} <small>/ month</small></strong><p>Calculated at {rate * 100}% of the entered price.</p></div>
-    <div className="post-fee-payment-options"><span>Choose how to pay</span><div><label className={paymentMethod === 'mobilemoneyrwanda' ? 'is-selected' : ''}><input type="radio" name="listing-fee-payment" value="mobilemoneyrwanda" checked={paymentMethod === 'mobilemoneyrwanda'} onChange={() => onPaymentMethodChange('mobilemoneyrwanda')} /> Mobile money</label><label className={paymentMethod === 'card' ? 'is-selected' : ''}><input type="radio" name="listing-fee-payment" value="card" checked={paymentMethod === 'card'} onChange={() => onPaymentMethodChange('card')} /> Visa or Mastercard</label></div><p>Secure checkout supports Rwanda mobile money and bank cards.</p><label className="post-payment-email"><span>Email for your payment receipt</span><input type="email" value={paymentEmail} onChange={(event) => onPaymentEmailChange(event.target.value)} placeholder="you@example.com" autoComplete="email" /></label></div>
+    <div className="post-monthly-fee" aria-live="polite"><span>One-time listing upload fee</span><strong>RWF {fee.toLocaleString('en-RW')}</strong><p>Paid once per property upload. Calculated at {rate * 100}% of the entered price.</p></div>
   </section>;
 }
 export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?: boolean; onCancel?: () => void }) {
@@ -136,7 +135,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [propertyType, setPropertyType] = useState<PropertyType>('House');
   const [intent, setIntent] = useState<Intent>('For rent');
   const [title, setTitle] = useState('');
-  const [fullName, setFullName] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('City of Kigali');
   const [district, setDistrict] = useState('Gasabo');
@@ -144,7 +142,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [cell, setCell] = useState('');
   const [village, setVillage] = useState('');
   const [gpsPin, setGpsPin] = useState('');
-  const [mapLocationText, setMapLocationText] = useState('');
   const [locationOptions, setLocationOptions] = useState<string[]>(getSectorNames('City of Kigali', 'Gasabo'));
   const [cellOptions, setCellOptions] = useState<string[]>([]);
   const [villageOptions, setVillageOptions] = useState<string[]>([]);
@@ -157,6 +154,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [price, setPrice] = useState('1,250,000');
   const [paymentMethod, setPaymentMethod] = useState<'mobilemoneyrwanda' | 'card'>('mobilemoneyrwanda');
   const [paymentEmail, setPaymentEmail] = useState('');
+  const [paymentPanelOpen, setPaymentPanelOpen] = useState(false);
   const [bedrooms, setBedrooms] = useState('4');
   const [bathrooms, setBathrooms] = useState('3');
   const [area, setArea] = useState('220');
@@ -175,6 +173,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [selectedCover, setSelectedCover] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
+  const [paymentPending, setPaymentPending] = useState(false);
   const [savedListingStatus, setSavedListingStatus] = useState('draft');
   const [accessRole, setAccessRole] = useState<'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri' | null>(null);
   const [postingRole, setPostingRole] = useState<PostingRole | null>(null);
@@ -246,7 +245,8 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   }, [location, district, sector, cell]);
 
   useEffect(() => {
-    try {
+    const syncAccount = () => {
+      try {
       const user = JSON.parse(window.localStorage.getItem('umutungo-demo-user') ?? 'null') as { role?: string } | null;
       const userRole = user?.role;
       setAccessRole(userRole === 'Landlord' || userRole === 'Property Owner' || userRole === 'Commissioner / Komisiyoneri' ? userRole : null);
@@ -254,11 +254,19 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
         setPostingRole(userRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : userRole);
         setSelectionComplete(true);
       }
-    } catch {
-      setAccessRole(null);
-    } finally {
-      setCheckingAccess(false);
-    }
+      } catch {
+        setAccessRole(null);
+      } finally {
+        setCheckingAccess(false);
+      }
+    };
+    syncAccount();
+    window.addEventListener('umutungo:auth-changed', syncAccount);
+    window.addEventListener('storage', syncAccount);
+    return () => {
+      window.removeEventListener('umutungo:auth-changed', syncAccount);
+      window.removeEventListener('storage', syncAccount);
+    };
   }, []);
 
   const readImage = (file: File) => new Promise<string>((resolve, reject) => {
@@ -295,16 +303,17 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     return true;
   };
   const previous = () => setStep((current) => Math.max(1, current - 1));
-  const saveListing = async () => {
-    if (!fullName.trim()) { setSaveError('Enter your full name before saving.'); setStep(1); return; }
+  const saveListingNow = async () => {
     if (!title.trim()) { setSaveError('Enter a listing title before saving.'); setStep(1); return; }
     if (!validateListingPrice()) { setStep(2); return; }
     if (publicationMode !== 'Draft' && !/^\S+@\S+\.\S+$/.test(paymentEmail.trim())) { setSaveError('Enter an email address to receive your payment receipt.'); setStep(1); return; }
     if (!district || !sector) { setLocationError('Choose a valid district and sector before saving the listing.'); setStep(2); return; }
     if (publicationMode === 'Scheduled' && (!scheduledFor || new Date(scheduledFor).getTime() <= Date.now())) { setSaveError('Choose a future date and time for scheduled publication.'); setStep(3); return; }
-    if (!apiToken() || !accessRole) { setSelectionComplete(false); setAuthOpen(true); setSaveError('Sign in with a matching posting account before publishing.'); return; }
-    const roleMatches = (postingRole === 'Komisiyoneri' && accessRole === 'Commissioner / Komisiyoneri') || (postingRole !== 'Komisiyoneri' && (accessRole === 'Landlord' || accessRole === 'Property Owner'));
-    if (!roleMatches) { setSelectionComplete(false); setAuthOpen(true); setSaveError(`Sign in with an account that matches your selected posting role: ${postingRole}.`); return; }
+    if (!apiToken()) { setSelectionComplete(false); setAuthOpen(true); setSaveError('Sign in with a posting account before publishing.'); return; }
+    if (accessRole) {
+      const roleMatches = (postingRole === 'Komisiyoneri' && accessRole === 'Commissioner / Komisiyoneri') || (postingRole !== 'Komisiyoneri' && (accessRole === 'Landlord' || accessRole === 'Property Owner'));
+      if (!roleMatches) { setSelectionComplete(false); setAuthOpen(true); setSaveError(`Use an account that matches your selected posting role: ${postingRole}.`); return; }
+    }
     const expiryDays = accessRole === 'Commissioner / Komisiyoneri' ? 30 : ownerTier.startsWith('Silver') ? 90 : ownerTier.startsWith('Gold') ? 180 : 365;
     const desiredStatus = publicationMode === 'Draft' ? 'draft' : publicationMode === 'Scheduled' ? 'scheduled' : 'published';
     setSaveError('');
@@ -312,10 +321,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     let databaseListing: { id: string; status: string; expires_at?: string } | null = null;
     let persistedImages: string[] = [];
     try {
-      await umutungoApi('/api/v1/me', {
-        method: 'PATCH',
-        body: JSON.stringify({ name: fullName.trim() }),
-      });
       let photoFiles = uploadFiles;
       if (!photoFiles.length) {
         const photoResponse = await fetch(cover);
@@ -366,10 +371,13 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
           body: JSON.stringify({ payment_method: paymentMethod, email: paymentEmail.trim(), requested_status: desiredStatus, publish_at: publicationMode === 'Scheduled' && scheduledFor ? new Date(scheduledFor).toISOString() : null }),
         });
         if (!checkout?.checkout_url) throw new Error('Could not start the secure listing fee checkout. Your listing is saved as a draft.');
-        window.location.assign(checkout.checkout_url);
+        setPaymentPanelOpen(false);
+        setPaymentPending(true);
+        window.setTimeout(() => window.location.assign(checkout.checkout_url), 700);
         return;
       }
     } catch (error) {
+      setPaymentPending(false);
       setSaveError(error instanceof Error ? error.message : 'The listing could not be saved. Please try again.');
       return;
     }
@@ -385,9 +393,20 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     setPublished(true);
   };
 
+  const saveListing = async () => {
+    if (publicationMode === 'Draft') {
+      await saveListingNow();
+      return;
+    }
+    setSaveError('');
+    setPaymentPanelOpen(true);
+  };
+
   const Container = embedded ? 'section' : 'main';
   if (checkingAccess) return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}><p>Loading listing form...</p></Container>;
   if (!selectionComplete) return <><PostingSelection role={postingRole} category={propertyType} signedInRole={accessRole} onRoleChange={(value) => { setPostingRole(value); setSaveError(''); }} onCategoryChange={(value) => { setPropertyType(value); setSaveError(''); }} onContinue={continueToForm} error={saveError} /><AuthModal open={authOpen} role={postingRole === 'Komisiyoneri' ? 'Commissioner / Komisiyoneri' : postingRole === 'Landlord' ? 'Landlord' : postingRole === 'Property Owner' ? 'Property Owner' : undefined} onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { const nextRole = accountRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : accountRole === 'Property Owner' ? 'Property Owner' : accountRole === 'Landlord' ? 'Landlord' : null; if (nextRole) { setAccessRole(accountRole as 'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri'); setPostingRole((current) => current ?? nextRole); setSelectionComplete(true); setSaveError(''); setAuthOpen(false); } else setSaveError('A Komisiyoneri, Landlord, or Property Owner account is required to post a listing.'); }} /></>;
+
+  if (paymentPending) return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}><section className="post-success payment-pending-state"><div className="post-success-mark"><Icon name="creditCard" size={27} /></div><p className="post-eyebrow">Payment pending</p><h1>Opening secure<br /><em>payment checkout.</em></h1><p>Your listing is saved as a draft while you complete payment.</p></section></Container>;
 
   if (published) {
     return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}>{!embedded && <header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><InterfacePreferences /><div className="post-header-links"><Link className="post-home-link" href="/"><Icon name="home" size={14} /> Home</Link><Link className="post-exit-link" href="/"><Icon name="x" size={14} /> Exit builder</Link></div></header>}<section className="post-success"><div className="post-success-mark"><Icon name="check" size={30} /></div><p className="post-eyebrow">Listing saved</p><h1>Your place is ready<br /><em>for its next chapter.</em></h1><p>{savedListingStatus === 'scheduled' ? 'Scheduled listing saved.' : savedListingStatus === 'published' ? 'Listing is published and available in the marketplace.' : 'Private draft saved.'}</p><div className="post-success-actions">{embedded ? <button className="post-primary-button" type="button" onClick={onCancel}>Back to landlord dashboard</button> : <Link className="post-primary-button" href={accessRole === 'Commissioner / Komisiyoneri' ? '/commissioner' : '/property-owner'}>Open dashboard <Icon name="arrow" size={15} /></Link>}<button className="post-secondary-button" type="button" onClick={() => setPublished(false)}>Edit listing</button></div></section></Container>;
@@ -400,12 +419,12 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
       <aside className="post-property-sidebar"><div><p className="post-eyebrow">New listing</p><h1>List your<br /><em>property.</em></h1><p className="post-sidebar-copy">Share the details buyers, renters, and clients need.</p></div><nav className="post-progress" aria-label="Listing steps">{steps.map((item) => <button className={step === item.number ? 'is-active' : step > item.number ? 'is-complete' : ''} type="button" key={item.number} onClick={() => setStep(item.number)}><span className="post-step-number">{step > item.number ? <Icon name="check" size={13} /> : `0${item.number}`}</span><span><strong>{item.label}</strong><small>{item.note}</small></span></button>)}</nav></aside>
       <section className="post-property-main">{saveError && <p className="post-save-error" role="alert">{saveError}</p>}
         <div className="post-main-heading"><div><p className="post-eyebrow">Step 0{step} of 03</p><h2>{steps[step - 1].label}</h2></div><span className="post-save-status"><Icon name="check" size={13} /> Saved locally</span></div>
-        <div className="post-builder-grid"><div className="post-form-card">{step === 2 && <RwandaLocationFields province={location} onProvinceChange={(value) => { setLocation(value); setLocationError(''); }} district={district} districtOptions={districtOptions} onDistrictChange={(value) => { setDistrict(value); setSector(''); setCell(''); setVillage(''); }} sector={sector} sectorOptions={locationOptions} onSectorChange={(value) => { setSector(value); setCell(''); setVillage(''); }} cell={cell} cellOptions={cellOptions} onCellChange={(value) => { setCell(value); setVillage(''); }} village={village} villageOptions={villageOptions} onVillageChange={setVillage} loading={locationLoading} error={locationError} gpsPin={gpsPin} onCaptureGps={() => navigator.geolocation?.getCurrentPosition((position) => { const pin = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`; setGpsPin(pin); setMapLocationText(pin); setLocationError(''); }, () => setLocationError('Location access was not available. You can continue with the administrative location.'))} />}
-          {step === 1 && <div className="post-form-section"><div className="post-section-intro"><h3>Listing details</h3></div><label className="post-field"><span>Your full name</span><input value={fullName} onChange={(event) => { setFullName(event.target.value); setSaveError(''); }} placeholder="Enter your full name" autoComplete="name" required /></label><label className="post-field"><span>Property</span><select value={propertyType} onChange={(event) => { const nextType = event.target.value as PropertyType; setPropertyType(nextType); if (!getIntentOptions(nextType).some((option) => option.label === intent)) setIntent(getIntentOptions(nextType)[0].label); setAmenities(['Vehicle', 'Furniture', 'Appliance', 'Equipment', 'Other'].includes(nextType) || nextType === 'Land' ? [] : ['Parking', 'Security']); }} aria-label="Property">{typeOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><div className="post-field-group"><span className="post-field-label">Listing intent</span><div className="post-segmented" role="group" aria-label="Listing intent">{intentOptions.map((option) => <button className={intent === option.label ? 'is-selected' : ''} type="button" key={option.label} onClick={() => setIntent(option.label)}>{option.label}</button>)}</div></div><ListingPricingFields price={price} onPriceChange={(value) => { setPrice(value); setSaveError(''); }} priceLabel={priceLabel} priceNote={priceNote} paymentMethod={paymentMethod} onPaymentMethodChange={setPaymentMethod} paymentEmail={paymentEmail} onPaymentEmailChange={setPaymentEmail} /><label className="post-field"><span>Listing Title</span><input value={title} onChange={(event) => { setTitle(event.target.value); setSaveError(''); }} placeholder="Enter a listing title" required /></label><label className="post-field"><span>Short description <small>Optional</small></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the property and its features." rows={4} /></label></div>}
+        <div className="post-builder-grid"><div className="post-form-card">{step === 2 && <RwandaLocationFields province={location} onProvinceChange={(value) => { setLocation(value); setLocationError(''); }} district={district} districtOptions={districtOptions} onDistrictChange={(value) => { setDistrict(value); setSector(''); setCell(''); setVillage(''); }} sector={sector} sectorOptions={locationOptions} onSectorChange={(value) => { setSector(value); setCell(''); setVillage(''); }} cell={cell} cellOptions={cellOptions} onCellChange={(value) => { setCell(value); setVillage(''); }} village={village} villageOptions={villageOptions} onVillageChange={setVillage} loading={locationLoading} error={locationError} gpsPin={gpsPin} onCaptureGps={() => navigator.geolocation?.getCurrentPosition((position) => { const pin = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`; setGpsPin(pin); setLocationError(''); }, () => setLocationError('Location access was not available. You can continue with the administrative location.'))} />}
+          {step === 1 && <div className="post-form-section"><div className="post-section-intro"><h3>Listing details</h3></div><label className="post-field"><span>Property</span><select value={propertyType} onChange={(event) => { const nextType = event.target.value as PropertyType; setPropertyType(nextType); if (!getIntentOptions(nextType).some((option) => option.label === intent)) setIntent(getIntentOptions(nextType)[0].label); setAmenities(['Vehicle', 'Furniture', 'Appliance', 'Equipment', 'Other'].includes(nextType) || nextType === 'Land' ? [] : ['Parking', 'Security']); }} aria-label="Property">{typeOptions.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><div className="post-field-group"><span className="post-field-label">Listing intent</span><div className="post-segmented" role="group" aria-label="Listing intent">{intentOptions.map((option) => <button className={intent === option.label ? 'is-selected' : ''} type="button" key={option.label} onClick={() => setIntent(option.label)}>{option.label}</button>)}</div></div><ListingPricingFields price={price} onPriceChange={(value) => { setPrice(value); setSaveError(''); }} priceLabel={priceLabel} priceNote={priceNote} /><label className="post-field"><span>Listing Title</span><input value={title} onChange={(event) => { setTitle(event.target.value); setSaveError(''); }} placeholder="Enter a listing title" required /></label><label className="post-field"><span>Short description <small>Optional</small></span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the property and its features." rows={4} /></label></div>}
           {step === 2 && <div className="post-form-section">
-            <div className="post-section-intro"><h3>{isAsset ? 'Set the collection area and item details' : 'Give it a sense of place'}</h3><p>{isAsset ? 'Add a general area for pickup, then describe the item.' : 'A clear location and honest numbers make a listing feel trustworthy.'}</p></div>
+            {isAsset && <div className="post-section-intro"><h3>Set the collection area and item details</h3><p>Add a general area for pickup, then describe the item.</p></div>}
             {isAsset ? <label className="post-field"><span>Pickup area <small>Optional</small></span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="e.g. Kimihurura, Kigali" /></label> : <label className="post-field"><span>{isLand ? 'Area or nearby landmark' : 'Neighbourhood'}</span><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder={isLand ? 'e.g. near the main road' : 'e.g. Kacyiru, near the offices'} /></label>}
-            {!isAsset && <div className="post-map-location"><label className="post-field"><span>Map location <small>Optional</small></span><input value={mapLocationText} onChange={(event) => { setMapLocationText(event.target.value); const coordinates = parseCoordinates(event.target.value); if (coordinates) { setGpsPin(`${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`); setLocationError(''); } }} placeholder="Paste a Google Maps link or coordinates (latitude, longitude)" /></label><p>Paste a Google Maps share link with coordinates, or use â€œUse current locationâ€ above. The pin will be saved with this listing.</p>{gpsPin && <a href={`https://www.google.com/maps?q=${encodeURIComponent(gpsPin)}`} target="_blank" rel="noreferrer">Preview property pin in Google Maps: {gpsPin}</a>}</div>}<div className="post-form-grid post-stats-grid">
+            <div className="post-form-grid post-stats-grid">
               {isAsset ? <>
                 <label className="post-field"><span>Quantity</span><div className="post-input-suffix"><input value={assetQuantity} onChange={(event) => setAssetQuantity(event.target.value)} inputMode="numeric" /><b>items</b></div></label>
                 <label className="post-field"><span>Condition</span><select value={assetCondition} onChange={(event) => setAssetCondition(event.target.value)}><option>New</option><option>Like new</option><option>Good</option><option>Fair</option><option>Needs repair</option></select></label>
@@ -422,9 +441,9 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
             </div>
             <div className="post-field-group"><span className="post-field-label">Highlights</span><div className="post-amenities">{highlightOptions.map((amenity) => <button className={amenities.includes(amenity) ? 'is-selected' : ''} type="button" key={amenity} onClick={() => toggleAmenity(amenity)}>{amenities.includes(amenity) && <Icon name="check" size={12} />}{amenity}</button>)}</div></div>
           </div>}
-          {step === 3 && <div className="post-form-section"><div className="post-section-intro"><h3>Let the photos do some talking</h3><p>Choose a cover that sets the mood, then add the details that help someone picture themselves there.</p></div>{propertyType === 'House' && <div className="post-room-photo-guide" role="note"><Icon name="sparkles" size={16} /><span><strong>Help build the 3D room tour</strong><small>Upload clear room photos in this order: living room, kitchen, then bedroom. The first three photos become the 3D tour stops.</small></span></div>}<label className="post-dropzone"><input type="file" accept="image/*" multiple onChange={handleFiles} /><span className="post-upload-icon"><Icon name="download" size={19} /></span><strong>Drop your photos here</strong><small>or click to browse Ã‚Â· JPG, PNG up to 10MB each</small></label><div className="post-curated-heading"><span>Start with a curated set</span><small>Swap these for your own any time</small></div><div className="post-image-choices">{curatedImages[propertyType].map((image) => <button className={cover === image ? 'is-selected' : ''} type="button" key={image} onClick={() => { setSelectedCover(image); setUploadedImages([]); setUploadFiles([]); }}><Image src={image} alt="Suggested property view" fill sizes="120px" />{cover === image && <span><Icon name="check" size={13} /></span>}</button>)}</div><div className="post-amenities-summary"><span>Selected highlights</span><div>{amenities.length ? amenities.map((amenity) => <b key={amenity}>{amenity}</b>) : <small>Add a few highlights above</small>}</div></div></div>}
+          {step === 3 && <div className="post-form-section"><div className="post-section-intro"><h3>Let the photos do some talking</h3><p>Choose a cover that sets the mood, then add the details that help someone picture themselves there.</p></div><label className="post-dropzone"><input type="file" accept="image/*" multiple onChange={handleFiles} /><span className="post-upload-icon"><Icon name="download" size={19} /></span><strong>Drop your photos here</strong><small>or click to browse Ã‚Â· JPG, PNG up to 10MB each</small></label><div className="post-curated-heading"><span>Start with a curated set</span><small>Swap these for your own any time</small></div><div className="post-image-choices">{curatedImages[propertyType].map((image) => <button className={cover === image ? 'is-selected' : ''} type="button" key={image} onClick={() => { setSelectedCover(image); setUploadedImages([]); setUploadFiles([]); }}><Image src={image} alt="Suggested property view" fill sizes="120px" />{cover === image && <span><Icon name="check" size={13} /></span>}</button>)}</div><div className="post-amenities-summary"><span>Selected highlights</span><div>{amenities.length ? amenities.map((amenity) => <b key={amenity}>{amenity}</b>) : <small>Add a few highlights above</small>}</div></div></div>}
           {step === 3 && <div className="post-lifecycle-panel"><div><span className="post-field-label">Publication</span><p>Publish now after photos upload, save a private draft, or schedule a future release.</p></div><div className="post-segmented"><button className={publicationMode === "Publish now" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode("Publish now")}>Publish now</button><button className={publicationMode === "Draft" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode("Draft")}>Save as draft</button><button className={publicationMode === "Scheduled" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode("Scheduled")}>Schedule</button></div>{publicationMode === 'Scheduled' && <label className="post-field"><span>Publish date and time</span><input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} required /></label>}{(accessRole === 'Landlord' || accessRole === 'Property Owner') && <div className="owner-premium-plans"><span className="post-field-label">Property Owner premium plan</span><div>{(['Silver', 'Gold', 'Platinum'] as const).map((plan) => <button className={ownerTier.startsWith(plan) ? 'is-selected' : ''} type="button" key={plan} onClick={() => setOwnerTier(plan)}><img src={`/premium/${plan.toLowerCase()}.svg`} alt={`${plan} premium plan icon`} /><strong>{plan}</strong></button>)}</div><Link href="/upgrade/owner">One-time upgrade payments</Link></div>}<small className="post-lifecycle-note">{accessRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri listings expire 30 days after publication.' : `Property Owner listings expire according to the ${ownerTier} tier.`}</small></div>}
-          <div className="post-form-actions">{step > 1 ? <button className="post-secondary-button" type="button" onClick={previous}><Icon name="arrow" size={14} /> Back</button> : <span />}{step < 3 ? <button className="post-primary-button" type="button" onClick={next}><span>Continue</span><Icon name="arrow" size={15} /></button> : <button className="post-primary-button" type="button" onClick={saveListing}><span>{publicationMode === 'Scheduled' ? 'Pay fee & schedule' : publicationMode === 'Draft' ? 'Save listing draft' : 'Pay monthly fee & publish'}</span><Icon name="arrow" size={15} /></button>}</div>
+          <div className="post-form-actions">{step > 1 ? <button className="post-secondary-button" type="button" onClick={previous}><Icon name="arrow" size={14} /> Back</button> : <span />}{step < 3 ? <button className="post-primary-button" type="button" onClick={next}><span>Continue</span><Icon name="arrow" size={15} /></button> : <button className="post-primary-button" type="button" onClick={saveListing}><span>{publicationMode === 'Scheduled' ? 'Pay fee & schedule' : publicationMode === 'Draft' ? 'Save listing draft' : 'Pay fee & publish'}</span><Icon name="arrow" size={15} /></button>}</div>
         </div><aside className="post-preview-wrap">
           <div className="post-preview-label"><span>Live preview</span><small>How it will look in Umutungo</small></div>
           <article className="post-preview-card">
@@ -437,6 +456,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
         </aside></div>
       </section>
     </div>
+    {paymentPanelOpen && <div className="listing-payment-panel-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPaymentPanelOpen(false); }}><section className="listing-payment-panel" role="dialog" aria-modal="true" aria-labelledby="listing-payment-title"><button className="listing-payment-panel-close" type="button" aria-label="Close payment options" onClick={() => setPaymentPanelOpen(false)}><Icon name="x" size={18} /></button><span className="listing-payment-panel-eyebrow"><Icon name="lock" size={14} /> Secure checkout</span><h2 id="listing-payment-title">Choose a payment method</h2><p className="listing-payment-panel-summary"><span><Icon name="creditCard" size={16} /> One-time upload fee</span><strong>RWF {listingFeeFor(price).fee.toLocaleString('en-RW')}</strong></p><div className="listing-payment-methods" role="radiogroup" aria-label="Payment method"><label className={paymentMethod === 'mobilemoneyrwanda' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="mobilemoneyrwanda" checked={paymentMethod === 'mobilemoneyrwanda'} onChange={() => setPaymentMethod('mobilemoneyrwanda')} /><Icon name="phone" size={20} /><span><strong>Mobile money</strong><small>MTN Mobile Money or Airtel Money</small></span></label><label className={paymentMethod === 'card' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} /><Icon name="creditCard" size={20} /><span><strong>Bank card</strong><small>Visa or Mastercard</small></span></label></div><label className="post-payment-email"><span><Icon name="mail" size={15} /> Email for your payment receipt</span><input type="email" value={paymentEmail} onChange={(event) => { setPaymentEmail(event.target.value); setSaveError(''); }} placeholder="you@example.com" autoComplete="email" required /></label>{saveError && <p className="post-location-error" role="alert">{saveError}</p>}<button className="post-primary-button listing-payment-continue" type="button" onClick={() => void saveListingNow()}><Icon name="lock" size={15} /> Continue to secure checkout <Icon name="arrow" size={15} /></button></section></div>}
 </Container>;
 }
 

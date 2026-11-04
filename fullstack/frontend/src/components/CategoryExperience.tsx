@@ -115,7 +115,7 @@ const mapLocalListings = (): Listing[] => readLocalPropertyListings().map((item)
 
 const toDatabaseListing = (item: DatabaseListing, category: CategoryConfig): Listing => {
   const intent: Listing['intent'] = item.transaction_type === 'rent_out' || item.transaction_type === 'rent' ? 'For rent' : item.transaction_type === 'both' ? category.name === 'Land' ? 'For sale or lease' : 'For sale or rent' : item.transaction_type === 'book' ? 'Book' : 'For sale';
-  const location = [item.sector, item.district, item.province].filter(Boolean).join(' Â· ');
+  const location = [item.village, item.cell, item.sector, item.district, item.province].filter(Boolean).join(' Â· ');
   const bedroomCount = Number(item.bedrooms ?? item.measurements?.bedrooms ?? 0);
   const bathroomCount = Number(item.bathrooms ?? item.measurements?.bathrooms ?? 0);
   const areaSize = Number(item.area ?? item.measurements?.building_size ?? item.measurements?.land_size ?? item.measurements?.plot_size ?? 0);

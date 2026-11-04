@@ -1311,7 +1311,7 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.PriceRange = listingPriceBandForAmount(input.Price)
-	monthlyFee, validPriceRange := listingMonthlyFee(input.Price, input.PriceRange)
+	monthlyFee, validPriceRange := listingUploadFee(input.Price, input.PriceRange)
 	if !validPriceRange {
 		errorJSON(w, http.StatusBadRequest, "listing price does not match the selected price range")
 		return
@@ -1876,7 +1876,7 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 	}
 	var monthlyFee *float64
 	if input.Price != nil {
-		fee, valid := listingMonthlyFee(*input.Price, priceRange)
+		fee, valid := listingUploadFee(*input.Price, priceRange)
 		if !valid {
 			errorJSON(w, http.StatusBadRequest, "updated price does not match the listing's selected price range")
 			return

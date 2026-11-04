@@ -19,9 +19,9 @@ func listingPriceBandForAmount(price float64) string {
 	}
 }
 
-// listingMonthlyFee validates the selected price band and calculates the
-// monthly marketplace fee from the listing's full asking price.
-func listingMonthlyFee(price float64, band string) (float64, bool) {
+// listingUploadFee validates the selected price band and calculates the
+// one-time marketplace fee from the listing's full asking price.
+func listingUploadFee(price float64, band string) (float64, bool) {
 	if price <= 0 || math.IsNaN(price) || math.IsInf(price, 0) {
 		return 0, false
 	}

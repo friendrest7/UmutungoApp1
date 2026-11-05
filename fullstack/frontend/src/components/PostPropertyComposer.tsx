@@ -242,7 +242,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
         if (typeof saved.bedrooms === 'string') setBedrooms(saved.bedrooms);
         if (typeof saved.bathrooms === 'string') setBathrooms(saved.bathrooms);
         if (typeof saved.area === 'string') setArea(saved.area);
-        if (Array.isArray(saved.customDetails)) setCustomDetails(saved.customDetails as Array<{ id: string; label: string; value: string }>);
         if (typeof saved.landTenure === 'string') setLandTenure(saved.landTenure);
         if (typeof saved.landRoadAccess === 'string') setLandRoadAccess(saved.landRoadAccess);
         if (typeof saved.assetQuantity === 'string') setAssetQuantity(saved.assetQuantity);
@@ -431,7 +430,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
       } else {
         await umutungoApi(`/api/v1/listings/${encodeURIComponent(listingId)}`, { method: 'PATCH', body: JSON.stringify({ title: listingTitle, description, price: amount, category: propertyType.toLowerCase(), transaction_type: selectedIntent.transactionType, province: location, district, sector, cell, village, tags: amenities, amenities }) });
       }
-      const savedForm = { postingRole: 'Property Owner', propertyType, intent, title, description, price, address, location, district, sector, cell, village, gpsPin, amenities, bedrooms, bathrooms, area, customDetails, landTenure, landRoadAccess, assetQuantity, assetCondition, assetSpecifications, paymentEmail, paymentPhone, paymentMethod };
+      const savedForm = { postingRole: 'Property Owner', propertyType, intent, title, description, price, address, location, district, sector, cell, village, gpsPin, amenities, bedrooms, bathrooms, area, landTenure, landRoadAccess, assetQuantity, assetCondition, assetSpecifications, paymentEmail, paymentPhone, paymentMethod };
       window.localStorage.setItem('umutungo-paid-draft-form', JSON.stringify(savedForm));
       if (feeQuote?.demo_mode) {
         const payment = await umutungoApi<{ status: string; is_demo: boolean }>(`/api/v1/listings/${encodeURIComponent(listingId)}/demo-payment`, { method: 'POST', body: JSON.stringify({ email: paymentEmail.trim(), phone: paymentPhone.trim(), requested_status: 'draft' }) });
@@ -512,7 +511,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
                 : isLand
                   ? { plot_size: Number(area) || 0, tenure: landTenure, road_access: landRoadAccess }
                   : { building_size: Number(area) || 0, bedrooms: Number(bedrooms) || 0, bathrooms: Number(bathrooms) || 0, parking: amenities.includes('Parking') ? 1 : 0 }),
-            additional_details: customDetails.map(({ label, value }) => ({ label: label.trim(), value: value.trim() })).filter((detail) => detail.label && detail.value),
           },
       };
       if (paidDraftListingId) {
@@ -694,7 +692,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
                 <label className="post-field"><span>Floor area</span><div className="post-input-suffix"><input value={area} onChange={(event) => setArea(event.target.value)} inputMode="numeric" /><b>mÃ‚Â²</b></div></label>
               </>}
             </div>
-            <div className="post-field-group post-extra-details"><span className="post-field-label">Additional details <small>Optional</small></span><p>Add any other useful information about this property.</p>{customDetails.map((detail, index) => <div className="post-extra-detail-row" key={detail.id}><label className="post-field"><span>Detail name</span><input value={detail.label} onChange={(event) => setCustomDetails((current) => current.map((item) => item.id === detail.id ? { ...item, label: event.target.value } : item))} placeholder="e.g. Security deposit" /></label><label className="post-field"><span>Value</span><input value={detail.value} onChange={(event) => setCustomDetails((current) => current.map((item) => item.id === detail.id ? { ...item, value: event.target.value } : item))} placeholder="e.g. One month" /></label><button className="post-extra-detail-remove" type="button" aria-label={`Remove additional detail ${index + 1}`} onClick={() => setCustomDetails((current) => current.filter((item) => item.id !== detail.id))}><Icon name="x" size={15} /></button></div>)}<button className="post-secondary-button post-add-detail-button" type="button" onClick={() => setCustomDetails((current) => [...current, { id: crypto.randomUUID(), label: '', value: '' }])}><b aria-hidden="true">+</b> Add another detail</button></div>
             <div className="post-field-group"><span className="post-field-label">Highlights</span><div className="post-amenities">{highlightOptions.map((amenity) => <button className={amenities.includes(amenity) ? 'is-selected' : ''} type="button" key={amenity} onClick={() => toggleAmenity(amenity)}>{amenities.includes(amenity) && <Icon name="check" size={12} />}{amenity}</button>)}</div></div>
           </div>}
           {step === 3 && <div className="post-form-section"><div className="post-section-intro"><h3>Let the photos do some talking</h3><p>Choose a cover that sets the mood, then add the details that help someone picture themselves there.</p></div><label className="post-dropzone"><input type="file" accept="image/*" multiple onChange={handleFiles} /><span className="post-upload-icon"><Icon name="download" size={19} /></span><strong>Drop your photos here</strong><small>or click to browse Ã‚Â· JPG, PNG up to 10MB each</small></label><div className="post-curated-heading"><span>Start with a curated set</span><small>Swap these for your own any time</small></div><div className="post-image-choices">{curatedImages[propertyType].map((image) => <button className={cover === image ? 'is-selected' : ''} type="button" key={image} onClick={() => { setSelectedCover(image); setUploadedImages([]); setUploadFiles([]); }}><Image src={image} alt="Suggested property view" fill sizes="120px" />{cover === image && <span><Icon name="check" size={13} /></span>}</button>)}</div><div className="post-amenities-summary"><span>Selected highlights</span><div>{amenities.length ? amenities.map((amenity) => <b key={amenity}>{amenity}</b>) : <small>Add a few highlights above</small>}</div></div></div>}

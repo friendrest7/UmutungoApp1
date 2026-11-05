@@ -435,8 +435,9 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
       window.localStorage.setItem('umutungo-paid-draft-form', JSON.stringify(savedForm));
       if (feeQuote?.demo_mode) {
         const payment = await umutungoApi<{ status: string; is_demo: boolean }>(`/api/v1/listings/${encodeURIComponent(listingId)}/demo-payment`, { method: 'POST', body: JSON.stringify({ email: paymentEmail.trim(), phone: paymentPhone.trim(), requested_status: 'draft' }) });
-        if (payment?.status !== 'successful' || !payment.is_demo) throw new Error('Payment could not be completed. Your private draft is saved.');
+        if (payment?.status !== 'successful') throw new Error('Payment could not be completed. Your private draft is saved.');
         setPaidDraftListingId(listingId);
+        setDemoPaymentSucceeded(Boolean(payment.is_demo));
         setStep(2);
         setPaymentPending(false);
         setPaymentPanelOpen(false);
@@ -545,9 +546,9 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
             method: 'POST',
             body: JSON.stringify({ email: paymentEmail.trim(), requested_status: desiredStatus, publish_at: publicationMode === 'Scheduled' && scheduledFor ? new Date(scheduledFor).toISOString() : null }),
           });
-          if (demoPayment?.status !== 'successful' || !demoPayment.is_demo) throw new Error('Demo payment could not be completed. Your listing is still saved as a draft.');
+          if (demoPayment?.status !== 'successful') throw new Error('Demo payment could not be completed. Your listing is still saved as a draft.');
           databaseListing.status = desiredStatus;
-          setDemoPaymentSucceeded(true);
+          setDemoPaymentSucceeded(Boolean(demoPayment.is_demo));
         } else {
         const checkout = await umutungoApi<{ checkout_url: string }>(`/api/v1/listings/${encodeURIComponent(databaseListing.id)}/subscription-payment`, {
           method: 'POST',

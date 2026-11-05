@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"net/mail"
@@ -85,6 +86,15 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusBadRequest, "choose a future publish date")
 		return
 	}
+	var activePayment, activeDemoPayment bool
+	if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE listing_id=$1 AND owner_id=$2 AND status='active'), EXISTS(SELECT 1 FROM listing_subscriptions ls JOIN payments p ON p.id=ls.payment_id WHERE ls.listing_id=$1 AND ls.owner_id=$2 AND ls.status='active' AND p.provider='demo')`, listingID, user.ID).Scan(&activePayment, &activeDemoPayment); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not verify the listing payment")
+		return
+	}
+	if activePayment {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "successful", "provider": "demo", "is_demo": activeDemoPayment, "amount": math.Round(fee), "currency": "RWF", "listing_id": listingID, "message": "A confirmed listing payment already exists."})
+		return
+	}
 	token, err := randomToken()
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create demo payment reference")
@@ -110,7 +120,8 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusInternalServerError, "could not record demo payment")
 		return
 	}
-	if err := s.activateListingSubscription(r, paymentID, listingID, 0); err != nil {
+	if err := s.activateListingSubscription(r, paymentID, listingID, txRef); err != nil {
+		log.Printf("demo listing payment activation failed for listing %s: %v", listingID, err)
 		_, _ = s.db.Exec(r.Context(), `UPDATE payments SET status='failed' WHERE id=$1 AND status='pending'`, paymentID)
 		_, _ = s.db.Exec(r.Context(), `UPDATE listing_subscriptions SET status='failed' WHERE payment_id=$1 AND status='pending'`, paymentID)
 		errorJSON(w, http.StatusConflict, "demo payment could not complete this listing")
@@ -287,7 +298,7 @@ func (s *Server) verifyListingSubscriptionPayment(w http.ResponseWriter, r *http
 						resultStatus = "successful"
 						_ = s.db.QueryRow(r.Context(), `SELECT requested_status='draft' FROM listing_subscriptions WHERE payment_id=$1`, paymentID).Scan(&paidDraft)
 					}
-				} else if strings.EqualFold(verified.Status, "successful") && paymentStatus == "pending" && s.activateListingSubscription(r, paymentID, storedListingID, verified.ID) == nil {
+				} else if strings.EqualFold(verified.Status, "successful") && paymentStatus == "pending" && s.activateListingSubscription(r, paymentID, storedListingID, fmt.Sprint(verified.ID)) == nil {
 					resultStatus = "successful"
 					_ = s.db.QueryRow(r.Context(), `SELECT requested_status='draft' FROM listing_subscriptions WHERE payment_id=$1`, paymentID).Scan(&paidDraft)
 				} else if strings.EqualFold(verified.Status, "pending") && paymentStatus == "pending" {
@@ -311,7 +322,7 @@ func (s *Server) verifyListingSubscriptionPayment(w http.ResponseWriter, r *http
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
 
-func (s *Server) activateListingSubscription(r *http.Request, paymentID, listingID string, providerTransactionID int64) error {
+func (s *Server) activateListingSubscription(r *http.Request, paymentID, listingID, providerTransactionID string) error {
 	tx, err := s.db.Begin(r.Context())
 	if err != nil {
 		return err
@@ -349,7 +360,7 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 		return fmt.Errorf("no listing expiry policy is configured for this account")
 	}
 	expiresAt := start.Add(time.Duration(expiryDays) * 24 * time.Hour)
-	if _, err := tx.Exec(r.Context(), `UPDATE payments SET status='successful',provider_transaction_id=$2 WHERE id=$1 AND status='pending'`, paymentID, fmt.Sprint(providerTransactionID)); err != nil {
+	if _, err := tx.Exec(r.Context(), `UPDATE payments SET status='successful',provider_transaction_id=$2 WHERE id=$1 AND status='pending'`, paymentID, providerTransactionID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(r.Context(), `UPDATE listing_subscriptions SET status='active',period_start=$2,period_end=NULL WHERE payment_id=$1`, paymentID, start); err != nil {

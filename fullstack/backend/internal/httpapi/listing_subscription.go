@@ -115,7 +115,11 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusInternalServerError, "could not create demo payment record")
 		return
 	}
-	if _, err := tx.Exec(r.Context(), `INSERT INTO listing_subscriptions(listing_id,owner_id,payment_id,monthly_amount,rate_percent,status,requested_status,publish_at) VALUES($1,$2,$3,$4,$5,'pending',$6,$7)`, listingID, user.ID, paymentID, math.Round(fee), rate, input.RequestedState, input.PublishAt); err != nil {
+	planKey := ""
+	if postingRole(user) == "landlord" {
+		planKey = strings.ToLower(strings.TrimSpace(input.Plan))
+	}
+	if _, err := tx.Exec(r.Context(), `INSERT INTO listing_subscriptions(listing_id,owner_id,payment_id,monthly_amount,rate_percent,status,requested_status,publish_at,plan_key) VALUES($1,$2,$3,$4,$5,'pending',$6,$7,$8)`, listingID, user.ID, paymentID, math.Round(fee), rate, input.RequestedState, input.PublishAt, planKey); err != nil {
 		errorJSON(w, http.StatusConflict, "a payment is already in progress for this listing")
 		return
 	}
@@ -255,7 +259,11 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusInternalServerError, "could not save payment request")
 		return
 	}
-	_, err = tx.Exec(r.Context(), `INSERT INTO listing_subscriptions(listing_id,owner_id,payment_id,monthly_amount,rate_percent,status,requested_status,publish_at) VALUES($1,$2,$3,$4,$5,'pending',$6,$7)`, listingID, user.ID, paymentID, amount, rate, input.RequestedState, input.PublishAt)
+	planKey := ""
+	if postingRole(user) == "landlord" {
+		planKey = strings.ToLower(strings.TrimSpace(input.Plan))
+	}
+	_, err = tx.Exec(r.Context(), `INSERT INTO listing_subscriptions(listing_id,owner_id,payment_id,monthly_amount,rate_percent,status,requested_status,publish_at,plan_key) VALUES($1,$2,$3,$4,$5,'pending',$6,$7,$8)`, listingID, user.ID, paymentID, amount, rate, input.RequestedState, input.PublishAt, planKey)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not save listing payment")
 		return
@@ -344,7 +352,8 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 	}
 	var requestedStatus string
 	var publishAt *time.Time
-	if err := tx.QueryRow(r.Context(), `SELECT requested_status,publish_at FROM listing_subscriptions WHERE payment_id=$1 AND listing_id=$2 AND status='pending' FOR UPDATE`, paymentID, listingID).Scan(&requestedStatus, &publishAt); err != nil {
+	var planKey string
+	if err := tx.QueryRow(r.Context(), `SELECT requested_status,publish_at,plan_key FROM listing_subscriptions WHERE payment_id=$1 AND listing_id=$2 AND status='pending' FOR UPDATE`, paymentID, listingID).Scan(&requestedStatus, &publishAt, &planKey); err != nil {
 		return err
 	}
 	start := time.Now().UTC()
@@ -362,7 +371,14 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 		return fmt.Errorf("Komisiyoneri listings must use purchased upload slots")
 	}
 	var expiryDays int
-	if err := tx.QueryRow(r.Context(), `SELECT MAX(default_expiry_days) FROM marketplace_listing_fee_rules WHERE role=$1 AND enabled`, postingRole(owner)).Scan(&expiryDays); err != nil || expiryDays < 1 {
+	if postingRole(owner) == "landlord" && planKey != "" {
+		if err := tx.QueryRow(r.Context(), `SELECT duration_days FROM marketplace_premium_offers WHERE offer_key=$1 AND enabled`, planKey).Scan(&expiryDays); err != nil {
+			return fmt.Errorf("the selected landlord plan is no longer available")
+		}
+	} else if err := tx.QueryRow(r.Context(), `SELECT MAX(default_expiry_days) FROM marketplace_listing_fee_rules WHERE role=$1 AND enabled`, postingRole(owner)).Scan(&expiryDays); err != nil {
+		return fmt.Errorf("no listing expiry policy is configured for this account")
+	}
+	if expiryDays < 1 {
 		return fmt.Errorf("no listing expiry policy is configured for this account")
 	}
 	expiresAt := start.Add(time.Duration(expiryDays) * 24 * time.Hour)

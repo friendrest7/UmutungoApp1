@@ -124,7 +124,7 @@ function propertyOwnerPriceBand(price: number) {
 function ListingPricingFields({ price, onPriceChange, priceLabel, priceNote, quote = null, quoteStatus = 'idle', showOwnerFee }: { price: string; onPriceChange: (value: string) => void; priceLabel: string; priceNote: string; quote?: { fee?: number; rate_percent?: number; payment_model?: 'percentage' | 'fixed' | 'upload_slot'; available_slots?: number } | null; quoteStatus?: 'idle' | 'loading' | 'ready' | 'error'; showOwnerFee: boolean }) {
   const enteredPrice = Number(price.replace(/[^0-9.]/g, '')) || 0;
   const priceBand = propertyOwnerPriceBand(enteredPrice);
-  const displayRate = quote && (quote.rate_percent ?? 0) > 0 ? quote.rate_percent : priceBand.rate;
+  const displayRate = quote?.rate_percent && quote.rate_percent > 0 ? quote.rate_percent : priceBand.rate;
   const calculatedFee = enteredPrice > 0 ? quote && (quote.fee ?? 0) > 0 ? quote.fee : Math.round(enteredPrice * displayRate / 100) : undefined;
   const quoteIsValid = Boolean(quote && (quote.rate_percent ?? 0) > 0 && (quote.fee ?? 0) > 0);
   return <section className="post-pricing-panel" aria-label="Listing price and posting requirement">

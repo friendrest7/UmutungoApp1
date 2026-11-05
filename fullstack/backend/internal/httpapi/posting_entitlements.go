@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"net/mail"
@@ -367,7 +368,7 @@ func (s *Server) publishListingWithEntitlement(w http.ResponseWriter, r *http.Re
 	var status string
 	var deletedAt *time.Time
 	err = tx.QueryRow(r.Context(), `SELECT status,deleted_at FROM listings WHERE id=$1 AND owner_id=$2 FOR UPDATE`, id, user.ID).Scan(&status, &deletedAt)
-	if err != nil || deletedAt != nil || status != "draft" {
+	if err != nil || deletedAt != nil {
 		errorJSON(w, http.StatusConflict, "only an active saved draft can be published")
 		return
 	}
@@ -381,12 +382,28 @@ func (s *Server) publishListingWithEntitlement(w http.ResponseWriter, r *http.Re
 			errorJSON(w, http.StatusPaymentRequired, "complete the one-time listing payment before publishing")
 			return
 		}
-		result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$3,publish_at=$4,expires_at=$4+make_interval(days=>$5),updated_at=NOW() WHERE id=$1 AND owner_id=$2 AND status='draft' AND deleted_at IS NULL`, id, user.ID, input.RequestedStatus, startAt, expiryDays)
-		if err != nil || result.RowsAffected() != 1 {
+		if status == input.RequestedStatus {
+			writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": input.RequestedStatus, "entitlement": "subscription"})
+			return
+		}
+		if status != "draft" {
+			errorJSON(w, http.StatusConflict, "only an active saved draft can be published")
+			return
+		}
+		expiresAt := startAt.Add(time.Duration(expiryDays) * 24 * time.Hour)
+		result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$3,publish_at=$4,expires_at=$5,updated_at=NOW() WHERE id=$1 AND owner_id=$2 AND status='draft' AND deleted_at IS NULL`, id, user.ID, input.RequestedStatus, startAt, expiresAt)
+		if err != nil {
+			log.Printf("paid listing publish update failed for listing %s: %v", id, err)
+			errorJSON(w, http.StatusInternalServerError, "could not publish the paid draft")
+			return
+		}
+		if result.RowsAffected() != 1 {
+			log.Printf("paid listing publish updated %d rows for listing %s", result.RowsAffected(), id)
 			errorJSON(w, http.StatusInternalServerError, "could not publish the paid draft")
 			return
 		}
 		if err := tx.Commit(r.Context()); err != nil {
+			log.Printf("paid listing publish commit failed for listing %s: %v", id, err)
 			errorJSON(w, http.StatusInternalServerError, "could not publish the paid draft")
 			return
 		}
@@ -408,7 +425,8 @@ func (s *Server) publishListingWithEntitlement(w http.ResponseWriter, r *http.Re
 		errorJSON(w, http.StatusConflict, "upload slot was already used")
 		return
 	}
-	if _, err = tx.Exec(r.Context(), `UPDATE listings SET status=$3,publish_at=$4,expires_at=$4+make_interval(days=>$5),updated_at=NOW() WHERE id=$1 AND owner_id=$2 AND status='draft' AND deleted_at IS NULL`, id, user.ID, input.RequestedStatus, startAt, expiryDays); err != nil {
+	expiresAt := startAt.Add(time.Duration(expiryDays) * 24 * time.Hour)
+	if _, err = tx.Exec(r.Context(), `UPDATE listings SET status=$3,publish_at=$4,expires_at=$5,updated_at=NOW() WHERE id=$1 AND owner_id=$2 AND status='draft' AND deleted_at IS NULL`, id, user.ID, input.RequestedStatus, startAt, expiresAt); err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not publish listing")
 		return
 	}

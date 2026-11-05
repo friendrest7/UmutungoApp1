@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { AuthProvider } from '@/auth/AuthContext';
 import { syncOfflineChanges } from '@/api/client';
@@ -15,6 +16,7 @@ import { LocalizationProvider } from '@/i18n';
 function AppShell() {
   const { isDark, colors } = useTheme();
   const [fontsLoaded] = useFonts({
+    ...Ionicons.font,
     LexendThin: require('../assets/fonts/Lexend-Thin.ttf'),
     LexendExtraLight: require('../assets/fonts/Lexend-ExtraLight.ttf'),
     LexendLight: require('../assets/fonts/Lexend-Light.ttf'),

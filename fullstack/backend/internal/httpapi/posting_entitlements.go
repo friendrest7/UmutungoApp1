@@ -393,7 +393,11 @@ func (s *Server) publishListingWithEntitlement(w http.ResponseWriter, r *http.Re
 			return
 		}
 		if !paid {
-			errorJSON(w, http.StatusPaymentRequired, "complete the one-time listing payment before publishing")
+			if postingRole(user) == "landlord" {
+				errorJSON(w, http.StatusPaymentRequired, "complete the monthly Landlord posting fee before publishing")
+			} else {
+				errorJSON(w, http.StatusPaymentRequired, "complete the one-time listing payment before publishing")
+			}
 			return
 		}
 		if status == input.RequestedStatus {

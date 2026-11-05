@@ -533,7 +533,8 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
           if (entitlement?.status === 'published' || entitlement?.status === 'scheduled') databaseListing.status = entitlement.status;
           else if (!entitlement) throw new Error('Sign in again before publishing this listing.');
         } catch (error) {
-          if (!(error instanceof Error) || !error.message.toLowerCase().includes('payment required')) throw error;
+          const paymentNeeded = error instanceof Error && /complete (the one-time listing payment|monthly landlord posting fee) before publishing/i.test(error.message);
+          if (!paymentNeeded) throw error;
         }
         if (isCommissionerPosting && databaseListing.status !== 'published' && databaseListing.status !== 'scheduled') {
           setSaveError('Your draft is saved. Komisiyoneri listings publish using purchased upload slots. Buy an upload package from your dashboard, then return to publish this draft.');

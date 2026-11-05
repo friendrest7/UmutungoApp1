@@ -39,14 +39,20 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 	}
 	var input struct {
 		Email          string     `json:"email"`
+		Phone          string     `json:"phone"`
 		RequestedState string     `json:"requested_status"`
 		PublishAt      *time.Time `json:"publish_at"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	if _, err := mail.ParseAddress(strings.TrimSpace(input.Email)); err != nil {
-		errorJSON(w, http.StatusBadRequest, "enter a valid email address for the receipt")
+	if strings.TrimSpace(input.Email) == "" {
+		if _, err := normalizeRwandaPhone(input.Phone); err != nil {
+			errorJSON(w, http.StatusBadRequest, "enter an email address or a valid Rwanda phone number")
+			return
+		}
+	} else if _, err := mail.ParseAddress(strings.TrimSpace(input.Email)); err != nil {
+		errorJSON(w, http.StatusBadRequest, "enter a valid email address or leave it blank and enter a phone number")
 		return
 	}
 	if input.RequestedState != "published" && input.RequestedState != "scheduled" && input.RequestedState != "draft" {
@@ -150,9 +156,11 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusBadRequest, "choose bank card or Rwanda mobile money")
 		return
 	}
-	if _, err := mail.ParseAddress(strings.TrimSpace(input.Email)); err != nil {
-		errorJSON(w, http.StatusBadRequest, "enter a valid email address for the payment receipt")
-		return
+	if input.Method == "card" {
+		if _, err := mail.ParseAddress(strings.TrimSpace(input.Email)); err != nil {
+			errorJSON(w, http.StatusBadRequest, "enter a valid email address for bank card checkout")
+			return
+		}
 	}
 	phone := ""
 	if input.Method == "mobilemoneyrwanda" {
@@ -162,6 +170,16 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 			return
 		}
 		phone = normalizedPhone
+		if strings.TrimSpace(input.Email) == "" {
+			input.Email = strings.TrimSpace(user.Email)
+			if _, err := mail.ParseAddress(input.Email); err != nil {
+				errorJSON(w, http.StatusBadRequest, "add an email to your account or enter an email in checkout for the payment receipt")
+				return
+			}
+		} else if _, err := mail.ParseAddress(strings.TrimSpace(input.Email)); err != nil {
+			errorJSON(w, http.StatusBadRequest, "enter a valid email address or leave it blank and use your account email")
+			return
+		}
 	}
 	if input.RequestedState != "published" && input.RequestedState != "scheduled" && input.RequestedState != "draft" {
 		errorJSON(w, http.StatusBadRequest, "listing must be saved as a paid draft, published, or scheduled after payment")

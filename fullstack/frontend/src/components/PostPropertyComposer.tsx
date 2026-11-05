@@ -196,6 +196,29 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [checkoutPopupOpened, setCheckoutPopupOpened] = useState(false);
 
   useEffect(() => {
+    const handleCheckoutReturn = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data?.type !== 'umutungo-listing-payment-return') return;
+      if (typeof event.data.listingId !== 'string' || event.data.listingId !== prepaymentListingId) return;
+      if (event.data.status !== 'successful') {
+        setPaymentPending(false);
+        setPaymentPanelOpen(true);
+        setSaveError('Payment was not confirmed. You can try again or choose another payment method.');
+        setCheckoutPopupOpened(false);
+        return;
+      }
+      setPaidDraftListingId(event.data.listingId);
+      setPaymentPending(false);
+      setPaymentPanelOpen(false);
+      setPayBeforeContinue(false);
+      setCheckoutPopupOpened(false);
+      setSaveError('');
+      setStep(2);
+    };
+    window.addEventListener('message', handleCheckoutReturn);
+    return () => window.removeEventListener('message', handleCheckoutReturn);
+  }, [prepaymentListingId]);
+
+  useEffect(() => {
     const paidDraftId = new URLSearchParams(window.location.search).get('paid_draft');
     if (!paidDraftId) return;
     try {
@@ -393,8 +416,8 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     const amount = Number(price.replace(/[^0-9.]/g, '')) || 0;
     if (!title.trim() || amount <= 0) { closePopup(); setSaveError('Enter a listing title and one-time property price before paying.'); return; }
     if (accessRole !== 'Property Owner' || !apiToken()) { closePopup(); setSaveError('Sign in with your Property Owner account before paying.'); return; }
-    if (!/^\S+@\S+\.\S+$/.test(paymentEmail.trim())) { closePopup(); setSaveError('Enter an email address to receive your payment receipt.'); return; }
-    if (paymentMethod === 'mobilemoneyrwanda' && !feeQuote?.demo_mode && !/^\+?2507\d{8}$/.test(paymentPhone.replace(/[\s()-]/g, '').replace(/^07/, '+2507'))) { closePopup(); setSaveError('Enter a valid Rwanda phone number for mobile money, such as +250 78 123 4567.'); return; }
+    if (paymentMethod === 'card' && !/^\S+@\S+\.\S+$/.test(paymentEmail.trim())) { closePopup(); setSaveError('Enter an email address for bank card checkout, or choose mobile money and enter your phone number.'); return; }
+    if (paymentMethod === 'mobilemoneyrwanda' && !/^\+?2507\d{8}$/.test(paymentPhone.replace(/[\s()-]/g, '').replace(/^07/, '+2507'))) { closePopup(); setSaveError('Enter a valid Rwanda phone number for mobile money, such as +250 78 123 4567.'); return; }
     setSaveError('');
     setPaymentPending(true);
     try {
@@ -410,7 +433,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
       const savedForm = { postingRole: 'Property Owner', propertyType, intent, title, description, price, address, location, district, sector, cell, village, gpsPin, amenities, bedrooms, bathrooms, area, customDetails, landTenure, landRoadAccess, assetQuantity, assetCondition, assetSpecifications, paymentEmail, paymentPhone, paymentMethod };
       window.localStorage.setItem('umutungo-paid-draft-form', JSON.stringify(savedForm));
       if (feeQuote?.demo_mode) {
-        const payment = await umutungoApi<{ status: string; is_demo: boolean }>(`/api/v1/listings/${encodeURIComponent(listingId)}/demo-payment`, { method: 'POST', body: JSON.stringify({ email: paymentEmail.trim(), requested_status: 'draft' }) });
+        const payment = await umutungoApi<{ status: string; is_demo: boolean }>(`/api/v1/listings/${encodeURIComponent(listingId)}/demo-payment`, { method: 'POST', body: JSON.stringify({ email: paymentEmail.trim(), phone: paymentPhone.trim(), requested_status: 'draft' }) });
         if (payment?.status !== 'successful' || !payment.is_demo) throw new Error('Payment could not be completed. Your private draft is saved.');
         setPaidDraftListingId(listingId);
         setStep(2);
@@ -422,7 +445,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
       const checkout = await umutungoApi<{ checkout_url: string }>(`/api/v1/listings/${encodeURIComponent(listingId)}/subscription-payment`, { method: 'POST', body: JSON.stringify({ payment_method: paymentMethod, email: paymentEmail.trim(), phone: paymentPhone.trim(), requested_status: 'draft' }) });
       if (!checkout?.checkout_url) throw new Error('Could not start secure checkout. Your private draft is saved.');
       setPendingCheckoutURL(checkout.checkout_url);
-      if (checkoutPopup && !checkoutPopup.closed) { checkoutPopup.opener = null; checkoutPopup.location.replace(checkout.checkout_url); setCheckoutPopupOpened(true); }
+      if (checkoutPopup && !checkoutPopup.closed) { checkoutPopup.location.replace(checkout.checkout_url); setCheckoutPopupOpened(true); }
       setPaymentPanelOpen(false);
     } catch (error) {
       closePopup();
@@ -436,8 +459,8 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     if (!title.trim()) { closeCheckoutPopup(); setSaveError('Enter a listing title before saving.'); setStep(1); return; }
     if (!validateListingPrice()) { closeCheckoutPopup(); setStep(2); return; }
     const desiredStatus = saveForLater || publicationMode === 'Draft' ? 'draft' : publicationMode === 'Scheduled' ? 'scheduled' : 'published';
-    if (desiredStatus !== 'draft' && !isCommissionerPosting && !/^\S+@\S+\.\S+$/.test(paymentEmail.trim())) { closeCheckoutPopup(); setSaveError('Enter an email address to receive your payment receipt.'); setStep(1); return; }
-    if (desiredStatus !== 'draft' && !isCommissionerPosting && paymentMethod === 'mobilemoneyrwanda' && !feeQuote?.demo_mode && !/^\+?2507\d{8}$/.test(paymentPhone.replace(/[\s()-]/g, '').replace(/^07/, '+2507'))) { closeCheckoutPopup(); setSaveError('Enter a valid Rwanda phone number for mobile money, such as +250 78 123 4567.'); setStep(1); return; }
+    if (desiredStatus !== 'draft' && !isCommissionerPosting && paymentMethod === 'card' && !/^\S+@\S+\.\S+$/.test(paymentEmail.trim())) { closeCheckoutPopup(); setSaveError('Enter an email address for bank card checkout, or choose mobile money and enter your phone number.'); setStep(1); return; }
+    if (desiredStatus !== 'draft' && !isCommissionerPosting && paymentMethod === 'mobilemoneyrwanda' && !/^\+?2507\d{8}$/.test(paymentPhone.replace(/[\s()-]/g, '').replace(/^07/, '+2507'))) { closeCheckoutPopup(); setSaveError('Enter a valid Rwanda phone number for mobile money, such as +250 78 123 4567.'); setStep(1); return; }
     if (!district || !sector) { closeCheckoutPopup(); setLocationError('Choose a valid district and sector before saving the listing.'); setStep(2); return; }
     if (publicationMode === 'Scheduled' && (!scheduledFor || new Date(scheduledFor).getTime() <= Date.now())) { closeCheckoutPopup(); setSaveError('Choose a future date and time for scheduled publication.'); setStep(3); return; }
     if (!apiToken()) { closeCheckoutPopup(); setSelectionComplete(false); setAuthOpen(true); setSaveError('Sign in with a posting account before publishing.'); return; }
@@ -532,7 +555,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
         if (!checkout?.checkout_url) throw new Error('Could not start the secure listing fee checkout. Your listing is saved as a draft.');
         setPendingCheckoutURL(checkout.checkout_url);
         if (checkoutPopup && !checkoutPopup.closed) {
-          checkoutPopup.opener = null;
           checkoutPopup.location.replace(checkout.checkout_url);
           setCheckoutPopupOpened(true);
         } else {
@@ -612,7 +634,6 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
     const checkoutPopup = window.open(pendingCheckoutURL, 'umutungo_flutterwave_checkout', `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`);
     if (checkoutPopup) {
-      checkoutPopup.opener = null;
       setCheckoutPopupOpened(true);
     }
   };
@@ -673,7 +694,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
         </aside></div>
       </section>
     </div>
-    {paymentPanelOpen && !isCommissionerPosting && <div className="listing-payment-panel-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setPaymentPanelOpen(false); setPayBeforeContinue(false); } }}><section className="listing-payment-panel" role="dialog" aria-modal="true" aria-labelledby="listing-payment-title"><button className="listing-payment-panel-close" type="button" aria-label="Close payment options" onClick={() => { setPaymentPanelOpen(false); setPayBeforeContinue(false); }}><Icon name="x" size={18} /></button><span className="listing-payment-panel-eyebrow"><Icon name="lock" size={14} /> {feeQuote?.demo_mode ? 'Demo checkout' : 'Secure checkout'}</span><h2 id="listing-payment-title">Choose a payment method</h2><p className="listing-payment-panel-summary"><span><Icon name="creditCard" size={16} /> {postingRole === 'Landlord' ? 'One-time landlord posting fee' : 'One-time property upload fee'}</span><strong>{feeQuote ? 'RWF ' + (feeQuote.fee ?? 0).toLocaleString('en-RW') : 'Fee unavailable'}</strong></p>{payBeforeContinue && <p className="post-location-error" role="status">After payment, your listing stays private while you continue adding its details.</p>}{feeQuote?.demo_mode && <p className="post-location-error" role="status">Demo mode: completing this step records a test payment only. No money will be charged.</p>}<div className="listing-payment-methods" role="radiogroup" aria-label="Payment method"><label className={paymentMethod === 'mobilemoneyrwanda' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="mobilemoneyrwanda" checked={paymentMethod === 'mobilemoneyrwanda'} onChange={() => setPaymentMethod('mobilemoneyrwanda')} /><Icon name="phone" size={20} /><span><strong>Mobile money</strong><small>MTN Mobile Money or Airtel Money</small></span></label><label className={paymentMethod === 'card' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} /><Icon name="creditCard" size={20} /><span><strong>Bank card</strong><small>Visa or Mastercard</small></span></label></div><label className="post-payment-email"><span><Icon name="mail" size={15} /> Email for your payment receipt</span><input type="email" value={paymentEmail} onChange={(event) => { setPaymentEmail(event.target.value); setSaveError(''); }} placeholder="you@example.com" autoComplete="email" required /></label>{paymentMethod === 'mobilemoneyrwanda' && <label className="post-payment-email"><span><Icon name="phone" size={15} /> Mobile money phone number</span><input type="tel" value={paymentPhone} onChange={(event) => { setPaymentPhone(event.target.value); setSaveError(''); }} placeholder="+250 78 123 4567" autoComplete="tel" inputMode="tel" /></label>}{saveError && <p className="post-location-error" role="alert">{saveError}</p>}<button className="post-primary-button listing-payment-continue" type="button" onClick={continueToSecureCheckout}><Icon name="lock" size={15} /> {feeQuote?.demo_mode ? 'Complete demo payment' : payBeforeContinue ? 'Pay and continue' : 'Continue to secure checkout'} <Icon name="arrow" size={15} /></button></section></div>}
+    {paymentPanelOpen && !isCommissionerPosting && <div className="listing-payment-panel-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setPaymentPanelOpen(false); setPayBeforeContinue(false); } }}><section className="listing-payment-panel" role="dialog" aria-modal="true" aria-labelledby="listing-payment-title"><button className="listing-payment-panel-close" type="button" aria-label="Close payment options" onClick={() => { setPaymentPanelOpen(false); setPayBeforeContinue(false); }}><Icon name="x" size={18} /></button><span className="listing-payment-panel-eyebrow"><Icon name="lock" size={14} /> {feeQuote?.demo_mode ? 'Demo checkout' : 'Secure checkout'}</span><h2 id="listing-payment-title">Choose a payment method</h2><p className="listing-payment-panel-summary"><span><Icon name="creditCard" size={16} /> {postingRole === 'Landlord' ? 'One-time landlord posting fee' : 'One-time property upload fee'}</span><strong>{feeQuote ? 'RWF ' + (feeQuote.fee ?? 0).toLocaleString('en-RW') : 'Fee unavailable'}</strong></p>{payBeforeContinue && <p className="post-location-error" role="status">After payment, your listing stays private while you continue adding its details.</p>}{feeQuote?.demo_mode && <p className="post-location-error" role="status">Demo mode: completing this step records a test payment only. No money will be charged.</p>}<div className="listing-payment-methods" role="radiogroup" aria-label="Payment method"><label className={paymentMethod === 'mobilemoneyrwanda' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="mobilemoneyrwanda" checked={paymentMethod === 'mobilemoneyrwanda'} onChange={() => setPaymentMethod('mobilemoneyrwanda')} /><Icon name="phone" size={20} /><span><strong>Mobile money</strong><small>MTN Mobile Money or Airtel Money</small></span></label><label className={paymentMethod === 'card' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} /><Icon name="creditCard" size={20} /><span><strong>Bank card</strong><small>Visa or Mastercard</small></span></label></div><label className="post-payment-email"><span><Icon name="mail" size={15} /> Email for your receipt {paymentMethod === 'mobilemoneyrwanda' ? '(optional with mobile money)' : ''}</span><input type="email" value={paymentEmail} onChange={(event) => { setPaymentEmail(event.target.value); setSaveError(''); }} placeholder="you@example.com" autoComplete="email" required={paymentMethod === 'card'} /></label>{paymentMethod === 'mobilemoneyrwanda' && <label className="post-payment-email"><span><Icon name="phone" size={15} /> Mobile money phone number</span><input type="tel" value={paymentPhone} onChange={(event) => { setPaymentPhone(event.target.value); setSaveError(''); }} placeholder="+250 78 123 4567" autoComplete="tel" required inputMode="tel" /></label>}{saveError && <p className="post-location-error" role="alert">{saveError}</p>}<button className="post-primary-button listing-payment-continue" type="button" onClick={continueToSecureCheckout}><Icon name="lock" size={15} /> {feeQuote?.demo_mode ? 'Complete demo payment' : payBeforeContinue ? 'Pay and continue' : 'Continue to secure checkout'} <Icon name="arrow" size={15} /></button></section></div>}
 </Container>;
 }
 

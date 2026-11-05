@@ -336,7 +336,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
       <a className="get-started-option" href="/categories/commercial" onClick={() => setGetStartedOpen(false)}><span className="get-started-option-icon"><Icon name="building" size={17} /></span><span><strong>Commercial properties</strong><small>Find shops, offices, and business spaces.</small></span><Icon name="arrow" size={14} /></a>
       <button className="get-started-option" type="button" onClick={() => { setGetStartedOpen(false); setCategoryMenuOpen(true); }}><span className="get-started-option-icon"><Icon name="building" size={17} /></span><span><strong>Browse categories</strong><small>See every type of property and product.</small></span><Icon name="arrow" size={14} /></button>
     </div>
-    <div className="get-started-signin">Need help? <a href="/#contact" onClick={() => setGetStartedOpen(false)}>Contact Umutungo</a></div>
+    <div className="get-started-signin">Need help? <a href="/contact" onClick={() => setGetStartedOpen(false)}>Contact Umutungo</a></div>
   </div>;
 
   useEffect(() => {
@@ -494,7 +494,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <button className="mobile-menu-link" type="button" aria-expanded={categoryMenuOpen} aria-controls="nav-category-panel" onClick={() => { setMobileOpen(false); setCategoryMenuOpen((open) => !open); }}>{t(language, 'Categories')}<Icon name={categoryMenuOpen ? 'chevron' : 'arrow'} size={14} /></button>
         {!signedIn && <button className="mobile-menu-link" type="button" aria-expanded={viewMoreOpen} aria-controls="nav-view-more-panel" onClick={() => setViewMoreOpen((open) => !open)}>Log in<Icon name="chevron" size={14} /></button>}
         <a className="mobile-menu-link" href="/about" onClick={() => setMobileOpen(false)}>{t(language, 'About us')}</a>
-        <a className="mobile-menu-link mobile-contact-link" href="/#contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>
+        <a className="mobile-menu-link mobile-contact-link" href="/contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>
           <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-haspopup={signedIn ? undefined : 'dialog'} aria-expanded={signedIn ? accountMenuOpen : getStartedOpen} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>{signedIn ? t(language, 'Account') : 'Get started'}<Icon name={signedIn && accountMenuOpen ? 'chevron' : signedIn ? 'user' : 'chevron'} size={15} /></button>
           {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} showSettings={false} />}

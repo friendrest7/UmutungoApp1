@@ -22,7 +22,6 @@ export default function HomePage() {
   const [listingLoadError, setListingLoadError] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
-  const [selectedListingCategory, setSelectedListingCategory] = useState<string | null>(null);
   const copy = (key: string) => t(language, key);
 
   useEffect(() => {
@@ -108,20 +107,14 @@ export default function HomePage() {
   };
   const visibleProperties = properties;
   const listingCategories = [
-    { name: 'Residential houses', slug: 'houses', types: ['house'] }, { name: 'Apartments', slug: 'apartments', types: ['apartment'] },
-    { name: 'Land', slug: 'land', types: ['land'] }, { name: 'Commercial buildings', slug: 'commercial', types: ['commercial'] },
-    { name: 'Offices', slug: 'offices', types: ['office'] }, { name: 'Hotels and lodges', slug: 'hospitality', types: ['hospitality'] },
-    { name: 'Vehicles', slug: 'vehicles', types: ['vehicle'] }, { name: 'Furniture', slug: 'furniture', types: ['furniture'] },
-    { name: 'Appliances', slug: 'appliances', types: ['appliance'] }, { name: 'Equipment', slug: 'equipment', types: ['equipment'] },
-    { name: 'Other assets', slug: 'other', types: ['other'] },
+    { name: 'Residential houses', slug: 'houses' }, { name: 'Apartments', slug: 'apartments' },
+    { name: 'Land', slug: 'land' }, { name: 'Commercial buildings', slug: 'commercial' },
+    { name: 'Offices', slug: 'offices' }, { name: 'Hotels and lodges', slug: 'hospitality' },
+    { name: 'Vehicles', slug: 'vehicles' }, { name: 'Furniture', slug: 'furniture' },
+    { name: 'Appliances', slug: 'appliances' }, { name: 'Equipment', slug: 'equipment' },
+    { name: 'Other assets', slug: 'other' },
   ];
-  const propertyCategories = listingCategories.filter((category) => !selectedListingCategory || category.slug === selectedListingCategory).map((category) => {
-    const categoryListings = visibleProperties.filter((property) => category.types.includes(property.type.toLowerCase()));
-    const featuredListing = categoryListings.find((property) => property.featured);
-    const liveListings = selectedListingCategory ? categoryListings : [featuredListing ?? categoryListings[0]].filter((property): property is PropertyPlaceholder => Boolean(property));
-    return { ...category, listings: liveListings };
-  });
-  const landingListings = propertyCategories.flatMap((category) => category.listings).sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)));
+  const landingListings = [...visibleProperties].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured))).slice(0, 6);
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
@@ -138,16 +131,15 @@ export default function HomePage() {
       <section className="section section-property container" id="properties">
         <div className="landing-discovery-panel">
           <div className="landing-discovery-intro"><h2>{t(language, 'Find the right property for whatever comes next.')}</h2><p>{t(language, 'Explore homes, land, vehicles, furniture and more for rent, sale, hire or a stay. Browsing is free, so explore the options and find what interests you.')}</p></div>
-        <div className="landing-category-filter" aria-label={t(language, 'Filter properties by category')}>
-          <button type="button" className={selectedListingCategory === null ? 'is-selected' : ''} aria-pressed={selectedListingCategory === null} onClick={() => setSelectedListingCategory(null)}><Icon name="building" size={18} /><span>{t(language, 'All')}</span></button>
+        <nav className="landing-category-filter" aria-label={t(language, 'Browse property categories')}>
+          <a href="/categories/properties"><Icon name="building" size={18} /><span>{t(language, 'All')}</span></a>
           {listingCategories.map((category) => {
             const icon: IconName = category.slug === 'houses' || category.slug === 'hospitality' ? 'home' : category.slug === 'land' ? 'leaf' : category.slug === 'vehicles' ? 'car' : category.slug === 'appliances' ? 'appliance' : category.slug === 'equipment' ? 'wrench' : 'building';
-            return <button key={category.slug} type="button" className={selectedListingCategory === category.slug ? 'is-selected' : ''} aria-pressed={selectedListingCategory === category.slug} onClick={() => setSelectedListingCategory((current) => current === category.slug ? null : category.slug)}><Icon name={icon} size={18} /><span>{t(language, category.name)}</span></button>;
+            return <a href={`/categories/${category.slug}`} key={category.slug}><Icon name={icon} size={18} /><span>{t(language, category.name)}</span></a>;
           })}
+        </nav>
         </div>
-        </div>
-        {landingListings.length > 0 && <div className="landing-property-backdrop"><div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}{selectedListingCategory === null && <a className="landing-add-property-card" href="/post-property"><span className="landing-add-property-icon" aria-hidden="true">+</span><strong>{t(language, 'Post a property')}</strong><small>{t(language, 'Add a property')}</small><span className="landing-add-property-action">{t(language, 'Post a property')} <Icon name="arrow" size={15} /></span></a>}</div></div>}
-        {selectedListingCategory && landingListings.length === 0 && <p className="landing-category-empty" role="status">No published listings in this category yet.</p>}
+        {landingListings.length > 0 && <><div className="landing-property-backdrop"><div className="property-grid landing-property-grid">{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div></div><div className="landing-preview-actions"><a className="button button-primary" href="/categories/properties">{t(language, 'Browse all properties')} <Icon name="arrow" size={15} /></a><a className="button button-outline" href="/post-property">{t(language, 'Post a property')}</a></div></>}
       </section>
 
       {false && <section className="info-section how-it-works-section" id="how-it-works">
@@ -161,10 +153,6 @@ export default function HomePage() {
           <a className="text-arrow-link" href="#properties">{copy('Explore spaces')} <Icon name="arrow" size={15} /></a>
         </div>
        </section>}
-
-      <section className="contact-interface" id="contact">
-        <div className="container contact-interface-grid"><div><h2>{copy('Need help with your property search?')}<br /><em>{copy('Contact the Umutungo')} <a className="contact-team-link" href="https://mail.google.com/mail/?view=cm&fs=1&to=hello%40umutungo.rw" target="_blank" rel="noreferrer"><span className="contact-team-link-label">{copy('team')}</span><Icon name="arrow" size={15} /></a></em></h2><p className="contact-interface-copy">{copy('We are building a property experience where every person in the journey can move with more clarity and confidence.')}</p><a className="contact-email" href="mailto:hello@umutungo.rw">hello@umutungo.rw <Icon name="arrow" size={15} /></a></div><form className="contact-interface-form" action="mailto:hello@umutungo.rw" method="post" encType="text/plain"><label><span>{copy('Name')}</span><input name="name" placeholder={copy('Your name')} required /></label><label><span>{copy('Email address')}</span><input name="email" type="email" placeholder="you@example.com" required /></label><label><span>{copy('Message')}</span><textarea name="message" placeholder={copy('How can we help?')} rows={4} required /></label><button className="button button-primary" type="submit">{copy('Send message')} <Icon name="arrow" size={15} /></button></form></div>
-      </section>
 
     </main>
     <Footer language={language} darkMode={darkMode} />

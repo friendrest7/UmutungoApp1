@@ -5540,10 +5540,13 @@ body.theme-dark .interface-language-select select option { background: #17211b; 
 .app-realistic .landing-property-grid .property-card-body { display: flex; flex: 1; flex-direction: column; }
 .app-realistic .landing-property-grid .property-card-footer { margin-top: auto; padding-top: 16px; }
 .app-realistic .landing-category-filter { display: flex; gap: 10px; margin: 0 0 22px; overflow-x: auto; padding: 3px 1px 8px; scrollbar-width: thin; }
-.app-realistic .landing-category-filter button { display: inline-flex; min-width: 82px; min-height: 70px; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border: 1px solid #e1e8e2; border-radius: 14px; background: #ffffff; color: #52645a; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease; }
-.app-realistic .landing-category-filter button:hover, .app-realistic .landing-category-filter button.is-selected { border-color: var(--brand-green); background: #edf7f2; color: var(--brand-green); }
-.app-realistic.theme-dark .landing-category-filter button { border-color: #39463e; background: #151a17; color: #d6e1d9; }
-.app-realistic.theme-dark .landing-category-filter button:hover, .app-realistic.theme-dark .landing-category-filter button.is-selected { border-color: #138446; background: #173b27; color: #a7e4c2; }
+.app-realistic .landing-category-filter a { display: inline-flex; min-width: 82px; min-height: 70px; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border: 1px solid #e1e8e2; border-radius: 14px; background: #ffffff; color: #52645a; font: inherit; font-size: 10px; font-weight: 650; text-decoration: none; transition: border-color .16s ease, background .16s ease, color .16s ease; }
+.app-realistic .landing-category-filter a:hover { border-color: var(--brand-green); background: #edf7f2; color: var(--brand-green); }
+.app-realistic .landing-preview-actions { display: flex; justify-content: center; gap: 12px; margin: 24px 0 0; }
+.contact-page-main .contact-interface { min-height: 70vh; display: flex; align-items: center; padding-top: 100px; }
+.contact-page-main .contact-interface-grid > div:first-child h1 { margin: 0 0 20px; font-size: clamp(30px, 4vw, 48px); line-height: 1.08; letter-spacing: -.04em; }
+.app-realistic.theme-dark .landing-category-filter a { border-color: #39463e; background: #151a17; color: #d6e1d9; }
+.app-realistic.theme-dark .landing-category-filter a:hover { border-color: #138446; background: #173b27; color: #a7e4c2; }
 .app-realistic.theme-dark .landing-discovery-panel { border-color: #29352e; background: linear-gradient(135deg, #121a16 0%, #15191f 62%, #102017 100%); box-shadow: 0 14px 38px rgba(0, 0, 0, .22); }
 .app-realistic.theme-dark .landing-discovery-intro h2 { color: #f1f7f4; }
 .app-realistic.theme-dark .landing-discovery-intro p { color: #c4d0c8; }
@@ -5731,7 +5734,8 @@ img, video, iframe { max-width: 100%; }
   .app-realistic .landing-discovery-intro h2 { font-size: clamp(20px, 5.4vw, 25px); }
   .app-realistic .landing-discovery-intro p { font-size: 12px; }
   .app-realistic .landing-category-filter { gap: 8px; margin-bottom: 15px; padding-bottom: 6px; }
-  .app-realistic .landing-category-filter button { min-width: 76px; min-height: 64px; border-radius: 12px; }
+  .app-realistic .landing-category-filter a { min-width: 76px; min-height: 64px; border-radius: 12px; }
+  .app-realistic .landing-preview-actions { flex-direction: column; }
   .app-realistic .landing-property-backdrop { padding: 8px; border-radius: 17px; }
   .app-realistic .landing-property-grid { grid-template-columns: minmax(0, 1fr); gap: 13px; }
   .app-realistic .landing-property-grid .property-image { aspect-ratio: 1.8 / 1; height: auto; }

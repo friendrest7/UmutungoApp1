@@ -20,7 +20,7 @@ npm test
 npm start
 ```
 
-Set `EXPO_PUBLIC_API_URL` in `.env` before starting. For Google sign-in, also set the Android, iOS, and web Google client IDs. Use `http://10.0.2.2:8080` for an Android emulator, `http://127.0.0.1:8080` for an iOS simulator, or the Windows computer's LAN IP for a physical phone. The Go backend must be running and its CORS/network configuration must allow the device to reach it.
+The checked-in `.env.example` points to the live Umutungo API and website routes, so copying it to `.env` connects the app to the production marketplace. To use a local Go backend instead, set `EXPO_PUBLIC_API_URL` to `http://10.0.2.2:8080` for an Android emulator, `http://127.0.0.1:8080` for an iOS simulator, or the Windows computer's LAN IP for a physical phone. For Google sign-in, set the Android, iOS, and web Google client IDs. A local backend must be running and reachable by the device.
 
 ## Implemented
 

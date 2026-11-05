@@ -576,12 +576,14 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     }
     if (checkoutPopup && !checkoutPopup.closed) checkoutPopup.close();
     const listing: LandlordListing = { id: databaseListing.id, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: ownerOneTimePrice ? ' one-time price' : selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? ' sale or lease' : ' sale or rent' : selectedIntent.transactionType === 'sell' ? ' asking' : propertyType === 'Hospitality' ? ' / night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? ' / day' : propertyType === 'Land' ? ' lease price' : ' / month', cover: persistedImages[0] ?? cover, images: persistedImages.length ? persistedImages : gallery, bedrooms: propertyType === 'Vehicle' ? `${vehicleMake} ${vehicleModel}`.trim() || vehicleYear : isAsset ? assetQuantity : isLand ? landTenure : bedrooms, bathrooms: propertyType === 'Vehicle' ? vehicleCondition : isAsset ? assetCondition : isLand ? landRoadAccess : bathrooms, area: propertyType === 'Vehicle' ? vehicleMileage : isAsset ? assetSpecifications : area, amenities, customDetails: customDetails.map(({ label, value }) => ({ label: label.trim(), value: value.trim() })).filter((detail) => detail.label && detail.value), status: databaseListing.status === 'scheduled' ? 'Scheduled' : databaseListing.status === 'published' ? 'Published' : 'Draft', savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: databaseListing.expires_at ?? new Date(Date.now() + expiryDays * 86400000).toISOString() };
-    const storageKey = accessRole === 'Commissioner / Komisiyoneri' ? 'umutungo-commissioner-properties' : 'umutungo-landlord-properties';
-    try {
-      const existing = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as LandlordListing[];
-      window.localStorage.setItem(storageKey, JSON.stringify([listing, ...existing]));
-    } catch {
-      window.localStorage.setItem(storageKey, JSON.stringify([listing]));
+    if (accessRole !== 'Property Owner') {
+      const storageKey = accessRole === 'Commissioner / Komisiyoneri' ? 'umutungo-commissioner-properties' : 'umutungo-landlord-properties';
+      try {
+        const existing = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as LandlordListing[];
+        window.localStorage.setItem(storageKey, JSON.stringify([listing, ...existing]));
+      } catch {
+        window.localStorage.setItem(storageKey, JSON.stringify([listing]));
+      }
     }
     setSavedListingStatus(databaseListing.status);
     setPublished(true);

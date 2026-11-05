@@ -112,11 +112,25 @@ function PostingSelection({ role, category, signedInRole, onRoleChange, onCatego
   return <main className="posting-selection-page"><header className="post-property-header"><Link href="/" aria-label="Umutungo home"><Logo /></Link><InterfacePreferences /><Link className="post-home-link" href="/"><Icon name="x" size={14} /> {t(language, 'Exit')}</Link></header><section className="posting-selection-shell"><div className="posting-selection-intro"><h1>{isRoleLocked ? <>{t(language, 'Post as')}<br /><em>{t(language, roleOptions[0])}.</em></> : <>{t(language, 'Choose a role')}<br /><em className="posting-selection-continue">{t(language, 'to continue.')}</em></>}</h1><p className="posting-selection-description">{t(language, 'Choose the type of property you want to upload and the role you want to post as. Weâ€™ll give you tools to manage your listings and a platform experience tailored to your needs and premium level.')}</p><p className="posting-selection-description">{t(language, 'Weâ€™re happy to help you find a market for your property. Everything you need to promote it is on our platform.')}</p><p className="posting-selection-description">{t(language, 'We help everyone bring their offerings to market and reach people beyond their usual reach in milliseconds.')}</p></div><div className="posting-selection-card"><div className="posting-selection-card-heading"><div><span>{t(language, 'STEP 1 OF 2')}</span><h2>{t(language, 'Set the direction')}</h2></div></div><fieldset><legend>{t(language, isRoleLocked ? 'Your posting role' : 'Who are you posting as?')}</legend><div className={`posting-role-grid ${isRoleLocked ? 'posting-role-locked' : ''}`}>{roleOptions.map((item) => <button type="button" key={item} className={role === item ? 'is-selected' : ''} aria-pressed={role === item} onClick={() => isRoleLocked ? undefined : onRoleChange(role === item ? null : item)}><strong>{t(language, item)}</strong><small>{t(language, item === 'Komisiyoneri' ? 'List properties for clients.' : item === 'Landlord' ? 'Manage rental listings and tenants.' : 'Manage your property listings.')}</small></button>)}</div></fieldset><fieldset><legend>{t(language, 'What are you listing?')}</legend><div className="posting-category-grid">{typeOptions.map((item) => <button type="button" key={item.key} className={category === item.key ? 'is-selected' : ''} onClick={() => onCategoryChange(item.key)}><Icon name={item.icon} size={18} /><span>{t(language, item.label)}</span></button>)}</div></fieldset>{error && <p className="post-location-error" role="alert">{t(language, error)}</p>}<button className="post-primary-button" type="button" onClick={onContinue}>{t(language, 'Continue to listing form')} <Icon name="arrow" size={15} /></button></div></section></main>;
 }
 
+function propertyOwnerPriceBand(price: number) {
+  if (price <= 300_000) return { label: 'RWF 0–300,000', rate: 1 };
+  if (price <= 1_000_000) return { label: 'RWF 300,000–1,000,000', rate: 2 };
+  if (price <= 10_000_000) return { label: 'RWF 1,000,000–10,000,000', rate: 3 };
+  if (price <= 30_000_000) return { label: 'RWF 10,000,000–30,000,000', rate: 3.1 };
+  if (price <= 100_000_000) return { label: 'RWF 30,000,000–100,000,000', rate: 3.2 };
+  return { label: 'RWF 100,000,000+', rate: 1.2 };
+}
+
 function ListingPricingFields({ price, onPriceChange, priceLabel, priceNote, quote = null, quoteStatus = 'idle', showOwnerFee }: { price: string; onPriceChange: (value: string) => void; priceLabel: string; priceNote: string; quote?: { fee?: number; rate_percent?: number; payment_model?: 'percentage' | 'fixed' | 'upload_slot'; available_slots?: number } | null; quoteStatus?: 'idle' | 'loading' | 'ready' | 'error'; showOwnerFee: boolean }) {
+  const enteredPrice = Number(price.replace(/[^0-9.]/g, '')) || 0;
+  const priceBand = propertyOwnerPriceBand(enteredPrice);
+  const displayRate = quote && (quote.rate_percent ?? 0) > 0 ? quote.rate_percent : priceBand.rate;
+  const calculatedFee = enteredPrice > 0 ? quote && (quote.fee ?? 0) > 0 ? quote.fee : Math.round(enteredPrice * displayRate / 100) : undefined;
+  const quoteIsValid = Boolean(quote && (quote.rate_percent ?? 0) > 0 && (quote.fee ?? 0) > 0);
   return <section className="post-pricing-panel" aria-label="Listing price and posting requirement">
     <div className="post-pricing-heading"><strong>{showOwnerFee ? 'Price and one-time posting fee' : 'Set your listing price'}</strong><p>{showOwnerFee ? 'Enter the property price to see the one-time Property Owner posting fee.' : 'Enter the price you want people to see on your listing.'}</p></div>
     <div className="post-price-field"><label className="post-field"><span>{priceLabel}</span><div className="post-input-prefix"><b>RWF</b><input value={price} onChange={(event) => onPriceChange(event.target.value)} inputMode="numeric" /></div></label><span className="post-price-note">{priceNote}</span></div>
-    {showOwnerFee && <div className="post-monthly-fee" aria-live="polite"><span>One-time posting fee</span><strong>{quote ? `RWF ${(quote.fee ?? 0).toLocaleString('en-RW')}` : quoteStatus === 'loading' ? 'Checking fee…' : quoteStatus === 'error' ? 'Fee unavailable' : 'Enter a price'}</strong><p>{quote ? `Paid once per property by Property Owners. Calculated at ${quote.rate_percent}% of the entered price.` : quoteStatus === 'error' ? 'Could not get the configured posting price. Check your connection or contact the administrator.' : 'The current Property Owner posting fee will be checked automatically.'}</p></div>}
+    {showOwnerFee && <div className="post-monthly-fee" aria-live="polite"><span>One-time Property Owner payment</span><strong>{calculatedFee !== undefined ? `RWF ${calculatedFee.toLocaleString('en-RW')}` : 'Enter a price'}</strong><p>{enteredPrice > 0 ? `${displayRate}% ${quoteIsValid ? 'confirmed' : 'estimated'} rate for ${priceBand.label} · ${calculatedFee === undefined ? '' : `RWF ${calculatedFee.toLocaleString('en-RW')} paid once to publish this property.`}` : 'Enter the one-time property price to calculate the percentage payment.'}</p></div>}
   </section>;
 }
 export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?: boolean; onCancel?: () => void }) {
@@ -165,6 +179,9 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [selectedCover, setSelectedCover] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
   const [paymentPending, setPaymentPending] = useState(false);
+  const [payBeforeContinue, setPayBeforeContinue] = useState(false);
+  const [paidDraftListingId, setPaidDraftListingId] = useState('');
+  const [prepaymentListingId, setPrepaymentListingId] = useState('');
   const [savedListingStatus, setSavedListingStatus] = useState('draft');
   const [accessRole, setAccessRole] = useState<'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri' | null>(null);
   const [postingRole, setPostingRole] = useState<PostingRole | null>(null);
@@ -177,6 +194,48 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [demoPaymentSucceeded, setDemoPaymentSucceeded] = useState(false);
   const [pendingCheckoutURL, setPendingCheckoutURL] = useState('');
   const [checkoutPopupOpened, setCheckoutPopupOpened] = useState(false);
+
+  useEffect(() => {
+    const paidDraftId = new URLSearchParams(window.location.search).get('paid_draft');
+    if (!paidDraftId) return;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('umutungo-paid-draft-form') ?? 'null') as Record<string, unknown> | null;
+      if (saved) {
+        setPostingRole('Property Owner');
+        setAccessRole('Property Owner');
+        if (typeof saved.propertyType === 'string') setPropertyType(saved.propertyType as PropertyType);
+        if (typeof saved.intent === 'string') setIntent(saved.intent as Intent);
+        if (typeof saved.title === 'string') setTitle(saved.title);
+        if (typeof saved.description === 'string') setDescription(saved.description);
+        if (typeof saved.price === 'string') setPrice(saved.price);
+        if (typeof saved.address === 'string') setAddress(saved.address);
+        if (typeof saved.location === 'string') setLocation(saved.location);
+        if (typeof saved.district === 'string') setDistrict(saved.district);
+        if (typeof saved.sector === 'string') setSector(saved.sector);
+        if (typeof saved.cell === 'string') setCell(saved.cell);
+        if (typeof saved.village === 'string') setVillage(saved.village);
+        if (typeof saved.gpsPin === 'string') setGpsPin(saved.gpsPin);
+        if (Array.isArray(saved.amenities)) setAmenities(saved.amenities as string[]);
+        if (typeof saved.bedrooms === 'string') setBedrooms(saved.bedrooms);
+        if (typeof saved.bathrooms === 'string') setBathrooms(saved.bathrooms);
+        if (typeof saved.area === 'string') setArea(saved.area);
+        if (Array.isArray(saved.customDetails)) setCustomDetails(saved.customDetails as Array<{ id: string; label: string; value: string }>);
+        if (typeof saved.landTenure === 'string') setLandTenure(saved.landTenure);
+        if (typeof saved.landRoadAccess === 'string') setLandRoadAccess(saved.landRoadAccess);
+        if (typeof saved.assetQuantity === 'string') setAssetQuantity(saved.assetQuantity);
+        if (typeof saved.assetCondition === 'string') setAssetCondition(saved.assetCondition);
+        if (typeof saved.assetSpecifications === 'string') setAssetSpecifications(saved.assetSpecifications);
+        if (typeof saved.paymentEmail === 'string') setPaymentEmail(saved.paymentEmail);
+        if (typeof saved.paymentPhone === 'string') setPaymentPhone(saved.paymentPhone);
+        if (saved.paymentMethod === 'card' || saved.paymentMethod === 'mobilemoneyrwanda') setPaymentMethod(saved.paymentMethod);
+      }
+      setPaidDraftListingId(paidDraftId);
+      setStep(2);
+      setSelectionComplete(true);
+      window.localStorage.removeItem('umutungo-paid-draft-form');
+      window.history.replaceState({}, '', window.location.pathname);
+    } catch { setSaveError('Your paid draft could not be restored. Please contact support with listing ID ' + paidDraftId + '.'); }
+  }, []);
 
   useEffect(() => {
     const amount = Number(price.replace(/[^0-9.]/g, '')) || 0;
@@ -204,8 +263,9 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const selectedIntent = intentOptions.find((option) => option.label === intent) ?? intentOptions[0];
   const isCommissionerPosting = postingRole === 'Komisiyoneri' || accessRole === 'Commissioner / Komisiyoneri';
   const districtOptions = getDistrictNames(location);
-  const priceLabel = selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? 'Sale or lease price' : 'Sale or rent price' : selectedIntent.transactionType === 'sell' ? 'Asking price' : propertyType === 'Hospitality' ? 'Nightly rate' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'Hire price' : propertyType === 'Land' ? 'Lease price' : 'Monthly price';
-  const priceNote = selectedIntent.transactionType === 'both' ? 'Enter the price for either option' : selectedIntent.transactionType === 'sell' ? 'total asking price' : propertyType === 'Hospitality' ? 'per night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'per day' : propertyType === 'Land' ? 'lease terms' : 'per month';
+  const ownerOneTimePrice = postingRole === 'Property Owner';
+  const priceLabel = ownerOneTimePrice ? 'One-time property price' : selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? 'Sale or lease price' : 'Sale or rent price' : selectedIntent.transactionType === 'sell' ? 'Asking price' : propertyType === 'Hospitality' ? 'Nightly rate' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'Hire price' : propertyType === 'Land' ? 'Lease price' : 'Monthly price';
+  const priceNote = ownerOneTimePrice ? 'total property price (one-time)' : selectedIntent.transactionType === 'both' ? 'Enter the price for either option' : selectedIntent.transactionType === 'sell' ? 'total asking price' : propertyType === 'Hospitality' ? 'per night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? 'per day' : propertyType === 'Land' ? 'lease terms' : 'per month';
 
   useEffect(() => {
     const nextDistricts = getDistrictNames(location);
@@ -314,7 +374,63 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     if (amount <= 0) { setSaveError('Enter a listing price greater than RWF 0.'); return false; }
     return true;
   };
-  const previous = () => setStep((current) => Math.max(1, current - 1));
+  const beginOwnerPayment = () => {
+    if (postingRole !== 'Property Owner') { next(); return; }
+    if (!title.trim()) { setSaveError('Enter a listing title before continuing to payment.'); return; }
+    if (!validateListingPrice()) return;
+    setPayBeforeContinue(true);
+    if (!apiToken() || accessRole !== 'Property Owner') {
+      setSelectionComplete(false);
+      setAuthOpen(true);
+      setSaveError('Sign in with your Property Owner account to continue to payment.');
+      return;
+    }
+    setSaveError('');
+    setPaymentPanelOpen(true);
+  };
+  const continueAfterOwnerPayment = async (checkoutPopup: Window | null) => {
+    const closePopup = () => { if (checkoutPopup && !checkoutPopup.closed) checkoutPopup.close(); };
+    const amount = Number(price.replace(/[^0-9.]/g, '')) || 0;
+    if (!title.trim() || amount <= 0) { closePopup(); setSaveError('Enter a listing title and one-time property price before paying.'); return; }
+    if (accessRole !== 'Property Owner' || !apiToken()) { closePopup(); setSaveError('Sign in with your Property Owner account before paying.'); return; }
+    if (!/^\S+@\S+\.\S+$/.test(paymentEmail.trim())) { closePopup(); setSaveError('Enter an email address to receive your payment receipt.'); return; }
+    if (paymentMethod === 'mobilemoneyrwanda' && !feeQuote?.demo_mode && !/^\+?2507\d{8}$/.test(paymentPhone.replace(/[\s()-]/g, '').replace(/^07/, '+2507'))) { closePopup(); setSaveError('Enter a valid Rwanda phone number for mobile money, such as +250 78 123 4567.'); return; }
+    setSaveError('');
+    setPaymentPending(true);
+    try {
+      let listingId = prepaymentListingId;
+      if (!listingId) {
+        const created = await umutungoApi<{ id: string }>('/api/v1/listings', { method: 'POST', body: JSON.stringify({ category: propertyType.toLowerCase(), transaction_type: selectedIntent.transactionType, title: listingTitle, description, price: amount, currency: 'RWF', province: location, district, sector, cell, village, latitude: parseCoordinates(gpsPin)?.latitude ?? null, longitude: parseCoordinates(gpsPin)?.longitude ?? null, status: 'draft', tags: amenities, amenities, contact_method: 'message', media: [] }) });
+        if (!created?.id) throw new Error('Could not save a private draft for payment.');
+        listingId = created.id;
+        setPrepaymentListingId(listingId);
+      } else {
+        await umutungoApi(`/api/v1/listings/${encodeURIComponent(listingId)}`, { method: 'PATCH', body: JSON.stringify({ title: listingTitle, description, price: amount, category: propertyType.toLowerCase(), transaction_type: selectedIntent.transactionType, province: location, district, sector, cell, village, tags: amenities, amenities }) });
+      }
+      const savedForm = { postingRole: 'Property Owner', propertyType, intent, title, description, price, address, location, district, sector, cell, village, gpsPin, amenities, bedrooms, bathrooms, area, customDetails, landTenure, landRoadAccess, assetQuantity, assetCondition, assetSpecifications, paymentEmail, paymentPhone, paymentMethod };
+      window.localStorage.setItem('umutungo-paid-draft-form', JSON.stringify(savedForm));
+      if (feeQuote?.demo_mode) {
+        const payment = await umutungoApi<{ status: string; is_demo: boolean }>(`/api/v1/listings/${encodeURIComponent(listingId)}/demo-payment`, { method: 'POST', body: JSON.stringify({ email: paymentEmail.trim(), requested_status: 'draft' }) });
+        if (payment?.status !== 'successful' || !payment.is_demo) throw new Error('Payment could not be completed. Your private draft is saved.');
+        setPaidDraftListingId(listingId);
+        setStep(2);
+        setPaymentPending(false);
+        setPaymentPanelOpen(false);
+        setPayBeforeContinue(false);
+        return;
+      }
+      const checkout = await umutungoApi<{ checkout_url: string }>(`/api/v1/listings/${encodeURIComponent(listingId)}/subscription-payment`, { method: 'POST', body: JSON.stringify({ payment_method: paymentMethod, email: paymentEmail.trim(), phone: paymentPhone.trim(), requested_status: 'draft' }) });
+      if (!checkout?.checkout_url) throw new Error('Could not start secure checkout. Your private draft is saved.');
+      setPendingCheckoutURL(checkout.checkout_url);
+      if (checkoutPopup && !checkoutPopup.closed) { checkoutPopup.opener = null; checkoutPopup.location.replace(checkout.checkout_url); setCheckoutPopupOpened(true); }
+      setPaymentPanelOpen(false);
+    } catch (error) {
+      closePopup();
+      setPaymentPending(false);
+      setSaveError(error instanceof Error ? error.message : 'Could not start payment.');
+    }
+  };
+  const previous = () => setStep((current) => paidDraftListingId && current <= 2 ? current : Math.max(1, current - 1));
   const saveListingNow = async (saveForLater = false, checkoutPopup: Window | null = null) => {
     const closeCheckoutPopup = () => { if (checkoutPopup && !checkoutPopup.closed) checkoutPopup.close(); };
     if (!title.trim()) { closeCheckoutPopup(); setSaveError('Enter a listing title before saving.'); setStep(1); return; }
@@ -343,9 +459,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
         const filename = cover.split('/').pop() || 'property-cover.jpg';
         photoFiles = [new File([photoBlob], filename, { type: photoBlob.type || 'image/jpeg' })];
       }
-      databaseListing = await umutungoApi<{ id: string; status: string; expires_at?: string }>('/api/v1/listings', {
-        method: 'POST',
-        body: JSON.stringify({
+      const listingPayload = {
           category: propertyType.toLowerCase(),
           transaction_type: selectedIntent.transactionType,
           title: listingTitle,
@@ -375,8 +489,14 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
                   : { building_size: Number(area) || 0, bedrooms: Number(bedrooms) || 0, bathrooms: Number(bathrooms) || 0, parking: amenities.includes('Parking') ? 1 : 0 }),
             additional_details: customDetails.map(({ label, value }) => ({ label: label.trim(), value: value.trim() })).filter((detail) => detail.label && detail.value),
           },
-        }),
-      });
+      };
+      if (paidDraftListingId) {
+        const updated = await umutungoApi<{ id: string; status?: string }>('/api/v1/listings/' + encodeURIComponent(paidDraftListingId), { method: 'PATCH', body: JSON.stringify(listingPayload) });
+        if (!updated?.id) throw new Error('Could not update your paid draft. Your payment is recorded and the draft remains private.');
+        databaseListing = { id: updated.id, status: updated.status ?? 'draft' };
+      } else {
+        databaseListing = await umutungoApi<{ id: string; status: string; expires_at?: string }>('/api/v1/listings', { method: 'POST', body: JSON.stringify(listingPayload) });
+      }
       if (!databaseListing?.id) throw new Error('The server did not return a saved listing.');
       for (const file of photoFiles) {
         const media = await uploadListingImage(databaseListing.id, file);
@@ -431,7 +551,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
       return;
     }
     if (checkoutPopup && !checkoutPopup.closed) checkoutPopup.close();
-    const listing: LandlordListing = { id: databaseListing.id, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? ' sale or lease' : ' sale or rent' : selectedIntent.transactionType === 'sell' ? ' asking' : propertyType === 'Hospitality' ? ' / night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? ' / day' : propertyType === 'Land' ? ' lease price' : ' / month', cover: persistedImages[0] ?? cover, images: persistedImages.length ? persistedImages : gallery, bedrooms: propertyType === 'Vehicle' ? `${vehicleMake} ${vehicleModel}`.trim() || vehicleYear : isAsset ? assetQuantity : isLand ? landTenure : bedrooms, bathrooms: propertyType === 'Vehicle' ? vehicleCondition : isAsset ? assetCondition : isLand ? landRoadAccess : bathrooms, area: propertyType === 'Vehicle' ? vehicleMileage : isAsset ? assetSpecifications : area, amenities, customDetails: customDetails.map(({ label, value }) => ({ label: label.trim(), value: value.trim() })).filter((detail) => detail.label && detail.value), status: databaseListing.status === 'scheduled' ? 'Scheduled' : databaseListing.status === 'published' ? 'Published' : 'Draft', savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: databaseListing.expires_at ?? new Date(Date.now() + expiryDays * 86400000).toISOString() };
+    const listing: LandlordListing = { id: databaseListing.id, title: listingTitle, type: propertyType, intent, location: `${address || sector}, ${district}, ${location}`, province: location, district, sector, cell, village, gpsPin, price: `RWF ${price || '0'}`, priceNote: ownerOneTimePrice ? ' one-time price' : selectedIntent.transactionType === 'both' ? propertyType === 'Land' ? ' sale or lease' : ' sale or rent' : selectedIntent.transactionType === 'sell' ? ' asking' : propertyType === 'Hospitality' ? ' / night' : propertyType === 'Vehicle' || propertyType === 'Equipment' ? ' / day' : propertyType === 'Land' ? ' lease price' : ' / month', cover: persistedImages[0] ?? cover, images: persistedImages.length ? persistedImages : gallery, bedrooms: propertyType === 'Vehicle' ? `${vehicleMake} ${vehicleModel}`.trim() || vehicleYear : isAsset ? assetQuantity : isLand ? landTenure : bedrooms, bathrooms: propertyType === 'Vehicle' ? vehicleCondition : isAsset ? assetCondition : isLand ? landRoadAccess : bathrooms, area: propertyType === 'Vehicle' ? vehicleMileage : isAsset ? assetSpecifications : area, amenities, customDetails: customDetails.map(({ label, value }) => ({ label: label.trim(), value: value.trim() })).filter((detail) => detail.label && detail.value), status: databaseListing.status === 'scheduled' ? 'Scheduled' : databaseListing.status === 'published' ? 'Published' : 'Draft', savedAt: new Date().toISOString(), scheduledFor: scheduledFor || undefined, expiresAt: databaseListing.expires_at ?? new Date(Date.now() + expiryDays * 86400000).toISOString() };
     const storageKey = accessRole === 'Commissioner / Komisiyoneri' ? 'umutungo-commissioner-properties' : 'umutungo-landlord-properties';
     try {
       const existing = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as LandlordListing[];
@@ -457,6 +577,20 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   };
 
   const continueToSecureCheckout = () => {
+    if (postingRole === 'Property Owner' && (!(feeQuote?.rate_percent && feeQuote.rate_percent > 0) || !(feeQuote?.fee && feeQuote.fee > 0))) {
+      setSaveError('A valid Property Owner percentage payment is required before publishing. Please refresh the fee or contact the administrator.');
+      return;
+    }
+    if (payBeforeContinue && postingRole === 'Property Owner') {
+      const width = Math.min(520, Math.max(360, window.screen.availWidth - 32));
+      const height = Math.min(760, Math.max(600, window.screen.availHeight - 48));
+      const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+      const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
+      const popup = feeQuote?.demo_mode ? null : window.open('about:blank', 'umutungo_flutterwave_checkout', `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+      if (popup) { popup.document.title = 'Preparing secure checkout'; popup.document.body.textContent = 'Preparing your secure Flutterwave checkout…'; }
+      void continueAfterOwnerPayment(popup);
+      return;
+    }
     const width = Math.min(520, Math.max(360, window.screen.availWidth - 32));
     const height = Math.min(760, Math.max(600, window.screen.availHeight - 48));
     const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
@@ -485,7 +619,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
 
   const Container = embedded ? 'section' : 'main';
   if (checkingAccess) return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}><p>Loading listing form...</p></Container>;
-  if (!selectionComplete) return <><PostingSelection role={postingRole} category={propertyType} signedInRole={accessRole} onRoleChange={(value) => { setPostingRole(value); setSaveError(''); }} onCategoryChange={(value) => { setPropertyType(value); setSaveError(''); }} onContinue={continueToForm} error={saveError} /><AuthModal open={authOpen} role={postingRole === 'Komisiyoneri' ? 'Commissioner / Komisiyoneri' : postingRole === 'Landlord' ? 'Landlord' : postingRole === 'Property Owner' ? 'Property Owner' : undefined} onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { const nextRole = accountRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : accountRole === 'Property Owner' ? 'Property Owner' : accountRole === 'Landlord' ? 'Landlord' : null; if (nextRole) { setAccessRole(accountRole as 'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri'); setPostingRole((current) => current ?? nextRole); setSelectionComplete(true); setSaveError(''); setAuthOpen(false); } else setSaveError('A Komisiyoneri, Landlord, or Property Owner account is required to post a listing.'); }} /></>;
+  if (!selectionComplete) return <><PostingSelection role={postingRole} category={propertyType} signedInRole={accessRole} onRoleChange={(value) => { setPostingRole(value); setSaveError(''); }} onCategoryChange={(value) => { setPropertyType(value); setSaveError(''); }} onContinue={continueToForm} error={saveError} /><AuthModal open={authOpen} role={postingRole === 'Komisiyoneri' ? 'Commissioner / Komisiyoneri' : postingRole === 'Landlord' ? 'Landlord' : postingRole === 'Property Owner' ? 'Property Owner' : undefined} onClose={() => { setAuthOpen(false); setPayBeforeContinue(false); }} onSuccess={(accountRole) => { const nextRole = accountRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : accountRole === 'Property Owner' ? 'Property Owner' : accountRole === 'Landlord' ? 'Landlord' : null; if (nextRole) { if (payBeforeContinue && accountRole !== 'Property Owner') { setSaveError('Sign in with a Property Owner account to pay and continue.'); setPayBeforeContinue(false); setAuthOpen(false); return; } setAccessRole(accountRole as 'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri'); setPostingRole((current) => current ?? nextRole); setSelectionComplete(true); setSaveError(''); setAuthOpen(false); if (payBeforeContinue) setPaymentPanelOpen(true); } else setSaveError('A Komisiyoneri, Landlord, or Property Owner account is required to post a listing.'); }} /></>;
 
   if (paymentPending && isCommissionerPosting) return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}><section className="post-payment-pending-card"><div className="post-payment-pending-icon"><span><Icon name="building" size={25} /></span><i /></div><p className="post-eyebrow">Paid upload slot required</p><h1>Use a purchased<br /><em>listing slot.</em></h1><p className="post-payment-pending-copy">Komisiyoneri publishing uses paid upload slots. There is no per-property checkout. Buy a slot package, then return to publish your saved draft.</p><Link className="post-primary-button" href="/commissioner">Go to upload slots <Icon name="arrow" size={15} /></Link></section></Container>;
   if (paymentPending) return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}><section className="post-payment-pending-card"><div className="post-payment-pending-icon"><span><Icon name="lock" size={25} /></span><i /></div><p className="post-eyebrow">Secure checkout in progress</p><h1>Finish payment in<br /><em>Flutterwave.</em></h1><p className="post-payment-pending-copy">Flutterwave is opening in a small checkout window. Your listing stays saved as a draft until the payment is confirmed.</p><div className="post-payment-pending-summary"><span><Icon name="creditCard" size={16} /> One-time posting fee</span><strong>{feeQuote?.fee ? `RWF ${feeQuote.fee.toLocaleString('en-RW')}` : 'Checkout ready'}</strong></div><div className="post-payment-pending-status"><i /> Waiting for payment confirmation</div><button className="post-primary-button" type="button" onClick={reopenSecureCheckout}>{checkoutPopupOpened ? 'Reopen checkout window' : 'Open secure checkout'} <Icon name="arrow" size={15} /></button><small>Keep this page open while you complete checkout. Your listing will remain a draft until payment is confirmed.</small></section></Container>;
@@ -525,8 +659,8 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
             <div className="post-field-group"><span className="post-field-label">Highlights</span><div className="post-amenities">{highlightOptions.map((amenity) => <button className={amenities.includes(amenity) ? 'is-selected' : ''} type="button" key={amenity} onClick={() => toggleAmenity(amenity)}>{amenities.includes(amenity) && <Icon name="check" size={12} />}{amenity}</button>)}</div></div>
           </div>}
           {step === 3 && <div className="post-form-section"><div className="post-section-intro"><h3>Let the photos do some talking</h3><p>Choose a cover that sets the mood, then add the details that help someone picture themselves there.</p></div><label className="post-dropzone"><input type="file" accept="image/*" multiple onChange={handleFiles} /><span className="post-upload-icon"><Icon name="download" size={19} /></span><strong>Drop your photos here</strong><small>or click to browse Ã‚Â· JPG, PNG up to 10MB each</small></label><div className="post-curated-heading"><span>Start with a curated set</span><small>Swap these for your own any time</small></div><div className="post-image-choices">{curatedImages[propertyType].map((image) => <button className={cover === image ? 'is-selected' : ''} type="button" key={image} onClick={() => { setSelectedCover(image); setUploadedImages([]); setUploadFiles([]); }}><Image src={image} alt="Suggested property view" fill sizes="120px" />{cover === image && <span><Icon name="check" size={13} /></span>}</button>)}</div><div className="post-amenities-summary"><span>Selected highlights</span><div>{amenities.length ? amenities.map((amenity) => <b key={amenity}>{amenity}</b>) : <small>Add a few highlights above</small>}</div></div></div>}
-          {step === 3 && <div className="post-lifecycle-panel"><div><span className="post-field-label">Publication</span><p>Pay now to publish your listing, or save it as a private draft and pay when you’re ready. You can also schedule publication.</p></div><div className="post-segmented"><button className={publicationMode === "Draft" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode((current) => current === 'Draft' ? 'Publish now' : 'Draft')}>Save as draft</button><button className={publicationMode === "Scheduled" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode((current) => current === 'Scheduled' ? 'Publish now' : 'Scheduled')}>Schedule</button></div>{publicationMode === 'Scheduled' && <label className="post-field"><span>Publish date and time</span><input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} required /></label>}{(accessRole === 'Landlord' || accessRole === 'Property Owner') && <div className="owner-premium-plans"><span className="post-field-label">Property Owner premium plan</span><div>{(['Silver', 'Gold', 'Platinum'] as const).map((plan) => <button className={ownerTier.startsWith(plan) ? 'is-selected' : ''} type="button" key={plan} onClick={() => setOwnerTier(plan)}><img src={`/premium/${plan.toLowerCase()}.svg`} alt={`${plan} premium plan icon`} /><strong>{plan}</strong></button>)}</div><Link href="/upgrade/owner">One-time upgrade payments</Link></div>}<small className="post-lifecycle-note">{accessRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri listings expire 30 days after publication.' : `Property Owner listings expire according to the ${ownerTier} tier.`}</small></div>}
-          <div className="post-form-actions">{step > 1 ? <button className="post-secondary-button" type="button" onClick={previous}><Icon name="arrow" size={14} /> Back</button> : <span />}{step < 3 ? <button className="post-primary-button" type="button" onClick={next}><span>Continue</span><Icon name="arrow" size={15} /></button> : publicationMode === 'Draft' ? <button className="post-primary-button" type="button" onClick={() => void saveListingNow(true)}>Save listing draft <Icon name="arrow" size={15} /></button> : <div className="post-payment-choice-actions"><button className="post-primary-button" type="button" onClick={saveListing}><Icon name="creditCard" size={15} /> {postingRole === 'Komisiyoneri' ? 'Publish with upload slot' : 'Pay now'} <Icon name="arrow" size={15} /></button><button className="post-secondary-button" type="button" onClick={() => void saveListingNow(true)}>Pay later</button></div>}</div>
+          {step === 3 && <div className="post-lifecycle-panel"><div><span className="post-field-label">Publication</span><p>{postingRole === 'Property Owner' ? 'Complete the one-time percentage payment to continue and publish your property. You can also schedule publication.' : 'Pay now to publish your listing, or save it as a private draft and pay when you’re ready. You can also schedule publication.'}</p></div><div className="post-segmented">{postingRole !== 'Property Owner' && <button className={publicationMode === "Draft" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode((current) => current === 'Draft' ? 'Publish now' : 'Draft')}>Save as draft</button>}<button className={publicationMode === "Scheduled" ? "is-selected" : ""} type="button" onClick={() => setPublicationMode((current) => current === 'Scheduled' ? 'Publish now' : 'Scheduled')}>Schedule</button></div>{publicationMode === 'Scheduled' && <label className="post-field"><span>Publish date and time</span><input type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} required /></label>}{(accessRole === 'Landlord' || accessRole === 'Property Owner') && <div className="owner-premium-plans"><span className="post-field-label">Property Owner premium plan</span><div>{(['Silver', 'Gold', 'Platinum'] as const).map((plan) => <button className={ownerTier.startsWith(plan) ? 'is-selected' : ''} type="button" key={plan} onClick={() => setOwnerTier(plan)}><img src={`/premium/${plan.toLowerCase()}.svg`} alt={`${plan} premium plan icon`} /><strong>{plan}</strong></button>)}</div><Link href="/upgrade/owner">One-time upgrade payments</Link></div>}<small className="post-lifecycle-note">{accessRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri listings expire 30 days after publication.' : `Property Owner listings expire according to the ${ownerTier} tier.`}</small></div>}
+          <div className="post-form-actions">{step > 1 && !(paidDraftListingId && step === 2) ? <button className="post-secondary-button" type="button" onClick={previous}><Icon name="arrow" size={14} /> Back</button> : <span />}{step < 3 ? <button className="post-primary-button" type="button" onClick={step === 1 && postingRole === 'Property Owner' ? beginOwnerPayment : next}><span>{step === 1 && postingRole === 'Property Owner' ? 'Pay and continue' : 'Continue'}</span><Icon name="arrow" size={15} /></button> : publicationMode === 'Draft' ? <button className="post-primary-button" type="button" onClick={() => void saveListingNow(true)}>Save listing draft <Icon name="arrow" size={15} /></button> : <div className="post-payment-choice-actions"><button className="post-primary-button" type="button" onClick={saveListing}><Icon name="creditCard" size={15} /> {postingRole === 'Komisiyoneri' ? 'Publish with upload slot' : 'Pay and continue'} <Icon name="arrow" size={15} /></button>{postingRole !== 'Property Owner' && <button className="post-secondary-button" type="button" onClick={() => void saveListingNow(true)}>Pay later</button>}</div>}</div>
         </div><aside className="post-preview-wrap">
           <div className="post-preview-label"><span>Live preview</span><small>How it will look in Umutungo</small></div>
           <article className="post-preview-card">
@@ -539,7 +673,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
         </aside></div>
       </section>
     </div>
-    {paymentPanelOpen && !isCommissionerPosting && <div className="listing-payment-panel-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPaymentPanelOpen(false); }}><section className="listing-payment-panel" role="dialog" aria-modal="true" aria-labelledby="listing-payment-title"><button className="listing-payment-panel-close" type="button" aria-label="Close payment options" onClick={() => setPaymentPanelOpen(false)}><Icon name="x" size={18} /></button><span className="listing-payment-panel-eyebrow"><Icon name="lock" size={14} /> {feeQuote?.demo_mode ? 'Demo checkout' : 'Secure checkout'}</span><h2 id="listing-payment-title">Choose a payment method</h2><p className="listing-payment-panel-summary"><span><Icon name="creditCard" size={16} /> {postingRole === 'Landlord' ? 'One-time landlord posting fee' : 'One-time property upload fee'}</span><strong>{feeQuote ? 'RWF ' + (feeQuote.fee ?? 0).toLocaleString('en-RW') : 'Fee unavailable'}</strong></p>{feeQuote?.demo_mode && <p className="post-location-error" role="status">Demo mode: completing this step records a test payment only. No money will be charged.</p>}<div className="listing-payment-methods" role="radiogroup" aria-label="Payment method"><label className={paymentMethod === 'mobilemoneyrwanda' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="mobilemoneyrwanda" checked={paymentMethod === 'mobilemoneyrwanda'} onChange={() => setPaymentMethod('mobilemoneyrwanda')} /><Icon name="phone" size={20} /><span><strong>Mobile money</strong><small>MTN Mobile Money or Airtel Money</small></span></label><label className={paymentMethod === 'card' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} /><Icon name="creditCard" size={20} /><span><strong>Bank card</strong><small>Visa or Mastercard</small></span></label></div><label className="post-payment-email"><span><Icon name="mail" size={15} /> Email for your payment receipt</span><input type="email" value={paymentEmail} onChange={(event) => { setPaymentEmail(event.target.value); setSaveError(''); }} placeholder="you@example.com" autoComplete="email" required /></label>{paymentMethod === 'mobilemoneyrwanda' && <label className="post-payment-email"><span><Icon name="phone" size={15} /> Mobile money phone number</span><input type="tel" value={paymentPhone} onChange={(event) => { setPaymentPhone(event.target.value); setSaveError(''); }} placeholder="+250 78 123 4567" autoComplete="tel" inputMode="tel" /></label>}{saveError && <p className="post-location-error" role="alert">{saveError}</p>}<button className="post-primary-button listing-payment-continue" type="button" onClick={continueToSecureCheckout}><Icon name="lock" size={15} /> {feeQuote?.demo_mode ? 'Complete demo payment' : 'Continue to secure checkout'} <Icon name="arrow" size={15} /></button></section></div>}
+    {paymentPanelOpen && !isCommissionerPosting && <div className="listing-payment-panel-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setPaymentPanelOpen(false); setPayBeforeContinue(false); } }}><section className="listing-payment-panel" role="dialog" aria-modal="true" aria-labelledby="listing-payment-title"><button className="listing-payment-panel-close" type="button" aria-label="Close payment options" onClick={() => { setPaymentPanelOpen(false); setPayBeforeContinue(false); }}><Icon name="x" size={18} /></button><span className="listing-payment-panel-eyebrow"><Icon name="lock" size={14} /> {feeQuote?.demo_mode ? 'Demo checkout' : 'Secure checkout'}</span><h2 id="listing-payment-title">Choose a payment method</h2><p className="listing-payment-panel-summary"><span><Icon name="creditCard" size={16} /> {postingRole === 'Landlord' ? 'One-time landlord posting fee' : 'One-time property upload fee'}</span><strong>{feeQuote ? 'RWF ' + (feeQuote.fee ?? 0).toLocaleString('en-RW') : 'Fee unavailable'}</strong></p>{payBeforeContinue && <p className="post-location-error" role="status">After payment, your listing stays private while you continue adding its details.</p>}{feeQuote?.demo_mode && <p className="post-location-error" role="status">Demo mode: completing this step records a test payment only. No money will be charged.</p>}<div className="listing-payment-methods" role="radiogroup" aria-label="Payment method"><label className={paymentMethod === 'mobilemoneyrwanda' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="mobilemoneyrwanda" checked={paymentMethod === 'mobilemoneyrwanda'} onChange={() => setPaymentMethod('mobilemoneyrwanda')} /><Icon name="phone" size={20} /><span><strong>Mobile money</strong><small>MTN Mobile Money or Airtel Money</small></span></label><label className={paymentMethod === 'card' ? 'is-selected' : ''}><input type="radio" name="listing-payment-panel-method" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} /><Icon name="creditCard" size={20} /><span><strong>Bank card</strong><small>Visa or Mastercard</small></span></label></div><label className="post-payment-email"><span><Icon name="mail" size={15} /> Email for your payment receipt</span><input type="email" value={paymentEmail} onChange={(event) => { setPaymentEmail(event.target.value); setSaveError(''); }} placeholder="you@example.com" autoComplete="email" required /></label>{paymentMethod === 'mobilemoneyrwanda' && <label className="post-payment-email"><span><Icon name="phone" size={15} /> Mobile money phone number</span><input type="tel" value={paymentPhone} onChange={(event) => { setPaymentPhone(event.target.value); setSaveError(''); }} placeholder="+250 78 123 4567" autoComplete="tel" inputMode="tel" /></label>}{saveError && <p className="post-location-error" role="alert">{saveError}</p>}<button className="post-primary-button listing-payment-continue" type="button" onClick={continueToSecureCheckout}><Icon name="lock" size={15} /> {feeQuote?.demo_mode ? 'Complete demo payment' : payBeforeContinue ? 'Pay and continue' : 'Continue to secure checkout'} <Icon name="arrow" size={15} /></button></section></div>}
 </Container>;
 }
 

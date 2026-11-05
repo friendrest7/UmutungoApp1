@@ -34,8 +34,8 @@ const accountAuthRole = (role?: string, workspaceKind?: string): AuthRole | null
 const joinOptions: Array<{ label: AuthRole; registerAs: string; description: string; icon: IconName }> = [
   { label: 'Client', registerAs: 'Client', description: 'Explore and compare properties.', icon: 'search' },
   { label: 'Tenant', registerAs: 'Tenant', description: 'Find a place to rent and manage applications.', icon: 'home' },
-  { label: 'Landlord', registerAs: 'Landlord', description: 'Manage rental properties and tenants.', icon: 'home' },
   { label: 'Commissioner / Komisiyoneri', registerAs: 'Komisiyoneri', description: 'Help clients find and manage property.', icon: 'users' },
+  { label: 'Landlord', registerAs: 'Landlord', description: 'Manage rental properties and tenants.', icon: 'home' },
   { label: 'Property Owner', registerAs: 'Property Owner', description: 'Share property you own for sale or rent.', icon: 'building' },
 ];
 const languages: Language[] = ['English', 'French', 'Kinyarwanda', 'Swahili'];

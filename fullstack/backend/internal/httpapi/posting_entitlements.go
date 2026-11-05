@@ -371,6 +371,28 @@ func (s *Server) publishListingWithEntitlement(w http.ResponseWriter, r *http.Re
 		errorJSON(w, http.StatusConflict, "only an active saved draft can be published")
 		return
 	}
+	if user.Role == "property_owner" {
+		var paid bool
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE listing_id=$1 AND owner_id=$2 AND status='active')`, id, user.ID).Scan(&paid); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not verify the listing payment")
+			return
+		}
+		if !paid {
+			errorJSON(w, http.StatusPaymentRequired, "complete the one-time listing payment before publishing")
+			return
+		}
+		result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$3,publish_at=$4,expires_at=$4+make_interval(days=>$5),updated_at=NOW() WHERE id=$1 AND owner_id=$2 AND status='draft' AND deleted_at IS NULL`, id, user.ID, input.RequestedStatus, startAt, expiryDays)
+		if err != nil || result.RowsAffected() != 1 {
+			errorJSON(w, http.StatusInternalServerError, "could not publish the paid draft")
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not publish the paid draft")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": input.RequestedStatus, "entitlement": "subscription"})
+		return
+	}
 	var slotID string
 	err = tx.QueryRow(r.Context(), `SELECT id FROM listing_upload_slots WHERE owner_id=$1 AND status='available' ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, user.ID).Scan(&slotID)
 	if err == pgx.ErrNoRows {

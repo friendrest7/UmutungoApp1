@@ -1879,7 +1879,8 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	var ownerID, currentStatus string
-	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,status FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &currentStatus); err != nil {
+	var currentPrice float64
+	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,status,price FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &currentStatus, &currentPrice); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -1888,10 +1889,20 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	var input struct {
-		Title       string   `json:"title"`
-		Description string   `json:"description"`
-		Price       *float64 `json:"price"`
-		Status      string   `json:"status"`
+		Title           string         `json:"title"`
+		Description     string         `json:"description"`
+		Price           *float64       `json:"price"`
+		Status          string         `json:"status"`
+		Category        string         `json:"category"`
+		TransactionType string         `json:"transaction_type"`
+		Province        string         `json:"province"`
+		District        string         `json:"district"`
+		Sector          string         `json:"sector"`
+		Cell            string         `json:"cell"`
+		Village         string         `json:"village"`
+		Tags            []string       `json:"tags"`
+		Amenities       []string       `json:"amenities"`
+		Measurements    map[string]any `json:"measurements"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -1934,6 +1945,15 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 			errorJSON(w, http.StatusConflict, "the listing price cannot change while a payment is pending")
 			return
 		}
+		var activeSubscription bool
+		if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE listing_id=$1 AND status='active')`, id).Scan(&activeSubscription); err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not verify the paid listing")
+			return
+		}
+		if activeSubscription && math.Abs(*input.Price-currentPrice) > 0.01 {
+			errorJSON(w, http.StatusConflict, "the property price cannot change after its one-time posting payment")
+			return
+		}
 		var owner CurrentUser
 		if err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind FROM users WHERE id=$1`, ownerID).Scan(&owner.ID, &owner.Name, &owner.Email, &owner.Phone, &owner.Role, &owner.Status, &owner.WorkspaceKind); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not validate listing price")
@@ -1949,10 +1969,27 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 			monthlyFee = &fee
 		}
 	}
-	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=COALESCE($3,price), monthly_fee=COALESCE($4,monthly_fee), price_range=CASE WHEN $3::numeric IS NULL THEN price_range ELSE CASE WHEN $3<=300000 THEN '0-300000' WHEN $3<=1000000 THEN '300000-1000000' WHEN $3<=10000000 THEN '1000000-10000000' WHEN $3<=30000000 THEN '10000000-30000000' WHEN $3<=100000000 THEN '30000000-100000000' ELSE '100000000-plus' END END, status=COALESCE(NULLIF($5,''),status), updated_at=NOW() WHERE id=$6 AND deleted_at IS NULL`, input.Title, input.Description, input.Price, monthlyFee, input.Status, id)
+	tagsJSON, _ := json.Marshal(input.Tags)
+	amenitiesJSON, _ := json.Marshal(input.Amenities)
+	_, err := s.db.Exec(r.Context(), `UPDATE listings SET title=COALESCE(NULLIF($1,''),title), description=COALESCE(NULLIF($2,''),description), price=COALESCE($3,price), monthly_fee=COALESCE($4,monthly_fee), price_range=CASE WHEN $3::numeric IS NULL THEN price_range ELSE CASE WHEN $3<=300000 THEN '0-300000' WHEN $3<=1000000 THEN '300000-1000000' WHEN $3<=10000000 THEN '1000000-10000000' WHEN $3<=30000000 THEN '10000000-30000000' WHEN $3<=100000000 THEN '30000000-100000000' ELSE '100000000-plus' END END, category=COALESCE(NULLIF($5,''),category), transaction_type=COALESCE(NULLIF($6,''),transaction_type), province=COALESCE(NULLIF($7,''),province), district=COALESCE(NULLIF($8,''),district), sector=COALESCE(NULLIF($9,''),sector), cell=COALESCE(NULLIF($10,''),cell), village=COALESCE(NULLIF($11,''),village), tags=CASE WHEN $12::jsonb='null'::jsonb THEN tags ELSE $12::jsonb END, amenities=CASE WHEN $13::jsonb='null'::jsonb THEN amenities ELSE $13::jsonb END, status=COALESCE(NULLIF($14,''),status), updated_at=NOW() WHERE id=$15 AND deleted_at IS NULL`, input.Title, input.Description, input.Price, monthlyFee, input.Category, input.TransactionType, input.Province, input.District, input.Sector, input.Cell, input.Village, string(tagsJSON), string(amenitiesJSON), input.Status, id)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not update listing")
 		return
+	}
+	if input.Measurements != nil {
+		measurementJSON, marshalErr := json.Marshal(input.Measurements)
+		if marshalErr != nil {
+			errorJSON(w, http.StatusBadRequest, "measurements must be valid JSON")
+			return
+		}
+		result, updateErr := s.db.Exec(r.Context(), `UPDATE measurements SET room_dimensions=$2 WHERE listing_id=$1`, id, measurementJSON)
+		if updateErr == nil && result.RowsAffected() == 0 {
+			_, updateErr = s.db.Exec(r.Context(), `INSERT INTO measurements(listing_id,room_dimensions) VALUES($1,$2)`, id, measurementJSON)
+		}
+		if updateErr != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not update listing measurements")
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated", "id": id})
 }

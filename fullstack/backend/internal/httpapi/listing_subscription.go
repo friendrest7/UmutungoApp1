@@ -49,8 +49,8 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusBadRequest, "enter a valid email address for the receipt")
 		return
 	}
-	if input.RequestedState != "published" && input.RequestedState != "scheduled" {
-		errorJSON(w, http.StatusBadRequest, "choose when to publish the listing")
+	if input.RequestedState != "published" && input.RequestedState != "scheduled" && input.RequestedState != "draft" {
+		errorJSON(w, http.StatusBadRequest, "choose whether to save a paid draft or publish the listing")
 		return
 	}
 	if user.Role == "property_owner" {
@@ -163,8 +163,8 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		}
 		phone = normalizedPhone
 	}
-	if input.RequestedState != "published" && input.RequestedState != "scheduled" {
-		errorJSON(w, http.StatusBadRequest, "listing must be published or scheduled after payment")
+	if input.RequestedState != "published" && input.RequestedState != "scheduled" && input.RequestedState != "draft" {
+		errorJSON(w, http.StatusBadRequest, "listing must be saved as a paid draft, published, or scheduled after payment")
 		return
 	}
 	var currency string
@@ -251,8 +251,10 @@ func (s *Server) verifyListingSubscriptionPayment(w http.ResponseWriter, r *http
 	statusParam := strings.ToLower(strings.TrimSpace(query.Get("status")))
 	resultStatus := "failed"
 	listingID := ""
+	paidDraft := false
 	if txRef != "" {
 		_ = s.db.QueryRow(r.Context(), `SELECT related_id::text FROM payments WHERE provider='flutterwave' AND provider_reference=$1 AND related_type='listing_subscription'`, txRef).Scan(&listingID)
+		_ = s.db.QueryRow(r.Context(), `SELECT ls.requested_status='draft' FROM listing_subscriptions ls JOIN payments p ON p.id=ls.payment_id WHERE p.provider='flutterwave' AND p.provider_reference=$1`, txRef).Scan(&paidDraft)
 	}
 	if txRef != "" && transactionID != "" && (statusParam == "successful" || statusParam == "pending") {
 		verified, err := newFlutterwaveClient(s.cfg.FlutterwaveSecretKey).verify(r.Context(), transactionID)
@@ -265,9 +267,11 @@ func (s *Server) verifyListingSubscriptionPayment(w http.ResponseWriter, r *http
 					_ = s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE payment_id=$1 AND status='active')`, paymentID).Scan(&active)
 					if active {
 						resultStatus = "successful"
+						_ = s.db.QueryRow(r.Context(), `SELECT requested_status='draft' FROM listing_subscriptions WHERE payment_id=$1`, paymentID).Scan(&paidDraft)
 					}
 				} else if strings.EqualFold(verified.Status, "successful") && paymentStatus == "pending" && s.activateListingSubscription(r, paymentID, storedListingID, verified.ID) == nil {
 					resultStatus = "successful"
+					_ = s.db.QueryRow(r.Context(), `SELECT requested_status='draft' FROM listing_subscriptions WHERE payment_id=$1`, paymentID).Scan(&paidDraft)
 				} else if strings.EqualFold(verified.Status, "pending") && paymentStatus == "pending" {
 					resultStatus = "pending"
 					_, _ = s.db.Exec(r.Context(), `UPDATE payments SET provider_transaction_id=$2 WHERE id=$1 AND status='pending'`, paymentID, fmt.Sprint(verified.ID))
@@ -280,6 +284,9 @@ func (s *Server) verifyListingSubscriptionPayment(w http.ResponseWriter, r *http
 		_, _ = s.db.Exec(r.Context(), `UPDATE listing_subscriptions SET status='failed' WHERE payment_id IN (SELECT id FROM payments WHERE provider='flutterwave' AND provider_reference=$1) AND status='pending'`, txRef)
 	}
 	returnURL := s.cfg.FrontendBaseURL + "/listing-payment?status=" + url.QueryEscape(resultStatus) + "&listing_id=" + url.QueryEscape(listingID)
+	if paidDraft {
+		returnURL += "&paid_draft=1"
+	}
 	if resultStatus == "pending" {
 		returnURL += "&tx_ref=" + url.QueryEscape(txRef) + "&transaction_id=" + url.QueryEscape(transactionID)
 	}
@@ -308,7 +315,7 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 	start := time.Now().UTC()
 	if requestedStatus == "scheduled" && publishAt != nil && publishAt.After(start) {
 		start = publishAt.UTC()
-	} else {
+	} else if requestedStatus != "draft" {
 		requestedStatus = "published"
 		publishAt = nil
 	}

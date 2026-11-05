@@ -482,6 +482,10 @@ export function LandlordWorkspace({
             <Icon name="home" size={17} />
             Overview
           </button>
+          <button type="button" className={activePage === "Tenants" ? "is-active" : ""} onClick={() => setActivePage("Tenants")}>
+            <Icon name="creditCard" size={17} />
+            Tenants
+          </button>
           <button type="button" className={activePage === "Properties" ? "is-active" : ""} onClick={() => setActivePage("Properties")}>
             <Icon name="building" size={17} />
             Properties
@@ -489,10 +493,6 @@ export function LandlordWorkspace({
           <button type="button" className={activePage === "Advertise property" ? "is-active" : ""} onClick={() => setActivePage("Advertise property")}>
             <Icon name="sparkles" size={17} />
             Advertise property
-          </button>
-          <button type="button" className={activePage === "Tenants" ? "is-active" : ""} onClick={() => setActivePage("Tenants")}>
-            <Icon name="creditCard" size={17} />
-            Tenants
           </button>
           <a href="/messages">
             <Icon name="users" size={17} />

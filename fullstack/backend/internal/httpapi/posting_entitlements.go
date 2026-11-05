@@ -58,6 +58,19 @@ func (s *Server) configuredListingFee(ctx context.Context, user CurrentUser, pri
 	return calculateRolePostingFee(role, price, rate, fixed)
 }
 
+func (s *Server) configuredLandlordPlanFee(ctx context.Context, plan string) (float64, int, error) {
+	plan = strings.ToLower(strings.TrimSpace(plan))
+	if plan != "silver" && plan != "gold" && plan != "platinum" {
+		return 0, 0, fmt.Errorf("choose a Silver, Gold, or Platinum landlord plan")
+	}
+	var amount float64
+	var duration int
+	if err := s.db.QueryRow(ctx, `SELECT price,duration_days FROM marketplace_premium_offers WHERE offer_key=$1 AND enabled`, plan).Scan(&amount, &duration); err != nil || amount <= 0 || duration <= 0 {
+		return 0, 0, fmt.Errorf("the selected landlord plan is not configured")
+	}
+	return amount, duration, nil
+}
+
 func (s *Server) listingExpiryDays(ctx context.Context, user CurrentUser) (int, error) {
 	var days int
 	err := s.db.QueryRow(ctx, `SELECT MAX(default_expiry_days) FROM marketplace_listing_fee_rules WHERE role=$1 AND enabled`, postingRole(user)).Scan(&days)
@@ -75,10 +88,6 @@ func (s *Server) listingEntitlements(w http.ResponseWriter, r *http.Request) {
 	}
 	if user.Role != "komisiyoneri" && user.Role != "property_owner" && user.Role != "admin" {
 		errorJSON(w, http.StatusForbidden, "marketplace posting access required")
-		return
-	}
-	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
-		errorJSON(w, http.StatusForbidden, "activate Property Owner access before marketplace posting")
 		return
 	}
 	var purchased, used, remaining, properties int
@@ -122,6 +131,15 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"payment_type": "paid_upload_slot", "payment_model": "upload_slot", "available_slots": slots, "currency": "RWF", "demo_mode": false})
+		return
+	}
+	if postingRole(user) == "landlord" {
+		fee, days, err := s.configuredLandlordPlanFee(r.Context(), r.URL.Query().Get("plan"))
+		if err != nil {
+			errorJSON(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"fee": math.Round(fee), "rate_percent": 0, "duration_days": days, "payment_type": "monthly_landlord_plan", "payment_model": "monthly_plan", "currency": "RWF", "demo_mode": s.cfg.DemoPaymentsEnabled})
 		return
 	}
 	price, err := strconv.ParseFloat(strings.TrimSpace(r.URL.Query().Get("price")), 64)
@@ -322,10 +340,6 @@ func (s *Server) publishListingWithEntitlement(w http.ResponseWriter, r *http.Re
 	}
 	if user.Role != "komisiyoneri" && user.Role != "property_owner" && user.Role != "admin" {
 		errorJSON(w, http.StatusForbidden, "marketplace posting access required")
-		return
-	}
-	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
-		errorJSON(w, http.StatusForbidden, "activate Property Owner access before marketplace posting")
 		return
 	}
 	if r.Method != http.MethodPost {

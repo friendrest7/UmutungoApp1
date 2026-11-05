@@ -1324,10 +1324,6 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "only brokers, property owners, or admins can create listings")
 		return
 	}
-	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
-		errorJSON(w, http.StatusForbidden, "activate Property Owner access before creating marketplace listings")
-		return
-	}
 	var input listingInput
 	if !decodeJSON(w, r, &input) {
 		return

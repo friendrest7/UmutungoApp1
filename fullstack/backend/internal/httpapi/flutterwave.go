@@ -45,7 +45,7 @@ func (f flutterwaveClient) startCheckout(ctx context.Context, txRef, email, name
 		"tx_ref": txRef, "amount": amount, "currency": "RWF", "redirect_url": redirectURL,
 		"payment_options": method,
 		"customer":        customer,
-		"customizations":  map[string]string{"title": "Umutungo property upload", "description": "One-time property listing upload fee"},
+		"customizations":  map[string]string{"title": "Umutungo property listing", "description": "Marketplace listing fee"},
 		"meta":            map[string]string{"listing_id": listingID, "payment_type": "listing_upload"},
 	})
 	if err != nil {

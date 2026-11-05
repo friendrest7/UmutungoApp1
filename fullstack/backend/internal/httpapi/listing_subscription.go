@@ -34,13 +34,10 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusForbidden, "Komisiyoneri publishing uses purchased upload slots")
 		return
 	}
-	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
-		errorJSON(w, http.StatusForbidden, "activate Property Owner access before posting")
-		return
-	}
 	var input struct {
 		Email          string     `json:"email"`
 		Phone          string     `json:"phone"`
+		Plan           string     `json:"plan"`
 		RequestedState string     `json:"requested_status"`
 		PublishAt      *time.Time `json:"publish_at"`
 	}
@@ -77,7 +74,13 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusConflict, "only an active RWF draft can use demo checkout")
 		return
 	}
-	rate, fee, err := s.configuredListingFee(r.Context(), user, price)
+	rate, fee := 0.0, 0.0
+	var err error
+	if postingRole(user) == "landlord" {
+		fee, _, err = s.configuredLandlordPlanFee(r.Context(), input.Plan)
+	} else {
+		rate, fee, err = s.configuredListingFee(r.Context(), user, price)
+	}
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, err.Error())
 		return
@@ -133,15 +136,11 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.Request, listingID string) {
 	user, ok := s.authUser(r)
 	if !ok {
-		errorJSON(w, http.StatusUnauthorized, "sign in to pay the one-time listing upload fee")
+		errorJSON(w, http.StatusUnauthorized, "sign in to pay the listing fee")
 		return
 	}
 	if user.Role != "property_owner" && user.Role != "komisiyoneri" && user.Role != "admin" {
 		errorJSON(w, http.StatusForbidden, "only a property owner or Komisiyoneri can pay for a listing")
-		return
-	}
-	if user.WorkspaceKind == "landlord" && !user.PropertyOwnerEnabled {
-		errorJSON(w, http.StatusForbidden, "activate Property Owner access before paying to publish")
 		return
 	}
 	if postingRole(user) == "komisiyoneri" {
@@ -156,6 +155,7 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		Method         string     `json:"payment_method"`
 		Email          string     `json:"email"`
 		Phone          string     `json:"phone"`
+		Plan           string     `json:"plan"`
 		RequestedState string     `json:"requested_status"`
 		PublishAt      *time.Time `json:"publish_at"`
 	}
@@ -214,9 +214,15 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusConflict, "only a saved draft can start its first listing payment")
 		return
 	}
-	rate, fee, feeErr := s.configuredListingFee(r.Context(), user, price)
+	rate, fee := 0.0, 0.0
+	var feeErr error
+	if postingRole(user) == "landlord" {
+		fee, _, feeErr = s.configuredLandlordPlanFee(r.Context(), input.Plan)
+	} else {
+		rate, fee, feeErr = s.configuredListingFee(r.Context(), user, price)
+	}
 	if feeErr != nil || math.Round(fee) < 1 || currency != "RWF" {
-		errorJSON(w, http.StatusConflict, "listing price or one-time upload fee is not valid")
+		errorJSON(w, http.StatusConflict, "the selected listing payment amount is not valid")
 		return
 	}
 	if input.RequestedState == "scheduled" && (input.PublishAt == nil || !input.PublishAt.After(time.Now())) {

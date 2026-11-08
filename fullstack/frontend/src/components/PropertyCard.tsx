@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
-import { propertySlug, supportsSpatialPreview } from '../lib/listings';
+import { propertySlug } from '../lib/listings';
 
 export type PropertyPoster = { id?: string; name: string; businessName?: string; photoUrl?: string; phone?: string; location?: string; role: 'Komisiyoneri' | 'Landlord' | 'Property Owner'; verified?: boolean; postedAt?: string; rating?: string };
 export type PropertyPlaceholder = { id: string; title: string; type: string; location: string; latitude?: number | null; longitude?: number | null; price: string; priceNote: string; bedrooms: number; bathrooms: number; parkingSpaces?: number; area: number; negotiable?: boolean; amenities?: string[]; tags?: string[]; customDetails?: Array<{ label: string; value: string }>; accent: string; image: string; images?: string[]; photoCount?: number; listed: string; availableFor?: 'rent' | 'sale' | 'both' | 'book'; description?: string; poster?: PropertyPoster; featured?: boolean };
@@ -18,7 +18,7 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
   const [imageFallbacks, setImageFallbacks] = useState<Record<number, string>>({});
   const [dialog, setDialog] = useState<'contact' | 'share' | null>(null);
   const [copied, setCopied] = useState(false);
-  const detailHref = `/property/${propertySlug(property.title)}${supportsSpatialPreview(property.type) ? '?view=3d' : ''}`;
+  const detailHref = `/property/${propertySlug(property.title)}`;
   const listingUrl = typeof window === 'undefined' ? detailHref : `${window.location.origin}${detailHref}`;
   const contactLabel = property.poster?.role === 'Komisiyoneri' ? t(language, 'Contact advertiser') : t(language, 'Contact owner');
   const type = property.type.toLowerCase();

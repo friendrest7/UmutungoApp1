@@ -42,7 +42,6 @@ The checked-in `.env.example` points to the live Umutungo API and website routes
 - Conversational property search calls the website's `/api/property-search` route and opens matching results in the native Search tab. The general property assistant continues to use `/api/chat`. Set `EXPO_PUBLIC_PROPERTY_SEARCH_API_URL` and `EXPO_PUBLIC_CHAT_API_URL` to the deployed website routes in the EAS profile.
 - Owner contact messaging, inbox conversations, and notifications through the existing API.
 - Hospitality booking requests and server-validated reviews for users who have viewed or rented a property.
-- Opens a real 3D tour link when a listing supplies one; it does not fabricate a tour or floor plan for listings without those assets.
 - English, French, Kinyarwanda, and Swahili labels for the core navigation and states.
 - Safe-area-aware scrolling, keyboard avoidance on forms, Android/iOS-compatible navigation, and photo-library permission handling.
 
@@ -98,7 +97,7 @@ The iOS simulator can reach a local backend using `http://127.0.0.1:8080`; a phy
 
 ## Android preview build
 
-The EAS project is configured and the preview profile increments Android's remote version code. The current update APK is in `results/mobile-builds/Umutungo-android-preview.apk` (version 1.4.0, version code 28). It is signed with the EAS Android keystore, matching the previous preview APK so it installs as an update. The separate local Gradle build uses a debug keystore and cannot update an EAS-signed install. Do not use the debug key for a Play Store release.
+The EAS project is configured and the preview profile increments Android's remote version code. The current update APK is in `results/mobile-builds/Umutungo-android-preview.apk` (version 1.5.0, version code 49). It is signed with the EAS Android keystore, matching the previous preview APK so it installs as an update. The separate local Gradle build uses a debug keystore and cannot update an EAS-signed install. Do not use the debug key for a Play Store release.
 
 Start a replacement build from `mobile`:
 
@@ -146,7 +145,7 @@ npx expo export --platform android
 npx expo export --platform ios
 ```
 
-The Android preview APK was built by EAS and verified as package `rw.umutungo.mobile`, version 1.4.0, version code 28. Its signing certificate matches the previous preview APK. This Windows environment has no connected Android device or configured emulator, so a device install and end-to-end live API check still need to be completed. iOS production distribution requires Apple signing and App Store Connect setup.
+The Android preview APK was built by EAS as package `rw.umutungo.mobile`, version 1.5.0, version code 49 (build `33444800-8816-4e00-be25-ddf39fc26b9c`). EAS used the existing Android keystore. This Windows environment has no connected Android device or configured emulator, so a device install and end-to-end live API check still need to be completed. iOS production distribution requires Apple signing and App Store Connect setup.
 
 ## Android manual test checklist
 

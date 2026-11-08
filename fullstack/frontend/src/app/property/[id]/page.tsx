@@ -84,16 +84,13 @@ export default function PropertyDetailPage() {
   const router = useRouter();
   const [property, setProperty] = useState<PropertyPlaceholder | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewerMode, setViewerMode] = useState<'photos' | 'tour' | 'plan' | null>(null);
+  const [viewerMode, setViewerMode] = useState<'photos' | 'plan' | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [requestOpen, setRequestOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
-  const [tourSatisfaction, setTourSatisfaction] = useState<'yes' | 'no' | null>(null);
-  const [directionsMapUrl, setDirectionsMapUrl] = useState('');
-  const supports3DView = supportsSpatialPreview(property?.type ?? '');
+  const supportsFloorPlan = supportsSpatialPreview(property?.type ?? '');
 
   useEffect(() => {
-    const open3d = new URLSearchParams(window.location.search).get('view') === '3d';
     const openGallery = new URLSearchParams(window.location.search).get('gallery') === '1';
     const id = decodeURIComponent(params.id ?? '');
     const isListingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -102,7 +99,6 @@ export default function PropertyDetailPage() {
       const localProperty = readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id);
       if (localProperty) {
         setProperty(localProperty);
-        if (open3d && supportsSpatialPreview(localProperty.type)) setViewerMode('tour');
         if (openGallery) setGalleryOpen(true);
       }
       setLoading(false);
@@ -116,14 +112,12 @@ export default function PropertyDetailPage() {
         if (result) {
           const mappedProperty = toProperty(result as SharedApiListing);
           setProperty(mappedProperty);
-          if (open3d && supportsSpatialPreview(mappedProperty.type)) setViewerMode('tour');
           if (openGallery) setGalleryOpen(true);
           return;
         }
         const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id) : undefined;
         if (localProperty) {
           setProperty(localProperty);
-          if (open3d && supportsSpatialPreview(localProperty.type)) setViewerMode('tour');
           if (openGallery) setGalleryOpen(true);
         }
       })
@@ -131,7 +125,6 @@ export default function PropertyDetailPage() {
         const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id) : undefined;
         if (localProperty) {
           setProperty(localProperty);
-          if (open3d && supportsSpatialPreview(localProperty.type)) setViewerMode('tour');
           if (openGallery) setGalleryOpen(true);
         }
       })
@@ -149,20 +142,6 @@ export default function PropertyDetailPage() {
     );
   }
 
-  const openDirectionsFromCurrentLocation = () => {
-    const destination = property.location || property.title;
-    const showMap = (origin?: string) => {
-      const query = new URLSearchParams({ output: 'embed', daddr: destination });
-      if (origin) query.set('saddr', origin);
-      setDirectionsMapUrl(`https://www.google.com/maps?${query.toString()}`);
-    };
-    if (!navigator.geolocation) { showMap(); return; }
-    navigator.geolocation.getCurrentPosition(({ coords }) => showMap(`${coords.latitude},${coords.longitude}`), () => showMap(), { enableHighAccuracy: true, timeout: 8000 });
-  };
-  const openOwnerMessages = () => {
-    const params = new URLSearchParams({ listingId: property.id, propertyTitle: property.title, ownerName: property.poster?.businessName || property.poster?.name || 'Property owner', propertyImage: property.image, propertyLocation: property.location });
-    router.push(`/messages?${params.toString()}`);
-  };
   const openPropertyRequest = () => {
     setViewerMode(null);
     setRequestOpen(true);
@@ -180,12 +159,8 @@ export default function PropertyDetailPage() {
         </header>
         <section className="property-detail-layout">
           <div className="property-detail-media">
-            {(viewerMode === 'tour' || viewerMode === 'plan') ? <PropertyViewer language="English" property={property} initialMode={viewerMode} embedded onClose={() => setViewerMode(null)} /> : <>
-            {supports3DView && <div className="property-detail-view-actions" aria-label="Property media">
-              <button type="button" onClick={() => setViewerMode('tour')}>
-                <Icon name="sparkles" size={15} />
-                Explore in 3D
-              </button>
+            {viewerMode === 'plan' ? <PropertyViewer language="English" property={property} initialMode={viewerMode} embedded onClose={() => setViewerMode(null)} /> : <>
+            {supportsFloorPlan && <div className="property-detail-view-actions" aria-label="Property media">
               <button type="button" onClick={() => setViewerMode('plan')}>
                 <Icon name="home" size={15} />
                 Floor plan
@@ -196,15 +171,6 @@ export default function PropertyDetailPage() {
               {(property.images ?? [property.image]).map((image, index) => <button className={selectedImageIndex === index ? 'is-selected' : ''} type="button" key={`${image}-${index}`} aria-label={`Show property photo ${index + 1}`} aria-pressed={selectedImageIndex === index} onClick={() => setSelectedImageIndex(index)}><img src={image} alt="" /></button>)}
             </div>
             </>}
-            {supports3DView && <section className="viewer-tour-feedback property-detail-feedback property-detail-feedback-mobile" aria-labelledby="property-tour-feedback-title-mobile">
-              <div><strong id="property-tour-feedback-title-mobile">Are you satisfied with the 3D view to continue checkout?</strong><span>Choose what you would like to do next.</span></div>
-              <div className="viewer-tour-feedback-options">
-                <button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => { setTourSatisfaction('yes'); openPropertyRequest(); }}>Yes, I’m satisfied</button>
-                <button type="button" className={tourSatisfaction === 'no' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'no'} onClick={() => { setTourSatisfaction('no'); openDirectionsFromCurrentLocation(); }}>No, I’d like to visit</button>
-                <button className="property-contact-button" type="button" onClick={openOwnerMessages}><Icon name="bookPen" size={15} /> Message owner</button>
-              </div>
-              {tourSatisfaction === 'no' && directionsMapUrl && <><div className="property-inline-directions"><div><strong>Directions to this property</strong><button type="button" onClick={() => setDirectionsMapUrl('')} aria-label="Close directions"><Icon name="x" size={14} /></button></div><iframe src={directionsMapUrl} title={`Directions to ${property.title}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div><button className="property-detail-rent-button" type="button" onClick={openPropertyRequest}>Continue to get this property <Icon name="arrow" size={15} /></button></>}
-            </section>}
             {(property.amenities?.length || property.tags?.length) ? <section className="property-detail-content" aria-label="Property features">
               <article className="property-detail-about"><span className="property-detail-section-label">Features and accessibility</span><p>{[...(property.amenities ?? []), ...(property.tags ?? [])].join(' · ')}</p></article>
             </section> : null}
@@ -226,15 +192,6 @@ export default function PropertyDetailPage() {
             <div className="property-detail-after-negotiability">
             {property.poster && <div className="property-detail-meta"><span>Advertiser: {property.poster.businessName || property.poster.name} ({property.poster.role})</span></div>}
             <article className="property-detail-about property-detail-description"><span className="property-detail-section-label">Description</span><p>{property.description?.trim() || 'Contact the property owner for more information about this listing.'}</p></article>
-            {supports3DView && <section className="viewer-tour-feedback property-detail-feedback property-detail-feedback-desktop" aria-labelledby="property-tour-feedback-title">
-              <div><strong id="property-tour-feedback-title">Are you satisfied with the 3D view to continue checkout?</strong><span>Choose what you would like to do next.</span></div>
-              <div className="viewer-tour-feedback-options">
-                <button type="button" className={tourSatisfaction === 'yes' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'yes'} onClick={() => { setTourSatisfaction('yes'); openPropertyRequest(); }}>Yes, I’m satisfied</button>
-                <button type="button" className={tourSatisfaction === 'no' ? 'is-selected' : ''} aria-pressed={tourSatisfaction === 'no'} onClick={() => { setTourSatisfaction('no'); openDirectionsFromCurrentLocation(); }}>No, I’d like to visit</button>
-                <button className="property-contact-button" type="button" onClick={openOwnerMessages}><Icon name="bookPen" size={15} /> Message owner</button>
-              </div>
-              {tourSatisfaction === 'no' && directionsMapUrl && <><div className="property-inline-directions"><div><strong>Directions to this property</strong><button type="button" onClick={() => setDirectionsMapUrl('')} aria-label="Close directions"><Icon name="x" size={14} /></button></div><iframe src={directionsMapUrl} title={`Directions to ${property.title}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div><button className="property-detail-rent-button" type="button" onClick={openPropertyRequest}>Continue to get this property <Icon name="arrow" size={15} /></button></>}
-            </section>}
             </div>
           </article>
         </section>

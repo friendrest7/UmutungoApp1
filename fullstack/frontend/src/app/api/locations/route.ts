@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const boundaryService = 'https://moegis.environment.gov.rw/server/rest/services/Hosted/Administrative_boundaries/FeatureServer';
 const layerByLevel = { sector: 1, cell: 2, village: 3 } as const;
+const fieldsByLevel = {
+  sector: 'province,district,sector',
+  cell: 'province,district,sector,cell',
+  village: 'province,district,sector,cell,village',
+} as const;
 
 function quote(value: string) {
   return `'${value.replace(/'/g, "''")}'`;
@@ -17,7 +22,7 @@ export async function GET(request: NextRequest) {
   const sector = params.get('sector')?.trim();
   const cell = params.get('cell')?.trim();
   const filters = [province && `province=${quote(province)}`, district && `district=${quote(district)}`, sector && `sector=${quote(sector)}`, cell && `cell=${quote(cell)}`].filter(Boolean);
-  const query = new URLSearchParams({ where: filters.length ? filters.join(' AND ') : '1=1', outFields: 'province,district,sector,cell,village', returnGeometry: 'false', orderByFields: level, f: 'json' });
+  const query = new URLSearchParams({ where: filters.length ? filters.join(' AND ') : '1=1', outFields: fieldsByLevel[level], returnGeometry: 'false', orderByFields: level, f: 'json' });
 
   try {
     const response = await fetch(`${boundaryService}/${layerByLevel[level]}/query?${query.toString()}`, { next: { revalidate: 86400 }, signal: AbortSignal.timeout(8000) });

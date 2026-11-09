@@ -8,6 +8,8 @@ const backendUrl = new URL(backend);
 const nextConfig = {
   agentRules: false,
   images: {
+    // Cloudflare serves original images without enabling paid image transforms.
+    unoptimized: process.env.CLOUDFLARE_BUILD === '1',
     formats: ['image/webp'],
     qualities: [75, 100],
     remotePatterns: [{

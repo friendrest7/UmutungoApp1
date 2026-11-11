@@ -31,6 +31,12 @@ func newFlutterwaveClient(secret string) flutterwaveClient {
 }
 
 func (f flutterwaveClient) startCheckout(ctx context.Context, txRef, email, name, redirectURL, method, phone string, amount float64, listingID string) (string, error) {
+	return f.startCheckoutFor(ctx, txRef, email, name, redirectURL, method, phone, amount,
+		map[string]string{"title": "Umutungo property listing", "description": "Marketplace listing fee"},
+		map[string]string{"listing_id": listingID, "payment_type": "listing_upload"})
+}
+
+func (f flutterwaveClient) startCheckoutFor(ctx context.Context, txRef, email, name, redirectURL, method, phone string, amount float64, customizations, meta map[string]string) (string, error) {
 	if f.secret == "" {
 		return "", fmt.Errorf("Flutterwave is not configured. Set FLUTTERWAVE_SECRET_KEY on the backend")
 	}
@@ -45,8 +51,8 @@ func (f flutterwaveClient) startCheckout(ctx context.Context, txRef, email, name
 		"tx_ref": txRef, "amount": amount, "currency": "RWF", "redirect_url": redirectURL,
 		"payment_options": method,
 		"customer":        customer,
-		"customizations":  map[string]string{"title": "Umutungo property listing", "description": "Marketplace listing fee"},
-		"meta":            map[string]string{"listing_id": listingID, "payment_type": "listing_upload"},
+		"customizations":  customizations,
+		"meta":            meta,
 	})
 	if err != nil {
 		return "", err

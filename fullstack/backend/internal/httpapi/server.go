@@ -78,6 +78,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/owner/listing-upload-purchases", s.createUploadSlotPurchase)
 	mux.HandleFunc("/api/v1/listing-fee", s.listingFeeQuote)
 	mux.HandleFunc("/api/v1/admin/marketplace-pricing", s.adminMarketplacePricing)
+	mux.HandleFunc("/api/v1/plans", s.publicPlans)
+	mux.HandleFunc("/api/v1/business/entitlements", s.businessEntitlements)
+	mux.HandleFunc("/api/v1/business/subscriptions", s.businessSubscriptions)
+	mux.HandleFunc("/api/v1/business/subscriptions/", s.businessSubscriptionItem)
+	mux.HandleFunc("/api/v1/business/subscription-payments/verify", s.verifyBusinessSubscriptionPayment)
+	mux.HandleFunc("/api/v1/admin/business-plans", s.adminBusinessPlans)
 	mux.HandleFunc("/uploads/", s.mediaFile)
 	mux.HandleFunc("/api/v1/applications", s.applications)
 	mux.HandleFunc("/api/v1/applications/", s.applicationRoute)
@@ -1255,7 +1261,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) publishDueListings(ctx context.Context) error {
-	_, err := s.db.Exec(ctx, `UPDATE listings l SET status='published', updated_at=NOW() WHERE l.status='scheduled' AND l.publish_at IS NOT NULL AND l.publish_at <= NOW() AND l.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM listing_subscriptions ls WHERE ls.listing_id=l.id AND ls.status='active') OR EXISTS(SELECT 1 FROM listing_upload_slots s WHERE s.listing_id=l.id AND s.status='consumed'))`)
+	_, err := s.db.Exec(ctx, `UPDATE listings l SET status='published', updated_at=NOW() WHERE l.status='scheduled' AND l.publish_at IS NOT NULL AND l.publish_at <= NOW() AND l.deleted_at IS NULL AND (l.entitlement_source='plan' OR EXISTS(SELECT 1 FROM listing_subscriptions ls WHERE ls.listing_id=l.id AND ls.status='active') OR EXISTS(SELECT 1 FROM listing_upload_slots s WHERE s.listing_id=l.id AND s.status='consumed'))`)
 	return err
 }
 
@@ -1348,7 +1354,7 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 	input.PriceRange = listingPriceBandForAmount(input.Price)
 	monthlyFee := 0.0
 	if postingRole(user) != "komisiyoneri" {
-		_, configuredFee, feeErr := s.configuredListingFee(r.Context(), user, input.Price)
+		_, configuredFee, feeErr := s.configuredListingFee(r.Context(), user, input.Price, input.Category, input.TransactionType)
 		if feeErr == nil {
 			monthlyFee = configuredFee
 		}
@@ -1500,32 +1506,25 @@ func (s *Server) updateListingFeatured(w http.ResponseWriter, r *http.Request, l
 		return
 	}
 	if *input.Featured && user.Role != "admin" {
-		if user.Role == "komisiyoneri" {
-			var hasActivePlan bool
-			if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM subscriptions WHERE user_id=$1 AND status='active' AND tier IN ('silver','gold','platinum') AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at > NOW()))`, user.ID).Scan(&hasActivePlan); err != nil {
-				errorJSON(w, http.StatusInternalServerError, "could not verify the Komisiyoneri plan")
-				return
-			}
-			if !hasActivePlan && s.cfg.AppEnv == "development" && strings.EqualFold(user.Email, "commissioner@umutungo.test") {
-				hasActivePlan = true
-			}
-			if !hasActivePlan {
-				errorJSON(w, http.StatusForbidden, "an active Silver, Gold, or Platinum Komisiyoneri plan is required to advertise listings")
-				return
-			}
-		} else if user.Role != "property_owner" {
-			errorJSON(w, http.StatusForbidden, "an active Property Owner plan is required to advertise listings")
+		entitlements, err := resolveEntitlements(r.Context(), s.db, user)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not verify your plan")
 			return
-		} else {
-			var hasActivePlan bool
-			if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM owner_upgrade_purchases WHERE owner_id=$1 AND status='active' AND (expires_at > NOW() OR (plan='diamond' AND listing_id=$2)))`, user.ID, listingID).Scan(&hasActivePlan); err != nil {
-				errorJSON(w, http.StatusInternalServerError, "could not verify the Property Owner plan")
+		}
+		canFeature := entitlements.CanFeature
+		if !canFeature && user.Role == "property_owner" {
+			// A Diamond promotion bought for this specific listing.
+			if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM owner_upgrade_purchases WHERE owner_id=$1 AND status='active' AND plan='diamond' AND listing_id=$2)`, user.ID, listingID).Scan(&canFeature); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "could not verify the listing promotion")
 				return
 			}
-			if !hasActivePlan {
-				errorJSON(w, http.StatusForbidden, "an active Owner plan or Diamond promotion for this land listing is required")
-				return
-			}
+		}
+		if !canFeature && s.cfg.AppEnv == "development" && strings.EqualFold(user.Email, "commissioner@umutungo.test") {
+			canFeature = true
+		}
+		if !canFeature {
+			errorJSON(w, http.StatusForbidden, "an active Silver, Gold, or Platinum plan is required to feature listings")
+			return
 		}
 	}
 	query := `UPDATE listings SET is_featured=$1,updated_at=NOW() WHERE id=$2 AND deleted_at IS NULL AND ($1=FALSE OR status='published')`
@@ -1880,9 +1879,9 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	var ownerID, currentStatus string
+	var ownerID, currentStatus, currentCategory, currentTransaction, currentSource, currentPausedReason string
 	var currentPrice float64
-	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,status,price FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &currentStatus, &currentPrice); err != nil {
+	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,status,price,category,transaction_type,entitlement_source,paused_reason FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &currentStatus, &currentPrice, &currentCategory, &currentTransaction, &currentSource, &currentPausedReason); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -1922,10 +1921,24 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	if input.Status == "published" && input.Status != currentStatus {
+		if currentPausedReason == "plan_expired" || currentPausedReason == "plan_limit" {
+			errorJSON(w, http.StatusPaymentRequired, "this listing was paused by your plan; publish it again from your listings to use your plan, a listing payment, or a credit")
+			return
+		}
 		var paidEntitlement bool
 		if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE listing_id=$1 AND status='active') OR EXISTS(SELECT 1 FROM listing_upload_slots WHERE listing_id=$1 AND status='consumed')`, id).Scan(&paidEntitlement); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not verify listing entitlement")
 			return
+		}
+		if !paidEntitlement && currentSource == publishViaPlan {
+			// A plan-covered listing the owner paused manually may come back
+			// only while the plan still has room for it.
+			owner, found := s.userByID(r, ownerID)
+			if found {
+				if entitlements, err := resolveEntitlements(r.Context(), s.db, owner); err == nil && coveredByPlan(entitlements) {
+					paidEntitlement = true
+				}
+			}
 		}
 		if !paidEntitlement {
 			errorJSON(w, http.StatusPaymentRequired, "a verified posting payment or unused upload slot is required to publish this listing")
@@ -1964,7 +1977,7 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		if postingRole(owner) == "komisiyoneri" {
 			fee := float64(0)
 			monthlyFee = &fee
-		} else if _, fee, err := s.configuredListingFee(r.Context(), owner, *input.Price); err == nil {
+		} else if _, fee, err := s.configuredListingFee(r.Context(), owner, *input.Price, firstNonEmpty(input.Category, currentCategory), firstNonEmpty(input.TransactionType, currentTransaction)); err == nil {
 			monthlyFee = &fee
 		} else {
 			fee := float64(0)
@@ -2821,19 +2834,30 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	}
 	listingTitle := ""
 	if input.ListingID != "" {
-		var listingOwnerID string
-		if err := s.db.QueryRow(r.Context(), `SELECT owner_id,title FROM listings WHERE id=$1 AND status='published'`, input.ListingID).Scan(&listingOwnerID, &listingTitle); err != nil {
+		var listingOwnerID, listingStatus string
+		if err := s.db.QueryRow(r.Context(), `SELECT owner_id,title,status FROM listings WHERE id::text=$1 AND deleted_at IS NULL`, input.ListingID).Scan(&listingOwnerID, &listingTitle, &listingStatus); err != nil {
 			errorJSON(w, http.StatusNotFound, "listing is unavailable")
 			return
 		}
 		if user.ID != listingOwnerID {
 			// Property enquiries always go to the account that owns the listing.
-			// Only the owner may choose a recipient when replying to a conversation.
 			input.RecipientID = listingOwnerID
+			if listingStatus != "published" && !s.sharesConversation(r, user.ID, listingOwnerID, input.ListingID) {
+				errorJSON(w, http.StatusNotFound, "listing is unavailable")
+				return
+			}
+		} else if input.RecipientID == "" || !s.sharesConversation(r, user.ID, input.RecipientID, input.ListingID) {
+			// The owner may only reply to someone who already asked about this listing.
+			errorJSON(w, http.StatusForbidden, "you can only reply to people who contacted you about this listing")
+			return
 		}
 	}
 	if input.RecipientID == "" || input.RecipientID == user.ID {
 		errorJSON(w, http.StatusBadRequest, "a valid landlord recipient is required")
+		return
+	}
+	if input.ListingID == "" && user.Role != "admin" && !s.sharesConversation(r, user.ID, input.RecipientID, "") && !s.sharesRental(r, user.ID, input.RecipientID) {
+		errorJSON(w, http.StatusForbidden, "start a conversation from a property listing or with your landlord or tenant")
 		return
 	}
 	tx, err := s.db.Begin(r.Context())
@@ -2863,6 +2887,21 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "sent"})
+}
+
+// sharesConversation reports whether the other user has already messaged this
+// user (optionally about one listing), which makes a reply legitimate.
+func (s *Server) sharesConversation(r *http.Request, userID, otherID, listingID string) bool {
+	var exists bool
+	err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM messages WHERE sender_id::text=$2 AND recipient_id=$1 AND ($3='' OR listing_id::text=$3))`, userID, otherID, listingID).Scan(&exists)
+	return err == nil && exists
+}
+
+// sharesRental reports whether two users are landlord and tenant.
+func (s *Server) sharesRental(r *http.Request, userID, otherID string) bool {
+	var exists bool
+	err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_agreements WHERE status IN ('active','pending') AND ((tenant_id=$1 AND landlord_id::text=$2) OR (landlord_id=$1 AND tenant_id::text=$2)))`, userID, otherID).Scan(&exists)
+	return err == nil && exists
 }
 
 func (s *Server) reviews(w http.ResponseWriter, r *http.Request) {
@@ -3808,18 +3847,15 @@ func (s *Server) subscriptionLevel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var tier string
-	var startsAt, endsAt *time.Time
-	err := s.db.QueryRow(r.Context(), `SELECT tier,starts_at,ends_at FROM subscriptions WHERE user_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at > NOW()) ORDER BY created_at DESC LIMIT 1`, user.ID).Scan(&tier, &startsAt, &endsAt)
-	if err == pgx.ErrNoRows {
-		writeJSON(w, http.StatusOK, map[string]any{"tier": "free", "status": "active"})
-		return
-	}
+	// Uses the same entitlement resolver as publishing, so the plan a user is
+	// shown is always the plan the backend enforces.
+	entitlements, err := resolveEntitlements(r.Context(), s.db, user)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load your plan level")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tier": tier, "status": "active", "starts_at": startsAt, "ends_at": endsAt})
+	writeJSON(w, http.StatusOK, map[string]any{"tier": entitlements.Tier, "status": "active", "source": entitlements.Source, "business_role": entitlements.BusinessRole,
+		"starts_at": entitlements.PeriodStart, "ends_at": entitlements.PeriodEnd, "entitlements": entitlements})
 }
 
 func (s *Server) maintenance(w http.ResponseWriter, r *http.Request) {
@@ -3838,14 +3874,48 @@ func (s *Server) maintenance(w http.ResponseWriter, r *http.Request) {
 		Title          string `json:"title"`
 		Description    string `json:"description"`
 	}
-	if !decodeJSON(w, r, &input) || input.LandlordID == "" || input.Title == "" || input.Description == "" {
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.Title, input.Description = strings.TrimSpace(input.Title), strings.TrimSpace(input.Description)
+	if input.LandlordID == "" || input.Title == "" || input.Description == "" {
 		errorJSON(w, http.StatusBadRequest, "landlord_id, title, and description are required")
 		return
 	}
-	var id string
-	err := s.db.QueryRow(r.Context(), `INSERT INTO maintenance_requests(tenant_id,landlord_id,property_unit_id,title,description) VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5) RETURNING id`, user.ID, input.LandlordID, input.PropertyUnitID, input.Title, input.Description).Scan(&id)
+	if len(input.Title) > 200 || len(input.Description) > 4000 {
+		errorJSON(w, http.StatusBadRequest, "title or description is too long")
+		return
+	}
+	// Only a tenant with a current rental agreement may file a request with
+	// that landlord, and only for a unit that belongs to the landlord.
+	var allowed bool
+	if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_agreements ra WHERE ra.tenant_id=$1 AND ra.landlord_id::text=$2 AND ra.status IN ('active','pending')
+		AND ($3='' OR ra.property_unit_id::text=$3 OR EXISTS(SELECT 1 FROM property_units pu WHERE pu.id::text=$3 AND pu.owner_id=ra.landlord_id)))`,
+		user.ID, input.LandlordID, input.PropertyUnitID).Scan(&allowed); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not verify your rental")
+		return
+	}
+	if !allowed {
+		errorJSON(w, http.StatusForbidden, "you can only send repair requests to a landlord you currently rent from")
+		return
+	}
+	tx, err := s.db.Begin(r.Context())
 	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create maintenance request")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var id string
+	if err := tx.QueryRow(r.Context(), `INSERT INTO maintenance_requests(tenant_id,landlord_id,property_unit_id,title,description) VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5) RETURNING id`, user.ID, input.LandlordID, input.PropertyUnitID, input.Title, input.Description).Scan(&id); err != nil {
 		errorJSON(w, http.StatusBadRequest, "could not create maintenance request")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'maintenance_requested','New repair request',$2)`, input.LandlordID, fmt.Sprintf("%s reported: %s", user.Name, input.Title)); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not notify your landlord")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create maintenance request")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "open"})

@@ -64,9 +64,9 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 			return
 		}
 	}
-	var currency, status string
+	var currency, status, category, transactionType string
 	var price float64
-	if err := s.db.QueryRow(r.Context(), `SELECT price,currency,status FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&price, &currency, &status); err != nil {
+	if err := s.db.QueryRow(r.Context(), `SELECT price,currency,status,category,transaction_type FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&price, &currency, &status, &category, &transactionType); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -74,12 +74,15 @@ func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, list
 		errorJSON(w, http.StatusConflict, "only an active RWF draft can use demo checkout")
 		return
 	}
+	if s.refuseIfCoveredByPlan(w, r, user) {
+		return
+	}
 	rate, fee := 0.0, 0.0
 	var err error
 	if postingRole(user) == "landlord" {
 		fee, _, err = s.configuredLandlordPlanFee(r.Context(), input.Plan)
 	} else {
-		rate, fee, err = s.configuredListingFee(r.Context(), user, price)
+		rate, fee, err = s.configuredListingFee(r.Context(), user, price, category, transactionType)
 	}
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, err.Error())
@@ -200,7 +203,7 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusBadRequest, "listing must be saved as a paid draft, published, or scheduled after payment")
 		return
 	}
-	var currency string
+	var currency, category, transactionType string
 	var price float64
 	var status string
 	if user.Role == "property_owner" {
@@ -210,7 +213,7 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 			return
 		}
 	}
-	if err := s.db.QueryRow(r.Context(), `SELECT price,currency,status FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&price, &currency, &status); err != nil {
+	if err := s.db.QueryRow(r.Context(), `SELECT price,currency,status,category,transaction_type FROM listings WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL`, listingID, user.ID).Scan(&price, &currency, &status, &category, &transactionType); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -218,12 +221,15 @@ func (s *Server) startListingSubscriptionPayment(w http.ResponseWriter, r *http.
 		errorJSON(w, http.StatusConflict, "only a saved draft can start its first listing payment")
 		return
 	}
+	if s.refuseIfCoveredByPlan(w, r, user) {
+		return
+	}
 	rate, fee := 0.0, 0.0
 	var feeErr error
 	if postingRole(user) == "landlord" {
 		fee, _, feeErr = s.configuredLandlordPlanFee(r.Context(), input.Plan)
 	} else {
-		rate, fee, feeErr = s.configuredListingFee(r.Context(), user, price)
+		rate, fee, feeErr = s.configuredListingFee(r.Context(), user, price, category, transactionType)
 	}
 	if feeErr != nil || math.Round(fee) < 1 || currency != "RWF" {
 		errorJSON(w, http.StatusConflict, "the selected listing payment amount is not valid")
@@ -388,7 +394,7 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 	if _, err := tx.Exec(r.Context(), `UPDATE listing_subscriptions SET status='active',period_start=$2,period_end=NULL WHERE payment_id=$1`, paymentID, start); err != nil {
 		return err
 	}
-	result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$2,publish_at=$3,expires_at=$4,updated_at=NOW() WHERE id=$1 AND status='draft' AND deleted_at IS NULL`, listingID, requestedStatus, publishAt, expiresAt)
+	result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$2,publish_at=$3,expires_at=$4,entitlement_source='listing_payment',updated_at=NOW() WHERE id=$1 AND status='draft' AND deleted_at IS NULL`, listingID, requestedStatus, publishAt, expiresAt)
 	if err != nil {
 		return err
 	}
@@ -396,6 +402,22 @@ func (s *Server) activateListingSubscription(r *http.Request, paymentID, listing
 		return fmt.Errorf("listing draft could not be activated")
 	}
 	return tx.Commit(r.Context())
+}
+
+// refuseIfCoveredByPlan stops a per-listing charge when the account's active
+// plan already includes the listing. It writes the 409 response and returns
+// true when the payment must not start.
+func (s *Server) refuseIfCoveredByPlan(w http.ResponseWriter, r *http.Request, user CurrentUser) bool {
+	entitlements, err := resolveEntitlements(r.Context(), s.db, user)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not check your plan")
+		return true
+	}
+	if coveredByPlan(entitlements) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "your plan already covers this listing; publish it without paying again", "code": "covered_by_plan", "entitlements": entitlements})
+		return true
+	}
+	return false
 }
 
 func (s *Server) listingSubscriptionRoute(w http.ResponseWriter, r *http.Request) {

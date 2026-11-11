@@ -59,7 +59,7 @@ export function Footer({ language, darkMode = false }: { language: Language; dar
       <div className="container app-download" id="app-download">
         <div className="app-download-copy"><h2>{t(language, 'Get the Umutungo app')}</h2><p>{t(language, 'Keep your property search close.')}</p></div>
         <div className="app-download-options" aria-label={t(language, 'Mobile app downloads')}>
-          <a className="app-download-option" href="https://drive.google.com/file/d/1xVZ2iNYDFGTAtqxvTvkoKDJJL90_keo6/view?usp=drive_link" target="_blank" rel="noopener noreferrer"><span className="app-download-icon"><Icon name="download" size={19} /></span><span><small>{t(language, 'Download on')}</small><strong>{t(language, 'Android app')}</strong></span></a>
+          <a className="app-download-option" href="https://expo.dev/artifacts/eas/SNaCxDJnUvtKjrTOxPwA4glDW9nQZrbxRYwfw8HziKg.apk" target="_blank" rel="noopener noreferrer"><span className="app-download-icon"><Icon name="download" size={19} /></span><span><small>{t(language, 'Download on')}</small><strong>{t(language, 'Android app')}</strong></span></a>
           <a className="app-download-option" href="https://apps.apple.com/rw/search?term=Umutungo" target="_blank" rel="noopener noreferrer" aria-label="Search Umutungo on the App Store"><span className="app-download-icon"><Icon name="apple" size={19} /></span><span><small>{t(language, 'Download on')}</small><strong>{t(language, 'iOS app')}</strong></span></a>
         </div>
       </div>

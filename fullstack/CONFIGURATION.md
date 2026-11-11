@@ -24,6 +24,7 @@ Configure secrets in the named hosting service, not in a committed file. `.env.e
 | Variable | Provider | Purpose | Secret? | Configure in |
 |---|---|---|---|---|
 | `APP_ENV` | Umutungo | Enables development-only behavior; use `production` on the pilot service | No | Render backend |
+| `TEST_LOGIN_ENABLED` | Umutungo | Enables documented demo login endpoints only when `APP_ENV=testing`; use only with an isolated staging database | No | Render staging backend |
 | `PORT` | Render | HTTP listen port (Render normally injects it) | No | Render backend |
 | `DATABASE_URL` | PostgreSQL | Application database connection | Yes | Render backend |
 | `CORS_ORIGINS` | Umutungo | Comma-separated allowed web origins | No | Render backend |

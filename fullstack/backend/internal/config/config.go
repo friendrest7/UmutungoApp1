@@ -18,6 +18,7 @@ type Config struct {
 	GoogleClientIDs      string
 	FlutterwaveSecretKey string
 	DemoPaymentsEnabled  bool
+	TestLoginEnabled     bool
 	FrontendBaseURL      string
 	BackendPublicURL     string
 	MTNAPIUser           string
@@ -57,6 +58,7 @@ func Load() Config {
 		GoogleClientIDs:      env("GOOGLE_CLIENT_IDS", ""),
 		FlutterwaveSecretKey: env("FLUTTERWAVE_SECRET_KEY", ""),
 		DemoPaymentsEnabled:  envBoolDefault("DEMO_PAYMENTS_ENABLED", demoPaymentsDefault),
+		TestLoginEnabled:     envBoolDefault("TEST_LOGIN_ENABLED", false),
 		FrontendBaseURL:      strings.TrimRight(env("FRONTEND_BASE_URL", "http://localhost:3000"), "/"),
 		BackendPublicURL:     strings.TrimRight(env("BACKEND_PUBLIC_URL", "http://localhost:8080"), "/"),
 		MTNAPIUser:           env("MTN_API_USER", ""),

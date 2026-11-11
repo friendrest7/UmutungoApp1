@@ -251,7 +251,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 // test account. It is unavailable outside development and cannot promote an
 // existing non-admin account.
 func (s *Server) devAdminLogin(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.AppEnv != "development" {
+	if !s.testLoginsEnabled() {
 		errorJSON(w, http.StatusNotFound, "route not found")
 		return
 	}
@@ -303,7 +303,7 @@ func (s *Server) devAdminLogin(w http.ResponseWriter, r *http.Request) {
 // devLogin creates real database sessions for the documented demo accounts.
 // It is available only in development and must never be exposed by production.
 func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.AppEnv != "development" {
+	if !s.testLoginsEnabled() {
 		errorJSON(w, http.StatusNotFound, "route not found")
 		return
 	}
@@ -380,6 +380,12 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": user, "access_token": token})
+}
+
+// Test logins are available locally by default and can be enabled explicitly
+// on an isolated staging backend. Production environments cannot enable it.
+func (s *Server) testLoginsEnabled() bool {
+	return s.cfg.AppEnv == "development" || (s.cfg.AppEnv == "testing" && s.cfg.TestLoginEnabled)
 }
 
 type developmentListingSeed struct {

@@ -91,9 +91,11 @@ export default function PropertyDetailPage() {
   const supportsFloorPlan = supportsSpatialPreview(property?.type ?? '');
 
   useEffect(() => {
+    let active = true;
     const openGallery = new URLSearchParams(window.location.search).get('gallery') === '1';
     const id = decodeURIComponent(params.id ?? '');
     const isListingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    setLoading(true);
     setProperty(null);
     if (isLocalDevelopmentHost()) {
       const localProperty = readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id);
@@ -102,13 +104,14 @@ export default function PropertyDetailPage() {
         if (openGallery) setGalleryOpen(true);
       }
       setLoading(false);
-      return;
+      return () => { active = false; };
     }
     const listingRequest = isListingId
       ? publicUmutungoApi<ApiListing>(`/api/v1/listings/${encodeURIComponent(id)}`)
       : publicUmutungoApi<{ items: ApiListing[] }>('/api/v1/listings', { cache: 'no-store' }).then((result) => result?.items.find((item) => propertySlug(item.title) === id) ?? null);
     void listingRequest
       .then((result) => {
+        if (!active) return;
         if (result) {
           const mappedProperty = toProperty(result as SharedApiListing);
           setProperty(mappedProperty);
@@ -122,13 +125,15 @@ export default function PropertyDetailPage() {
         }
       })
       .catch(() => {
+        if (!active) return;
         const localProperty = isLocalDevelopmentHost() ? readLocalPropertyListings().find((item) => item.id === id || propertySlug(item.title) === id) : undefined;
         if (localProperty) {
           setProperty(localProperty);
           if (openGallery) setGalleryOpen(true);
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [params.id]);
 
   if (loading && !property) return <main className="property-detail-page property-detail-loading" aria-busy="true"><div className="property-detail-skeleton" aria-hidden="true"><span /><div><i /><i /><i /></div><section><i /><i /><i /><i /></section></div></main>;

@@ -9,7 +9,7 @@ import { PropertyPlaceholder } from './PropertyCard';
 import { AuthModal } from './AuthModal';
 import { umutungoApi } from '../lib/umutungoApi';
 import { dashboardPathForAccountRole } from '../lib/accountRouting';
-import { propertySlug, supportsSpatialPreview } from '../lib/listings';
+import { supportsSpatialPreview } from '../lib/listings';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
 type PropertyViewerProps = { language: Language; property: PropertyPlaceholder; onClose: () => void; initialMode?: ViewerMode; initialImageIndex?: number; initialRequest?: boolean; initialContact?: boolean; embedded?: boolean };
@@ -405,7 +405,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   };
   const downloadReceipt = () => {
     if (!paymentReceipt) return;
-    const propertyUrl = `${window.location.origin}/property/${encodeURIComponent(propertySlug(paymentReceipt.propertyTitle))}`;
+    const propertyUrl = `${window.location.origin}/property/${encodeURIComponent(property.id)}`;
     const blob = buildReceiptPdf(paymentReceipt, propertyUrl);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

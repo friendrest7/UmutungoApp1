@@ -2488,7 +2488,7 @@ body.theme-dark .post-payment-pending-card > small, body.theme-dark .post-paymen
   color: #111111;
   font-family: var(--brand-body);
 }
-.app-realistic :is(h1, h2, h3, p, span, small, strong, a, button, label, input, select, textarea):not(:where([data-landing] *:not(.property-card, .property-card *))) { color: #111111; }
+.app-realistic :is(h1, h2, h3, p, span, small, strong, a, button, label, input, select, textarea):not(:where([data-own-colors] *)) { color: #111111; }
 .app-realistic h1, .app-realistic h2, .app-realistic h3,
 .app-realistic .section-heading h2, .app-realistic .scroll-story-intro h2,
 .app-realistic .scroll-story-step h3, .app-realistic .listing-cta h2,
@@ -2631,9 +2631,9 @@ body :is(.role-dashboard-nav, .role-dashboard-panel-heading > button, .role-dash
   color: #f5f7fa;
   color-scheme: dark;
 }
-.app.theme-dark :is(h1, h2, h3, h4, h5, h6, p, span, small, strong, em, a, button, label, legend, input, select, textarea, summary):not(:where([data-landing] *:not(.property-card, .property-card *))) { color: #f5f7fa !important; }
-.app.theme-dark :is(p, small, .muted, .section-description, .property-card p, .property-listed, .footer-bottom, .role-dashboard-muted, .role-dashboard-eyebrow, .upgrade-muted, .category-experience-eyebrow, .category-listing-meta, .category-listing-copy p, .category-detail-location, .category-detail-description, .category-detail-rating small):not(:where([data-landing] *:not(.property-card, .property-card *))) { color: rgba(245, 247, 250,.70) !important; }
-.app.theme-dark :is(svg, .eyebrow > span) { color: #f5f7fa; }
+.app.theme-dark :is(h1, h2, h3, h4, h5, h6, p, span, small, strong, em, a, button, label, legend, input, select, textarea, summary):not(:where([data-own-colors] *)) { color: #f5f7fa !important; }
+.app.theme-dark :is(p, small, .muted, .section-description, .property-card p, .property-listed, .footer-bottom, .role-dashboard-muted, .role-dashboard-eyebrow, .upgrade-muted, .category-experience-eyebrow, .category-listing-meta, .category-listing-copy p, .category-detail-location, .category-detail-description, .category-detail-rating small):not(:where([data-own-colors] *)) { color: rgba(245, 247, 250,.70) !important; }
+.app.theme-dark :is(svg, .eyebrow > span):not(:where([data-own-colors] *)) { color: #f5f7fa; }
 .app.theme-dark :is(input, select, textarea) { border-color: rgba(245, 247, 250,.20); background: #11151a; color: #f5f7fa; }
 .app.theme-dark :is(input, select, textarea)::placeholder { color: rgba(245, 247, 250,.54); }
 .app.theme-dark :is(.topbar, .site-footer, .standalone-section, .info-section, .about-section, .contact-interface, .how-it-works-section, .scroll-story, .category-section, .section-property, .neighbourhood-section, .listing-cta) { background-color: #0b0d10; color: #f5f7fa; }

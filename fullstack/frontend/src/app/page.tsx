@@ -146,7 +146,7 @@ export default function HomePage() {
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
     <AiChatbot language={language} />
-    <main className={styles.landing} data-landing="">
+    <main className={styles.landing} data-own-colors="">
       {/* 1. Hero: one clear choice between finding and listing. */}
       <section className={styles.hero} id="home" aria-labelledby="landing-title">
         <video className={styles.heroMedia} autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video>

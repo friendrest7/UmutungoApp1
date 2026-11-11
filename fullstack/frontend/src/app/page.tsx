@@ -152,8 +152,8 @@ export default function HomePage() {
         <video className={styles.heroMedia} autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video>
         <div className={styles.heroVeil} aria-hidden="true" />
         <div className={styles.heroInner}>
-          <p className={styles.heroEyebrow}><span aria-hidden="true" />{copy('Rwanda’s property marketplace')}</p>
-          <h1 id="landing-title" className={styles.heroTitle}>{copy('Find it. List it.')} <em>{copy('Manage it.')}</em></h1>
+          {/* Kept for screen readers and search engines; not shown visually. */}
+          <h1 id="landing-title" className={styles.srOnly}>{copy('Umutungo: find, list and manage property in Rwanda')}</h1>
           <p className={styles.heroLead}>{copy('Homes, land, offices and everyday assets for rent, sale or hire across Rwanda, plus simple tools for landlords to manage tenants and rent.')}</p>
 
           <div className={styles.goalCard}>

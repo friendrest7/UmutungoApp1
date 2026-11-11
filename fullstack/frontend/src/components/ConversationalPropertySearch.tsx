@@ -8,7 +8,16 @@ import { Language, t } from '../data/translations';
 type SearchMessage = { role: 'user' | 'assistant'; content: string };
 type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; location: string; province: string; district: string; sector: string; intent: string; priceRange: string; minBedrooms: number };
 
-export function ConversationalPropertySearch({ language, compact = false }: { language: Language; compact?: boolean }) {
+type ConversationalPropertySearchProps = {
+  language: Language;
+  compact?: boolean;
+  /** Example queries shown as tappable chips that fill the search field. */
+  examples?: string[];
+  placeholder?: string;
+  submitLabel?: string;
+};
+
+export function ConversationalPropertySearch({ language, compact = false, examples = [], placeholder, submitLabel }: ConversationalPropertySearchProps) {
   const [messages, setMessages] = useState<SearchMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -58,10 +67,12 @@ export function ConversationalPropertySearch({ language, compact = false }: { la
         {isSending && <p className="conversational-search-status">Finding the right next step…</p>}
         {error && <p className="conversational-search-error" role="alert">{error}</p>}
       </div>}
-      <form className="conversational-search-form" onSubmit={submitSearch}>
-        <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={compact ? 'Describe the properties you want and we’ll get them for you…' : 'Describe the property you need'} aria-label={compact ? 'Describe the properties you want and we’ll get them for you' : 'Describe the property you need'} disabled={isSending} />
-        <button type="submit" aria-label={t(language, 'Send message')} disabled={isSending || !prompt.trim()}><Icon name="arrow" size={16} /></button>
+      <form className={`conversational-search-form ${submitLabel ? 'has-label' : ''}`} onSubmit={submitSearch}>
+        {submitLabel && <Icon name="search" size={18} />}
+        <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={placeholder ?? (compact ? 'Describe the properties you want and we’ll get them for you…' : 'Describe the property you need')} aria-label={placeholder ?? (compact ? 'Describe the properties you want and we’ll get them for you' : 'Describe the property you need')} disabled={isSending} />
+        <button type="submit" aria-label={submitLabel ? undefined : t(language, 'Send message')} disabled={isSending || !prompt.trim()}>{submitLabel ? <span>{t(language, submitLabel)}</span> : <Icon name="arrow" size={16} />}</button>
       </form>
+      {examples.length > 0 && <div className="conversational-search-examples"><span>{t(language, 'Try:')}</span>{examples.map((example) => <button type="button" key={example} onClick={() => setPrompt(t(language, example))} disabled={isSending}>{t(language, example)}</button>)}</div>}
     </div>}
   </section>;
 }

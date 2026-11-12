@@ -74,8 +74,12 @@ export default function PropertyDetailPage() {
     };
     setLoading(true);
     setProperty(null);
-    if (isLocalDevelopmentHost()) {
-      show(findLocal());
+    // Locally, listings saved in this browser come first; anything else (for
+    // example a listing from the local backend) is loaded from the API below,
+    // so "View details" works for every card.
+    const local = findLocal();
+    if (local) {
+      show(local);
       setLoading(false);
       return () => { active = false; };
     }

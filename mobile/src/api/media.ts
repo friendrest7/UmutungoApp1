@@ -1,6 +1,6 @@
 import { getApiBaseUrl } from './client';
 
-const DEFAULT_WEB_URL = 'https://umutungo.rw';
+const DEFAULT_WEB_URL = 'https://umutungodeals.com';
 
 function isLocalHost(hostname: string) {
   return /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/i.test(hostname);

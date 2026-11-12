@@ -1,4 +1,4 @@
-export type ColorPalette = typeof lightColors;
+export type ColorPalette = { [Key in keyof typeof lightColors]: string };
 
 export const brandColors = {
   primary: '#00C763', black: '#000000', white: '#FFFFFF',
@@ -12,7 +12,7 @@ export const lightColors = {
 
 export const darkColors: ColorPalette = {
   green: brandColors.primary, greenDark: '#5bd18b', greenSoft: '#143724', ink: '#f2faf6',
-  muted: '#b1c3b7', line: '#385244', paper: '#FFFFFF', canvas: '#0c1510', amber: '#f1bd62', danger: '#ff9189',
+  muted: '#b1c3b7', line: '#385244', paper: '#17251d', canvas: '#0c1510', amber: '#f1bd62', danger: '#ff9189',
 };
 
 // Legacy inline styles read this object directly; ThemeProvider updates it before children render.

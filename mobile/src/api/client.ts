@@ -17,11 +17,14 @@ async function request<T>(path: string, init: RequestInit = {}, authenticated = 
   if (!base) throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env before connecting to Umutungo.');
   const token = authenticated ? await SecureStore.getItemAsync(TOKEN_KEY) : null;
   const cacheKey = `${base}${path}`;
-  const cacheable = !authenticated && init.cache !== 'no-store' && (!init.method || init.method.toUpperCase() === 'GET');
+  // `cache` controls this module's persistent offline cache. Do not forward it
+  // to React Native fetch, where browser cache modes are not consistently supported.
+  const { cache, ...fetchInit } = init;
+  const cacheable = !authenticated && cache !== 'no-store' && (!init.method || init.method.toUpperCase() === 'GET');
   let response: Response;
   try {
     response = await fetch(`${base}${path}`, {
-      ...init,
+      ...fetchInit,
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(init.headers ?? {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     });
   } catch {

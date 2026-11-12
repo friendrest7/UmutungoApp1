@@ -66,7 +66,7 @@ export function PropertyCard({ listing, onPress, cardWidth }: { listing: ApiList
   const beds = Number(listing.measurements?.bedrooms ?? 0);
   const baths = Number(listing.measurements?.bathrooms ?? 0);
   const parking = Number(listing.measurements?.parking_spaces ?? listing.measurements?.parking ?? 0);
-  const publicUrl = 'https://umutungo.rw/property/' + listing.id;
+  const publicUrl = 'https://umutungodeals.com/property/' + listing.id;
   const mapDestination = listing.latitude != null && listing.longitude != null
     ? `${listing.latitude},${listing.longitude}`
     : `${listingLocation(listing) || 'Rwanda'}, Rwanda`;

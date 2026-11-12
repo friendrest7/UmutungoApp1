@@ -26,7 +26,7 @@ const priceRanges = [
 
 type SearchMessage = { role: 'user' | 'assistant'; content: string };
 type SearchPlan = { status: 'clarify' | 'search'; reply: string; category: string; location: string; province: string; district: string; sector: string; intent: string; priceRange: string; minBedrooms: number };
-const PROPERTY_SEARCH_URL = process.env.EXPO_PUBLIC_PROPERTY_SEARCH_API_URL || (process.env.EXPO_PUBLIC_CHAT_API_URL || 'https://umutungo.rw/api/chat').replace(/\/api\/chat\/?$/, '/api/property-search');
+const PROPERTY_SEARCH_URL = process.env.EXPO_PUBLIC_PROPERTY_SEARCH_API_URL || (process.env.EXPO_PUBLIC_CHAT_API_URL || 'https://umutungodeals.com/api/chat').replace(/\/api\/chat\/?$/, '/api/property-search');
 const LISTING_PAGE_SIZE = 12;
 const searchCategoryMap: Record<string, string> = { houses: 'house', apartments: 'apartment', land: 'land', commercial: 'commercial', offices: 'office', hospitality: 'hospitality', vehicles: 'vehicle', 'car-parts': 'car_parts', furniture: 'furniture', appliances: 'appliance', equipment: 'equipment', other: 'other' };
 

@@ -1,5 +1,4 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { useColorScheme } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { colors, darkColors, lightColors, ColorPalette } from './colors';
 import { createStyles } from './styles';
@@ -10,10 +9,19 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 const THEME_KEY = 'umutungo-theme-mode';
 
 export function ThemeProvider({ children }: PropsWithChildren) {
-  const systemScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('system');
-  useEffect(() => { void SecureStore.getItemAsync(THEME_KEY).then((stored) => { if (stored === 'system' || stored === 'light' || stored === 'dark') setModeState(stored); }); }, []);
-  const isDark = mode === 'dark' || (mode === 'system' && systemScheme === 'dark');
+  // Keep the app readable on devices configured with dark system appearance.
+  const [mode, setModeState] = useState<ThemeMode>('light');
+  useEffect(() => {
+    void SecureStore.getItemAsync(THEME_KEY).then((stored) => {
+      // Migrate older installs away from following a dark system appearance by default.
+      if (stored === 'dark' || stored === 'light') setModeState(stored);
+      else if (stored === 'system') {
+        setModeState('light');
+        void SecureStore.setItemAsync(THEME_KEY, 'light');
+      }
+    }).catch(() => setModeState('light'));
+  }, []);
+  const isDark = mode === 'dark';
   const palette = useMemo(() => isDark ? darkColors : lightColors, [isDark]);
   Object.assign(colors, palette);
   const styles = useMemo(() => createStyles(palette), [palette]);

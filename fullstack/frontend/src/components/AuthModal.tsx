@@ -244,7 +244,7 @@ export function AuthModal({ open = true, role, onClose = () => {}, onSuccess, hi
             if (!token.access_token) { setError(token.error_description ?? 'Google sign-in was cancelled.'); return; }
             const requestedRole = googleRoleRef.current;
             const response = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken: token.access_token, role: requestedRole }) });
-            const result = await response.json();
+            const result = await response.json() as { error?: string; role?: string; access_token?: string; user?: { role?: string; workspace_kind?: string; [key: string]: unknown } };
             if (!response.ok) { setError(result.error ?? 'Google sign-in could not be completed.'); return; }
             const accountRole = accountRoleFromApi(result.user?.role ?? result.role, result.user?.workspace_kind);
             if (result.access_token) window.localStorage.setItem('umutungo-api-token', result.access_token);

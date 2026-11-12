@@ -8,7 +8,7 @@ import { useI18n } from '@/i18n';
 
 type ChatListing = { id: string; title: string; price: number; currency?: string; province?: string; district?: string; sector?: string; images?: string[]; media?: { url: string; type?: string }[] };
 type ChatMessage = { role: 'user' | 'assistant'; content: string; listings?: ChatListing[] };
-const CHAT_URL = process.env.EXPO_PUBLIC_CHAT_API_URL || 'https://umutungo.rw/api/chat';
+const CHAT_URL = process.env.EXPO_PUBLIC_CHAT_API_URL || 'https://umutungodeals.com/api/chat';
 
 export default function ChatScreen() {
   const { colors, styles } = useTheme();

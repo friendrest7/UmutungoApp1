@@ -15,8 +15,8 @@ import { LocalizationProvider } from '@/i18n';
 
 function AppShell() {
   const { isDark, colors } = useTheme();
-  const [fontsLoaded] = useFonts({
-    ...Ionicons.font,
+  const [fontsLoaded, fontError] = useFonts({
+    ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
     LexendThin: require('../assets/fonts/Lexend-Thin.ttf'),
     LexendExtraLight: require('../assets/fonts/Lexend-ExtraLight.ttf'),
     LexendLight: require('../assets/fonts/Lexend-Light.ttf'),
@@ -54,7 +54,7 @@ function AppShell() {
     };
     void prepareNotifications();
   }, []);
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded && !fontError) return null;
   return <><StatusBar style={isDark ? 'light' : 'dark'} />{offline && <View accessibilityRole="alert" style={{ paddingVertical: 7, paddingHorizontal: 14, backgroundColor: '#8a5a00' }}><Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{t('Offline mode · showing saved properties. Changes to favorites will sync when you reconnect.')}</Text></View>}<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }} /></>;
 }
 

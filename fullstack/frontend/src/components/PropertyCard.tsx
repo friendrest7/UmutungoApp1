@@ -5,10 +5,37 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
+import styles from './PropertyCard.module.css';
 
 export type PropertyPoster = { id?: string; name: string; businessName?: string; photoUrl?: string; phone?: string; location?: string; role: 'Komisiyoneri' | 'Landlord' | 'Property Owner'; verified?: boolean; postedAt?: string; rating?: string };
 export type PropertyPlaceholder = { id: string; title: string; type: string; location: string; latitude?: number | null; longitude?: number | null; price: string; priceNote: string; bedrooms: number; bathrooms: number; parkingSpaces?: number; area: number; negotiable?: boolean; amenities?: string[]; tags?: string[]; customDetails?: Array<{ label: string; value: string }>; accent: string; image: string; images?: string[]; photoCount?: number; listed: string; availableFor?: 'rent' | 'sale' | 'both' | 'book'; description?: string; poster?: PropertyPoster; featured?: boolean };
 type PropertyCardProps = { language: Language; property: PropertyPlaceholder; favorite: boolean; onFavorite: () => void };
+
+const PLACEHOLDER_IMAGE = '/properties/listing-placeholder.svg';
+
+function availabilityLabel(availableFor: PropertyPlaceholder['availableFor']) {
+  if (availableFor === 'rent') return 'For rent';
+  if (availableFor === 'both') return 'For sale or rent';
+  if (availableFor === 'book') return 'For booking';
+  return 'For sale';
+}
+
+function cardCategoryFor(property: PropertyPlaceholder) {
+  const type = property.type.toLowerCase();
+  if (!['property', 'properties', 'asset', 'assets'].includes(type)) return property.type;
+  const title = property.title.toLowerCase();
+  if (/refrigerator|fridge|washer|washing machine|appliance|kitchen appliance/.test(title)) return 'Appliance';
+  if (/furniture|sofa|couch|dining set|bedroom set/.test(title)) return 'Furniture';
+  if (/vehicle|car|sedan|suv|bicycle|bike|motorcycle|truck/.test(title)) return 'Vehicle';
+  if (/guest room|guest stay|lodge|hotel|short stay/.test(title)) return 'Hospitality';
+  if (/apartment|flat|studio/.test(title)) return 'Apartment';
+  if (/office/.test(title)) return 'Office';
+  if (/house|home|villa|bungalow/.test(title)) return 'House';
+  if (/land|plot/.test(title)) return 'Land';
+  if (/shop|warehouse|commercial|retail/.test(title)) return 'Commercial';
+  if (/tool|equipment|machine|generator/.test(title)) return 'Equipment';
+  return '';
+}
 
 export function PropertyCard({ language, property, favorite, onFavorite }: PropertyCardProps) {
   const images = property.images?.length ? property.images : [property.image];
@@ -19,29 +46,32 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
   const [copied, setCopied] = useState(false);
   const detailHref = `/property/${encodeURIComponent(property.id)}`;
   const listingUrl = typeof window === 'undefined' ? detailHref : `${window.location.origin}${detailHref}`;
+  const posterName = property.poster?.businessName || property.poster?.name || '';
   const contactLabel = property.poster?.role === 'Komisiyoneri' ? t(language, 'Contact advertiser') : t(language, 'Contact owner');
   const type = property.type.toLowerCase();
-  const genericCategory = ['property', 'properties', 'asset', 'assets'].includes(type);
-  const title = property.title.toLowerCase();
-  const cardCategory = genericCategory
-    ? /refrigerator|fridge|washer|washing machine|appliance|kitchen appliance/.test(title) ? 'Appliance'
-      : /furniture|sofa|couch|dining set|bedroom set/.test(title) ? 'Furniture'
-        : /vehicle|car|sedan|suv|bicycle|bike|motorcycle|truck/.test(title) ? 'Vehicle'
-          : /guest room|guest stay|lodge|hotel|short stay/.test(title) ? 'Hospitality'
-            : property.type
-    : property.type;
   const residential = /house|home|apartment|residential|villa|room/.test(type);
   const vehicle = /vehicle|car|motorcycle|truck/.test(type);
   const land = /land|plot/.test(type);
-  const messageHref = `/messages?${new URLSearchParams({ listingId: property.id, propertyTitle: property.title, ownerName: property.poster?.businessName || property.poster?.name || 'Property advertiser', propertyImage: property.image, propertyLocation: property.location }).toString()}`;
-  const mapDestination = property.latitude != null && property.longitude != null
-    ? `${property.latitude},${property.longitude}`
-    : `${property.location}, Rwanda`;
+  const isRent = property.availableFor === 'rent' || property.availableFor === 'book';
+  const realPhotos = images.filter((image) => image && !image.endsWith('listing-placeholder.svg')).length;
+  const photoCount = Math.max(property.photoCount ?? 0, realPhotos);
+  // Some sources bake the period into the price ("RWF 775,000 / month"); show it as the note instead.
+  const embeddedPeriod = property.price.match(/^(.*?)\s*(\/\s*[A-Za-z ]+)$/);
+  const priceValue = embeddedPeriod ? embeddedPeriod[1] : property.price;
+  const rawNote = property.priceNote || embeddedPeriod?.[2] || '';
+  const priceNote = rawNote && !/^\s*asking\s*$/i.test(rawNote) ? rawNote : '';
+  const messageHref = `/messages?${new URLSearchParams({ listingId: property.id, propertyTitle: property.title, ownerName: posterName || 'Property advertiser', propertyImage: property.image, propertyLocation: property.location }).toString()}`;
+  const mapDestination = property.latitude != null && property.longitude != null ? `${property.latitude},${property.longitude}` : `${property.location}, Rwanda`;
   const directionsHref = `https://www.google.com/maps/dir/?api=1&origin=Current%20Location&destination=${encodeURIComponent(mapDestination)}&travelmode=driving`;
-  useEffect(() => {
-    setActiveImage(0);
-    setImageFallbacks({});
-  }, [property.id]);
+  const categoryLabel = cardCategoryFor(property);
+  const facts = [
+    residential && property.bedrooms > 0 ? { icon: 'bed' as const, value: String(property.bedrooms), label: property.bedrooms === 1 ? 'Bed' : 'Beds' } : null,
+    residential && property.bathrooms > 0 ? { icon: 'bath' as const, value: String(property.bathrooms), label: property.bathrooms === 1 ? 'Bath' : 'Baths' } : null,
+    property.parkingSpaces ? { icon: 'car' as const, value: String(property.parkingSpaces), label: 'Parking' } : null,
+    property.area > 0 && !vehicle ? { icon: 'area' as const, value: `${property.area.toLocaleString()} m²`, label: land ? 'Land' : 'Area' } : null,
+  ].filter((fact): fact is NonNullable<typeof fact> => fact !== null);
+
+  useEffect(() => { setActiveImage(0); setImageFallbacks({}); }, [property.id]);
   useEffect(() => {
     if (!isHovered || images.length < 2) return;
     const timer = window.setInterval(() => setActiveImage((current) => (current + 1) % images.length), 2600);
@@ -69,23 +99,45 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
     } catch { setDialog('share'); }
   };
 
-  return <article className="property-card property-card-redesign" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-    <div className="property-image property-card-photo">
-      <div className="property-image-track" style={{ transform: `translateX(-${activeImage * 100}%)` }} aria-live="polite">{images.map((image, index) => {
-        const displayedImage = imageFallbacks[index] ?? image;
-        return <div className="property-image-slide" key={`${image}-${index}`}><Image src={displayedImage} alt={`${t(language, property.title)} ${t(language, 'property image')} ${index + 1}`} fill sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 33vw" unoptimized={displayedImage.startsWith('http')} className="property-image-art" onError={() => setImageFallbacks((current) => ({ ...current, [index]: '/properties/listing-placeholder.svg' }))} /></div>;
-      })}</div>
-      <Link className="property-card-photo-link" href={`${detailHref}${detailHref.includes('?') ? '&' : '?'}gallery=1`} aria-label={`${t(language, 'Open photo gallery for')} ${property.title}`} />
-      <div className="property-card-photo-labels"><span className="property-category-badge">{t(language, cardCategory)}</span>{property.featured && <span className="property-card-recommended-badge"><Icon name="sparkles" size={12} /> {t(language, 'Recommended')}</span>}</div>
-    </div>
-    <div className="property-card-body">
-      <div className="property-card-title-row"><h3>{t(language, property.title)}</h3><div className="property-card-title-actions"><span className={`property-availability-tag ${property.availableFor === 'rent' ? 'is-rent' : ''}`}>{property.availableFor === 'rent' ? t(language, 'For rent') : property.availableFor === 'both' ? t(language, 'For sale or rent') : property.availableFor === 'book' ? t(language, 'For booking') : t(language, 'For sale')}</span></div></div>
-      <div className="property-card-location-row"><a className="property-card-location-link" href={directionsHref} target="_blank" rel="noreferrer" title={t(language, 'View route and estimated travel time')} aria-label={`${t(language, 'Directions from your current location to')} ${property.location || t(language, 'Location available on request')}. ${t(language, 'Google Maps will show the route and estimated travel time.')} `}><Icon name="pin" size={15} /><span className="property-card-location-copy"><span>{t(language, property.location || 'Location available on request')}</span></span></a><Link className="property-card-view-property" href={detailHref}>{t(language, 'View property')}</Link></div>
-      <strong className="property-card-price">{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <> <small>{t(language, property.priceNote)}</small></>}</strong>
-      {(residential || land || property.parkingSpaces || (property.area > 0 && !vehicle)) && <div className="property-details property-card-features">{residential && property.bedrooms > 0 && <span><Icon name="bed" size={16} /><strong>{property.bedrooms}</strong> {t(language, 'Beds')}</span>}{residential && property.bathrooms > 0 && <span><Icon name="bath" size={16} /><strong>{property.bathrooms}</strong> {t(language, 'Baths')}</span>}{property.parkingSpaces ? <span><Icon name="car" size={16} /><strong>{property.parkingSpaces}</strong> {t(language, 'Parking')}</span> : null}{property.area > 0 && !vehicle && <span><Icon name="area" size={16} /><strong>{property.area.toLocaleString()}</strong> m² {t(language, land ? 'Land area' : 'Area')}</span>}</div>}
-      <div className="property-card-footer property-card-redesign-footer"><div className="property-card-actions"><button className="property-card-contact" type="button" onClick={() => setDialog('contact')}>{contactLabel}</button><button className="property-card-share" type="button" onClick={() => void openShare()} aria-label={`${t(language, 'Share')} ${property.title}`}><Icon name="share" size={17} /></button><button className={`property-card-save ${favorite ? 'is-favorite' : ''}`} type="button" onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? `${t(language, 'Remove property from favorites')}: ${property.title}` : `${t(language, 'Save property')}: ${property.title}`}><Icon name="heart" size={18} filled={favorite} /></button></div></div>
-    </div>
-    {dialog && <div className="property-card-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><section className="property-card-dialog" role="dialog" aria-modal="true" aria-labelledby={`property-card-dialog-${property.id}`}><button className="property-card-dialog-close" type="button" onClick={() => setDialog(null)} aria-label={t(language, 'Close')}><Icon name="x" size={18} /></button><h3 id={`property-card-dialog-${property.id}`}>{dialog === 'contact' ? `${contactLabel} · ${property.poster?.businessName || property.poster?.name || t(language, 'Property advertiser')}` : t(language, 'Share this listing')}</h3>{dialog === 'contact' ? <div className="property-card-dialog-actions">{property.poster?.verified && property.poster.phone ? <><a href={`tel:${property.poster.phone}`}><Icon name="user" size={16} />{t(language, 'Call')} {property.poster.phone}</a><a href={`https://wa.me/${property.poster.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`${property.title} ${listingUrl}`)}`} target="_blank" rel="noreferrer"><Icon name="whatsapp" size={16} />{t(language, 'WhatsApp')}</a></> : <p>{t(language, 'Phone and WhatsApp details are not publicly available for this advertiser.')}</p>}<Link href={messageHref} onClick={() => setDialog(null)}><Icon name="bookPen" size={16} />{t(language, 'Message on Umutungo')}</Link></div> : <div className="property-card-dialog-actions"><button type="button" onClick={() => void copyLink()}>{copied ? t(language, 'Link copied') : t(language, 'Copy link')}</button><a href={`https://wa.me/?text=${encodeURIComponent(`${property.title} ${listingUrl}`)}`} target="_blank" rel="noreferrer"><Icon name="whatsapp" size={16} />{t(language, 'WhatsApp')}</a><a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(listingUrl)}`} target="_blank" rel="noreferrer">{t(language, 'Facebook')}</a><p>{t(language, 'For Instagram, TikTok, or Status, copy the link and paste it in your post.')}</p></div>}</section></div>}
+  return <>
+    {/* data-own-colors opts the card out of the site-wide text colour overrides in globals.css. */}
+    <article className={styles.card} data-own-colors="" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+      <div className={styles.media}>
+        <div className={styles.track} style={{ transform: `translateX(-${activeImage * 100}%)` }}>{images.map((image, index) => {
+          const displayedImage = imageFallbacks[index] ?? (image || PLACEHOLDER_IMAGE);
+          return <div className={styles.slide} key={`${image}-${index}`}><Image src={displayedImage} alt={index === 0 ? t(language, property.title) : ''} fill sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 25vw" unoptimized={displayedImage.startsWith('http')} className={styles.image} onError={() => setImageFallbacks((current) => ({ ...current, [index]: PLACEHOLDER_IMAGE }))} /></div>;
+        })}</div>
+        <div className={styles.mediaShade} aria-hidden="true" />
+        <div className={styles.badges}>
+          <span className={`${styles.badge} ${isRent ? styles.badgeRent : styles.badgeSale}`}>{t(language, availabilityLabel(property.availableFor))}</span>
+          {property.featured && <span className={`${styles.badge} ${styles.badgeFeatured}`} title={t(language, 'Featured listings are promoted by the advertiser.')}>{t(language, 'Featured')}</span>}
+        </div>
+        <button className={`${styles.save} ${favorite ? styles.saveActive : ''}`} type="button" onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? `${t(language, 'Remove property from favorites')}: ${property.title}` : `${t(language, 'Save property')}: ${property.title}`}><Icon name="heart" size={18} filled={favorite} /></button>
+        <div className={styles.mediaFoot}>
+          {categoryLabel ? <span className={styles.category}>{t(language, categoryLabel)}</span> : <span />}
+          {photoCount > 1 && <Link className={styles.photoCount} href={`${detailHref}?gallery=1`} aria-label={`${t(language, 'Open photo gallery for')} ${property.title} (${photoCount})`}><Icon name="camera" size={13} />{photoCount}</Link>}
+        </div>
+      </div>
+
+      <div className={styles.body}>
+        <p className={styles.price}>{priceValue}{priceNote && <span> {t(language, priceNote)}</span>}{property.negotiable && <em>{t(language, 'Negotiable')}</em>}</p>
+        <h3 className={styles.title}><Link className={styles.titleLink} href={detailHref}>{t(language, property.title)}</Link></h3>
+        <div className={styles.locationRow}>
+          <a className={styles.location} href={directionsHref} target="_blank" rel="noreferrer" title={t(language, 'View route and estimated travel time')}><Icon name="pin" size={14} /><span>{t(language, property.location || 'Location available on request')}</span></a>
+          <Link className={styles.viewDetails} href={detailHref} aria-label={`${t(language, 'View details')}: ${property.title}`}>{t(language, 'View details')}<span aria-hidden="true">→</span></Link>
+        </div>
+        {facts.length > 0 && <ul className={styles.facts} aria-label={t(language, 'Key facts')}>{facts.map((fact) => <li key={fact.label}><Icon name={fact.icon} size={15} /><strong>{fact.value}</strong><span>{t(language, fact.label)}</span></li>)}</ul>}
+
+        <div className={styles.footer}>
+          <div className={styles.actions}>
+            <button className={styles.contact} type="button" onClick={() => setDialog('contact')} aria-label={`${contactLabel}: ${property.title}`}><Icon name="phone" size={15} />{contactLabel}</button>
+            <button className={styles.iconButton} type="button" onClick={() => void openShare()} aria-label={`${t(language, 'Share')} ${property.title}`}><Icon name="share" size={16} /></button>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    {dialog && <div className="property-card-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}><section className="property-card-dialog" role="dialog" aria-modal="true" aria-labelledby={`property-card-dialog-${property.id}`}><button className="property-card-dialog-close" type="button" onClick={() => setDialog(null)} aria-label={t(language, 'Close')}><Icon name="x" size={18} /></button><h3 id={`property-card-dialog-${property.id}`}>{dialog === 'contact' ? contactLabel :t(language, 'Share this listing')}</h3>{dialog === 'contact' ? <div className="property-card-dialog-actions">{property.poster?.verified && property.poster.phone ? <><a href={`tel:${property.poster.phone}`}><Icon name="user" size={16} />{t(language, 'Call')} {property.poster.phone}</a><a href={`https://wa.me/${property.poster.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`${property.title} ${listingUrl}`)}`} target="_blank" rel="noreferrer"><Icon name="whatsapp" size={16} />{t(language, 'WhatsApp')}</a></> : <p>{t(language, 'Phone and WhatsApp details are not publicly available for this advertiser.')}</p>}<Link href={messageHref} onClick={() => setDialog(null)}><Icon name="bookPen" size={16} />{t(language, 'Message on Umutungo')}</Link></div> : <div className="property-card-dialog-actions"><button type="button" onClick={() => void copyLink()}>{copied ? t(language, 'Link copied') : t(language, 'Copy link')}</button><a href={`https://wa.me/?text=${encodeURIComponent(`${property.title} ${listingUrl}`)}`} target="_blank" rel="noreferrer"><Icon name="whatsapp" size={16} />{t(language, 'WhatsApp')}</a><a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(listingUrl)}`} target="_blank" rel="noreferrer">{t(language, 'Facebook')}</a><p>{t(language, 'For Instagram, TikTok, or Status, copy the link and paste it in your post.')}</p></div>}</section></div>}
     {copied && <span className="property-card-copy-confirmation" role="status">{t(language, 'Link copied to clipboard')}</span>}
-  </article>;
+  </>;
 }

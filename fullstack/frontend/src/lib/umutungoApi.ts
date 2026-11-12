@@ -127,6 +127,21 @@ export function apiToken() {
   return window.localStorage.getItem('umutungo-api-token') ?? '';
 }
 
+// ApiError keeps the HTTP status and machine-readable code (for example
+// "plan_required") so callers can react to them, not just show the message.
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  body?: unknown;
+  constructor(message: string, status: number, code?: string, body?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.body = body;
+  }
+}
+
 export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
   const token = apiToken();
   if (!token || !apiIsAvailable()) return null;
@@ -134,8 +149,8 @@ export async function umutungoApi<T>(path: string, init: RequestInit = {}) {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}), Authorization: `Bearer ${token}` },
   });
-  const body = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? 'Umutungo request failed');
+  const body = await response.json().catch(() => ({})) as T & { error?: string; code?: string };
+  if (!response.ok) throw new ApiError(body.error ?? 'Umutungo request failed', response.status, body.code, body);
   return body as T;
 }
 

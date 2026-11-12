@@ -1,12 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Language, t } from '../data/translations';
 import { apiToken, publicUmutungoApi, umutungoApi } from '../lib/umutungoApi';
-import { AuthModal } from './AuthModal';
+import { goToSignIn } from '../lib/signIn';
 import { Icon } from './Icons';
 import { Logo } from './Logo';
 
 export function Footer({ language, darkMode = false }: { language: Language; darkMode?: boolean }) {
-  const [authOpen, setAuthOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -53,7 +52,7 @@ export function Footer({ language, darkMode = false }: { language: Language; dar
             <div className="testimonial-form-footer"><span>{body.length}/1000</span><button type="submit" disabled={submitting || body.trim().length < 20}>{submitting ? 'Submitting…' : 'Submit your story'}</button></div>
             {submissionMessage && <p className="testimonial-form-status" role="status">{submissionMessage}</p>}
             {submissionError && <p className="testimonial-form-error" role="alert">{submissionError}</p>}
-          </form> : <button className="testimonial-sign-in" type="button" onClick={() => setAuthOpen(true)}>Sign in to share your story</button>}
+          </form> : <button className="testimonial-sign-in" type="button" onClick={() => goToSignIn('Client')}>Sign in to share your story</button>}
         </div>
       </section>
       <div className="container app-download" id="app-download">
@@ -63,14 +62,14 @@ export function Footer({ language, darkMode = false }: { language: Language; dar
           <a className="app-download-option" href="https://apps.apple.com/rw/search?term=Umutungo" target="_blank" rel="noopener noreferrer" aria-label="Search Umutungo on the App Store"><span className="app-download-icon"><Icon name="apple" size={19} /></span><span><small>{t(language, 'Download on')}</small><strong>{t(language, 'iOS app')}</strong></span></a>
         </div>
       </div>
-      <div className="container footer-main"><a className="footer-register-link" href="/register">{t(language, 'Create an account')} <Icon name="arrow" size={14} /></a>
-        <div className="footer-brand-block"><a href="/" aria-label="Umutungo home"><Logo darkMode={darkMode} /></a></div>
-        <div className="footer-column"><a className="footer-column-heading" href="/">{t(language, 'Explore')}</a><a href="/">{t(language, 'Home')}</a><a href="/categories/properties">{t(language, 'Categories')}</a></div>
-        <div className="footer-column"><a className="footer-column-heading" href="/post-property">{t(language, 'For you')}</a><a href="/post-property">{t(language, 'Post a House')}</a><a href="/#rwanda">{t(language, 'Umutungo in Rwanda')}</a><a href="/about">{t(language, 'Our promise')}</a></div>
-        <div className="footer-column"><span>{t(language, 'Connect')}</span><a href="/contact">{t(language, 'Contact us')}</a><a href="mailto:hello@umutungo.rw">hello@umutungo.rw</a><a className="footer-social-link instagram-link" href="#home" aria-label="Instagram"><Icon name="instagram" size={22} />Instagram <span aria-hidden="true">↗</span></a><a className="footer-social-link linkedin-link" href="#home" aria-label="LinkedIn"><Icon name="linkedin" size={22} />LinkedIn <span aria-hidden="true">↗</span></a></div>
+      <div className="container footer-main">
+        <div className="footer-brand-block"><a href="/" aria-label="Umutungo home"><Logo darkMode /></a><p>{t(language, 'Rwanda’s marketplace for homes, land and everyday assets.')}</p><a className="footer-register-link" href="/register">{t(language, 'Create an account')} <Icon name="arrow" size={14} /></a></div>
+        <nav className="footer-column" aria-label={t(language, 'Explore')}><span>{t(language, 'Explore')}</span><a href="/categories/properties">{t(language, 'All listings')}</a><a href="/#categories">{t(language, 'Property categories')}</a><a href="/categories/vehicles">{t(language, 'Vehicles and other assets')}</a><a href="/post-property">{t(language, 'Post a property')}</a></nav>
+        <nav className="footer-column" aria-label={t(language, 'For business')}><span>{t(language, 'For business')}</span><a href="/register?role=Komisiyoneri">{t(language, 'For Komisiyoneri')}</a><a href="/register?role=Property%20Owner">{t(language, 'For Property Owners')}</a><a href="/landlord">{t(language, 'For Landlords')}</a><a href="/upgrade">{t(language, 'Plans and pricing')}</a></nav>
+        <nav className="footer-column" aria-label={t(language, 'Company')}><span>{t(language, 'Company')}</span><a href="/about">{t(language, 'About us')}</a><a href="/about">{t(language, 'Our promise')}</a><a href="/how-it-works">{t(language, 'How it works')}</a></nav>
+        <div className="footer-column"><span>{t(language, 'Support')}</span><a href="/contact">{t(language, 'Contact us')}</a><a href="mailto:hello@umutungo.rw">hello@umutungo.rw</a><a className="footer-social-link instagram-link" href="#home" aria-label="Instagram"><Icon name="instagram" size={22} />Instagram <span aria-hidden="true">↗</span></a><a className="footer-social-link linkedin-link" href="#home" aria-label="LinkedIn"><Icon name="linkedin" size={22} />LinkedIn <span aria-hidden="true">↗</span></a></div>
       </div>
       <div className="container footer-bottom"><span>{t(language, '© 2024 Umutungo. Made in Rwanda.')}</span><span><a href="mailto:hello@umutungo.rw?subject=Privacy%20policy%20request">{t(language, 'Privacy')}</a><a href="mailto:hello@umutungo.rw?subject=Terms%20of%20use%20request">{t(language, 'Terms')}</a></span></div>
-      <AuthModal open={authOpen} role="Client" onClose={() => setAuthOpen(false)} onSuccess={() => { setAuthOpen(false); setSignedIn(Boolean(apiToken())); }} />
     </footer>
   );
 }

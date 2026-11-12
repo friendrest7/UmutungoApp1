@@ -1,0 +1,101 @@
+/* Owner workspace sign-in page. Same palette as the workspace itself
+   (forest green, ivory, gold accent), so signing in feels like part of it. */
+.page {
+  --si-forest: #123d32;
+  --si-ivory: #f7f6f0;
+  --si-surface: #ffffff;
+  --si-ink: #18231e;
+  --si-muted: #5f6d65;
+  --si-line: #e2e8e2;
+  --si-gold: #c99a4b;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--si-ivory);
+  color: var(--si-ink);
+  font-family: var(--font-lexend), sans-serif;
+}
+:global(html.theme-dark) .page {
+  --si-ivory: #0d1712;
+  --si-surface: #15241c;
+  --si-ink: #f1f5f2;
+  --si-muted: #b4c2b9;
+  --si-line: #2c4035;
+}
+
+/* ---------- Left: photo + pitch ---------- */
+.visual { position: sticky; top: 0; display: flex; height: 100vh; height: 100dvh; flex-direction: column; justify-content: flex-start; gap: clamp(40px, 9vh, 96px); overflow: hidden; padding: clamp(24px, 3.5vw, 48px); color: #ffffff; }
+.photo { object-fit: cover; }
+.shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 26, 20, .92) 0%, rgba(8, 26, 20, .78) 38%, rgba(10, 30, 23, .25) 70%, rgba(10, 30, 23, .1) 100%); }
+.brand { position: relative; align-self: flex-start; display: inline-flex; }
+.brand :global(.brand-logo) { width: auto; height: 44px; }
+.pitch { position: relative; max-width: 520px; }
+.pitchEyebrow { margin: 0 0 12px; color: #f2d398; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.pitch h2 { margin: 0 0 22px; color: #ffffff; font-size: clamp(28px, 3vw, 42px); font-weight: 600; letter-spacing: -.035em; line-height: 1.1; text-wrap: balance; }
+.pitch ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.pitch li { display: flex; align-items: center; gap: 11px; color: rgba(255, 255, 255, .9); font-size: 15px; line-height: 1.4; }
+.pitch li span { display: grid; flex: 0 0 auto; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .16); color: #ffffff; backdrop-filter: blur(6px); }
+
+/* ---------- Right: sign-in ---------- */
+.panel { display: flex; min-width: 0; flex-direction: column; padding: clamp(24px, 3.5vw, 48px); }
+.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; color: var(--si-muted); font-size: 14px; font-weight: 500; text-decoration: none; }
+.back:hover { color: var(--si-ink); }
+.form { width: min(100%, 440px); margin: auto; padding: 40px 0; }
+.eyebrow { margin: 0; color: var(--si-forest); font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+:global(html.theme-dark) .eyebrow { color: #7fd3a6; }
+.form h1 { margin: 10px 0 10px; color: var(--si-ink); font-size: clamp(28px, 2.6vw, 34px); font-weight: 600; letter-spacing: -.035em; line-height: 1.12; text-wrap: balance; }
+.lead { margin: 0; color: var(--si-muted); font-size: 15px; line-height: 1.6; }
+.denied { display: flex; align-items: flex-start; gap: 10px; margin: 20px 0 0; padding: 12px 14px; border-radius: 10px; background: #fff3d8; color: #6e4b06; font-size: 14px; line-height: 1.5; }
+.denied svg { flex: 0 0 auto; margin-top: 2px; }
+:global(html.theme-dark) .denied { background: #3a2f17; color: #f3dca8; }
+.help { margin: 0; color: var(--si-muted); font-size: 13px; text-align: center; }
+.help a { color: var(--si-forest); font-weight: 600; }
+:global(html.theme-dark) .help a { color: #7fd3a6; }
+
+/* ---------- The shared sign-in methods, sized up for a full page ----------
+   They're styled globally for the compact pop-up; these overrides apply only
+   inside this page. */
+.form :global(.auth-page-panel) { margin-top: 8px; }
+.form :global(.auth-choice-view) { margin-top: 24px; }
+.form :global(:is(.auth-google-button, .auth-method-button, .auth-submit, .auth-email-switch)) { min-height: 52px; border-radius: 12px; font-size: 15px; font-weight: 600; }
+.form :global(.auth-google-button) { border-color: var(--si-line); background: var(--si-surface); color: var(--si-ink); }
+.form :global(.auth-method-button) { gap: 12px; margin-top: 10px; padding: 10px 16px; border-color: var(--si-line); background: var(--si-surface); color: var(--si-forest); }
+.form :global(.auth-method-button:hover), .form :global(.auth-google-button:hover) { border-color: var(--si-forest); background: var(--si-surface); }
+.form :global(.auth-method-button strong) { color: var(--si-ink); font-size: 15px; font-weight: 600; }
+.form :global(.auth-method-button small) { color: var(--si-muted); font-size: 13px; }
+.form :global(.auth-submit) { border: 0; background: var(--si-forest); color: #ffffff; }
+.form :global(.auth-submit:hover) { background: #1d5847; }
+.form :global(.auth-divider) { margin: 24px 0 12px; color: var(--si-muted); font-size: 12px; letter-spacing: .06em; }
+.form :global(.auth-divider::before), .form :global(.auth-divider::after) { background: var(--si-line); }
+.form :global(.auth-form) { gap: 16px; margin-top: 20px; }
+.form :global(.auth-form label) { gap: 8px; color: var(--si-ink); font-size: 14px; font-weight: 600; }
+.form :global(.auth-form label small) { color: var(--si-muted); font-size: 12.5px; font-weight: 400; }
+.form :global(:is(.auth-form input, .auth-form select)) { min-height: 50px; padding: 0 14px; border-color: var(--si-line); border-radius: 10px; background: var(--si-surface); color: var(--si-ink); font-size: 16px; }
+.form :global(:is(.auth-form input, .auth-form select):focus-visible) { outline: 3px solid color-mix(in srgb, var(--si-forest) 35%, transparent); border-color: var(--si-forest); }
+.form :global(.auth-form-back) { color: var(--si-forest); font-size: 14px; font-weight: 600; }
+.form :global(:is(.auth-notice, .auth-error, .auth-signup-prompt)) { font-size: 14px; line-height: 1.55; }
+.form :global(.auth-signup-prompt) { margin-top: 22px; color: var(--si-muted); }
+.form :global(.auth-signup-prompt button) { color: var(--si-forest); font-size: 14px; font-weight: 700; }
+.form :global(.auth-legal) { display: block; margin-top: 10px; color: var(--si-muted); font-size: 12.5px; line-height: 1.5; }
+.form :global(.auth-test-accounts .auth-method-button) { min-height: 56px; padding: 8px 12px; }
+.form :global(.auth-test-accounts .auth-method-button strong) { font-size: 14px; }
+.form :global(.auth-test-accounts .auth-method-button small) { font-size: 12px; }
+:global(html.theme-dark) .form :global(:is(.auth-form-back, .auth-signup-prompt button, .auth-method-button)) { color: #7fd3a6 !important; }
+:global(html.theme-dark) .form :global(.auth-submit) { background: #00c763; color: #04230f; }
+
+/* ---------- Tablet & phone: photo becomes a banner above the form ---------- */
+@media (max-width: 860px) {
+  .page { grid-template-columns: minmax(0, 1fr); }
+  .visual { position: relative; height: auto; min-height: 280px; gap: 40px; padding: 20px 16px 24px; }
+  .brand :global(.brand-logo) { height: 36px; }
+  .pitch h2 { margin-bottom: 0; font-size: 26px; }
+  .pitch ul { display: none; }
+  .panel { padding: 20px 16px 28px; }
+  .back { display: none; }
+  .form { margin: 0 auto; padding: 8px 0 32px; }
+  .form h1 { font-size: 26px; }
+}
+@media (max-width: 380px) {
+  .form :global(.auth-test-accounts) { grid-template-columns: 1fr; }
+}

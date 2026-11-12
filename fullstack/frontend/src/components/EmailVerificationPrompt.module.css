@@ -1,0 +1,32 @@
+/* Uses the dashboard's own colour variables, so it follows light/dark theme. */
+.wrap { width: min(1160px, calc(100% - 112px)); margin: 24px auto 0; }
+.card { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; border: 1px solid var(--dashboard-line); border-left: 4px solid #00c763; border-radius: 12px; background: var(--dashboard-surface); color: var(--dashboard-ink); }
+.icon { display: grid; flex: 0 0 auto; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: color-mix(in srgb, #00c763 16%, transparent); color: #007a3d; }
+.body { flex: 1; min-width: 0; }
+.body h2 { margin: 0 0 10px; font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.field { flex: 1 1 220px; min-width: 0; max-width: 340px; }
+.field input { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--dashboard-line); border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 14px; }
+.field input:focus-visible { outline: 3px solid #00c763; outline-offset: 1px; }
+.primary { min-height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: #007a3d; color: #ffffff; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; }
+.primary:hover:not(:disabled) { background: #04502b; }
+.link { padding: 6px 2px; border: 0; background: none; color: #007a3d; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.primary:disabled, .link:disabled { cursor: default; opacity: .6; }
+.note, .error { margin: 10px 0 0; font-size: 13px; line-height: 1.45; }
+.note { color: var(--dashboard-muted); }
+.error { color: #c0262d; }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 5px 12px; border-radius: 999px; background: color-mix(in srgb, #00c763 14%, transparent); color: #007a3d; font-size: 12.5px; font-weight: 700; }
+.badge span { color: var(--dashboard-muted); font-weight: 500; }
+
+/* Dashboards go dark either via the site theme (.theme-dark) or their own toggle (.dashboard-dark). */
+:is(:global(.theme-dark), :global(.dashboard-dark)) :is(.icon, .badge, .link) { color: #3fe08d; }
+:is(:global(.theme-dark), :global(.dashboard-dark)) .primary { background: #00c763; color: #04230f; }
+:is(:global(.theme-dark), :global(.dashboard-dark)) .error { color: #ff8a8f; }
+
+@media (max-width: 900px) { .wrap { width: min(100% - 60px, 700px); } }
+@media (max-width: 640px) {
+  .wrap { width: calc(100% - 36px); }
+  .card { padding: 16px; }
+  .field { max-width: none; }
+}

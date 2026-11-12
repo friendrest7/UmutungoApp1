@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { requestOtp, signInWithGoogle, signInWithPassword, verifyOtp } from '@/api/client';
+import { requestOtp, signInWithGoogle, signInWithTestAccount, verifyOtp } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { ErrorState } from '@/components/StateView';
 import { useTheme } from '@/theme/ThemeContext';
@@ -13,12 +13,15 @@ import { useI18n } from '@/i18n';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const demoAccounts = [
-  { label: 'Client', email: 'client@umutungo.test', password: 'Client123!' },
-  { label: 'Property Owner', email: 'owner@umutungo.test', password: 'Owner123!' },
-  { label: 'Komisiyoneri', email: 'commissioner@umutungo.test', password: 'Commissioner123!' },
-  { label: 'Admin', email: 'admin@umutungo.test', password: 'Admin123!' },
-];
+// Local test accounts for the development backend's /api/v1/auth/dev-login.
+// No passwords: the development backend picks the account by email, and a
+// production backend has no such route. Release builds get an empty list.
+const developmentTestAccounts: Array<{ label: string; email: string }> = __DEV__ ? [
+  { label: 'Client', email: 'client@umutungo.test' },
+  { label: 'Property Owner', email: 'owner@umutungo.test' },
+  { label: 'Komisiyoneri', email: 'commissioner@umutungo.test' },
+  { label: 'Admin', email: 'admin@umutungo.test' },
+] : [];
 
 export default function SignInScreen() {
   const { colors, styles } = useTheme();
@@ -26,9 +29,6 @@ export default function SignInScreen() {
   const router = useRouter();
   const { setUser, setProfile } = useAuth();
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [emailOpen, setEmailOpen] = useState(false);
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [notice, setNotice] = useState('');
@@ -100,16 +100,14 @@ export default function SignInScreen() {
     }
   };
 
-  const signInWithCredentials = async (loginEmail: string, loginPassword: string) => {
-    if (!loginEmail.trim() || !loginPassword) { setError('Enter your email and password.'); return; }
+  const signInAsTestAccount = async (testEmail: string) => {
     setBusy(true); setError('');
     try {
-      const result = await signInWithPassword(loginEmail.trim(), loginPassword);
+      const result = await signInWithTestAccount(testEmail);
       setUser(result.user); setProfile(null); router.replace((result.user.role === 'property_owner' ? '/(tabs)/owner-home' : '/(tabs)') as never);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Email sign-in is unavailable.'); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Test accounts only work with a development backend.'); }
     finally { setBusy(false); }
   };
-  const submitEmail = () => void signInWithCredentials(email, password);
 
   const submitCode = async () => {
     if (code.trim().length < 4) {
@@ -141,8 +139,6 @@ export default function SignInScreen() {
         <Text style={styles.secondaryText}>{googleBusy ? t('Connecting to Google...') : googleConfigured && googleRequest ? t('Continue with Google') : t('Google sign-in is not configured')}</Text>
       </Pressable>
       <Text style={[styles.muted, { textAlign: 'center' }]}>{t('Google access is verified by the Umutungo API before a session is created.')}</Text>
-      <Pressable style={styles.secondaryButton} onPress={() => { setEmailOpen((open) => !open); setError(''); }}><Text style={styles.secondaryText}>{emailOpen ? t('Use phone sign-in') : t('Sign in to an existing account')}</Text></Pressable>
-      {emailOpen && <View style={[styles.card, { gap: 9 }]}><Text style={styles.label}>{t('Email')}</Text><TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor={colors.muted} autoCapitalize="none" keyboardType="email-address" autoComplete="email" /><Text style={styles.label}>{t('Password')}</Text><TextInput style={styles.input} value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" /><Pressable style={styles.button} disabled={busy} onPress={() => void submitEmail()}><Text style={styles.buttonText}>{busy ? t('Signing in...') : t('Sign in')}</Text></Pressable><Text style={styles.muted}>{t('Email and password are enabled for development demo accounts only. Use phone verification for live accounts.')}</Text></View>}
       {step === 'phone' ? <View style={{ gap: 10 }}>
         <Text style={styles.label}>{t('Rwanda phone number')}</Text>
         <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="+250 7XX XXX XXX" placeholderTextColor={colors.muted} keyboardType="phone-pad" autoComplete="tel" />
@@ -154,12 +150,12 @@ export default function SignInScreen() {
         <Pressable style={styles.button} disabled={busy} onPress={() => void submitCode()}><Text style={styles.buttonText}>{busy ? t('Verifying...') : t('Verify and continue')}</Text></Pressable>
         <Pressable style={styles.secondaryButton} onPress={() => setStep('phone')}><Text style={styles.secondaryText}>{t('Change phone number')}</Text></Pressable>
       </View>}
-      {__DEV__ && <View style={[styles.card, { gap: 8, marginTop: 12 }]}>
-        <Text style={styles.heading}>Testing credentials</Text>
-        <Text style={styles.muted}>Development builds only. Tap an account to sign in.</Text>
-        {demoAccounts.map((account) => <Pressable key={account.email} style={[styles.secondaryButton, { alignItems: 'flex-start', paddingVertical: 9 }]} disabled={busy} onPress={() => void signInWithCredentials(account.email, account.password)}>
+      {__DEV__ && developmentTestAccounts.length > 0 && <View style={[styles.card, { gap: 8, marginTop: 12 }]}>
+        <Text style={styles.heading}>Test accounts</Text>
+        <Text style={styles.muted}>Development builds and a development backend only. Tap an account to sign in.</Text>
+        {developmentTestAccounts.map((account) => <Pressable key={account.email} style={[styles.secondaryButton, { alignItems: 'flex-start', paddingVertical: 9 }]} disabled={busy} onPress={() => void signInAsTestAccount(account.email)}>
           <Text style={styles.secondaryText}>{account.label}</Text>
-          <Text style={styles.muted}>{account.email} · {account.password}</Text>
+          <Text style={styles.muted}>{account.email}</Text>
         </Pressable>)}
       </View>}
       <View style={[styles.card, { gap: 8, marginTop: 12 }]}>

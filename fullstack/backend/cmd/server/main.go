@@ -30,6 +30,9 @@ func main() {
 	}
 
 	api := httpapi.New(pool, cfg)
+	// Publishes scheduled listings and ends lapsed plans every few minutes,
+	// instead of only when someone happens to load a dashboard.
+	api.StartScheduler(context.Background(), 5*time.Minute)
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           api.Handler(),

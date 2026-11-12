@@ -25,7 +25,7 @@ go run ./cmd/server
 
 The default development OTP is `111111`. It is returned only in development mode; production must connect an SMS provider before enabling real OTP delivery.
 
-The development API also supports the frontend test accounts through `POST /api/v1/auth/dev-login`. Available credentials are `owner@umutungo.test` / `Owner123!`, `landlord@umutungo.test` / `Landlord123!`, and `commissioner@umutungo.test` / `Commissioner123!`. Signing in with either property-owner account stores the full test inventory as published listings owned by that account. Fixture IDs make seeding repeatable without creating duplicates. This route creates database-backed sessions and is disabled outside development.
+The development API also supports the frontend test accounts through `POST /api/v1/auth/dev-login` with a JSON body like `{"email": "owner@umutungo.test"}`. The accounts are `tenant@`, `client@`, `commissioner@`, `landlord@`, `owner@` and `admin@umutungo.test`; there are no passwords. The route exists only when `APP_ENV=development` (and `TEST_LOGIN_ENABLED` isn't `false`); a production server doesn't register it. Signing in with either property-owner account stores the full test inventory as published listings owned by that account. Fixture IDs make seeding repeatable without creating duplicates. This route creates database-backed sessions and is disabled outside development.
 
 ## Main endpoints
 

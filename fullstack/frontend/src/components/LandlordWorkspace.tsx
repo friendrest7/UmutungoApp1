@@ -1,11 +1,16 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { AuthModal, type AuthRole } from "./AuthModal";
+import { type AuthRole } from "./AuthModal";
+import { OwnerSignIn } from "./OwnerSignIn";
 import { Icon } from "./Icons";
 import { Logo } from "./Logo";
 import { LandlordAdvertisePropertiesSection, type AdvertiseListing } from "./LandlordAdvertisePropertiesSection";
-import { apiToken, umutungoApi } from "../lib/umutungoApi";
+import { LandlordPortalPage, type Portal } from "./LandlordPortalPages";
+import portalStyles from "./LandlordPortal.module.css";
+import { WorkspaceTopbar, type WorkspaceAlert } from "./WorkspaceTopbar";
+import { LandlordPlanPage, TrialBanner, type AccessResponse } from "./LandlordPlanPage";
+import { ApiError, apiToken, umutungoApi } from "../lib/umutungoApi";
 import {
   rwandaLocations,
   getDistrictNames,
@@ -100,12 +105,8 @@ const mapMarketplaceListing = (item: MarketplaceListingRecord): AdvertiseListing
     featured: item.is_featured ?? false,
   };
 };
-const money = (amount: number) =>
-  new Intl.NumberFormat("en-RW", {
-    style: "currency",
-    currency: "RWF",
-    maximumFractionDigits: 0,
-  }).format(amount);
+const PORTAL_PAGES = ["Home", "Properties", "Tenants", "Payments", "Announcements", "Repair advice", "Settings"];
+const money = (amount: number) => `RWF ${Math.round(amount).toLocaleString("en-US")}`;
 const fmtDate = (value: string) =>
   new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
@@ -134,12 +135,43 @@ export function LandlordWorkspace({
   >("checking");
   const [ownerName, setOwnerName] = useState("there");
   const [role, setRole] = useState<AuthRole>("Property Owner");
-  const [activePage, setActivePage] = useState("Overview");
+  const [activePage, setActivePage] = useState("Home");
+  const signOut = async () => {
+    const token = localStorage.getItem("umutungo-api-token");
+    if (token) {
+      try { await fetch("/api/v1/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }); }
+      catch { /* Clear the local credential even if offline. */ }
+    }
+    localStorage.removeItem("umutungo-demo-user");
+    localStorage.removeItem("umutungo-api-token");
+    ["umutungo-notifications", "umutungo-landlord-notifications", "umutungo-commissioner-notifications", "umutungo-tenant-notifications"].forEach((key) => localStorage.removeItem(key));
+    window.dispatchEvent(new Event("umutungo:auth-changed"));
+    window.location.replace("/");
+  };
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
-    if (section === "Properties" || section === "Tenants" || section === "Enquiries" || section === "Reports" || section === "Advertise property") setActivePage(section);
+    if (section === "Properties" || section === "Tenants" || section === "Payments" || section === "Announcements" || section === "Repair advice" || section === "Settings" || section === "Plan" || section === "Enquiries" || section === "Reports" || section === "Advertise property") setActivePage(section);
   }, []);
-  const [authOpen, setAuthOpen] = useState(false);
+  // Landlord accounts have no free tier: the first visit starts a Silver
+  // trial, and without an active plan the workspace is replaced by the plan
+  // picker. Property owner accounts always come back as "active".
+  const [accessData, setAccessData] = useState<AccessResponse | null>(null);
+  const loadAccess = useCallback(async () => {
+    try {
+      const data = await umutungoApi<AccessResponse>("/api/v1/owner/access");
+      if (data) setAccessData(data);
+    } catch {
+      // Fail open to the normal workspace; the backend still enforces the plan.
+      setAccessData({ access: { required: false, state: "active", tier: "", label: "", is_trial: false, trial_used: false, trial_days: 0, starts_at: null, ends_at: null, days_left: 0, first_day: "", last_day: "", today: "", day_number: 0, period_days: 0, scheduled_tier: "", scheduled_tier_starts_at: null }, plans: [], demo_payments: false });
+    }
+  }, []);
+  const planLocked = accessData?.access.state === "locked";
+  const workspaceReady = session === "allowed" && accessData !== null && !planLocked;
+  // A 402 from any workspace call means the plan ended while the page was open.
+  const handlePlanError = useCallback((cause: unknown) => {
+    if (cause instanceof ApiError && cause.code === "plan_required") { void loadAccess(); return true; }
+    return false;
+  }, [loadAccess]);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [marketplaceListings, setMarketplaceListings] = useState<AdvertiseListing[]>([]);
   const [canAdvertiseListings, setCanAdvertiseListings] = useState(false);
@@ -195,6 +227,7 @@ export function LandlordWorkspace({
         if (!data) throw new Error("Sign in to open your private workspace.");
         setWorkspace(data);
       } catch (cause) {
+        if (handlePlanError(cause)) return;
         setError(
           cause instanceof Error
             ? cause.message
@@ -204,7 +237,7 @@ export function LandlordWorkspace({
         setLoading(false);
       }
     },
-    [],
+    [handlePlanError],
   );
   useEffect(() => {
     let cancelled = false;
@@ -251,10 +284,85 @@ export function LandlordWorkspace({
     };
   }, []);
   useEffect(() => {
-    if (session === "allowed") void loadWorkspace(month, propertyFilter);
-  }, [session, month, propertyFilter, loadWorkspace]);
+    if (session === "allowed") void loadAccess();
+  }, [session, loadAccess]);
   useEffect(() => {
-    if (session !== "allowed") return;
+    if (workspaceReady) void loadWorkspace(month, propertyFilter);
+  }, [workspaceReady, month, propertyFilter, loadWorkspace]);
+  const [portal, setPortal] = useState<Portal | null>(null);
+  const loadPortal = useCallback(async () => {
+    try {
+      const data = await umutungoApi<Portal>("/api/v1/owner/portal");
+      if (data) setPortal(data);
+    } catch (cause) {
+      if (handlePlanError(cause)) return;
+      setError(cause instanceof Error ? cause.message : "Could not load tenants and payments.");
+    }
+  }, [handlePlanError]);
+  useEffect(() => {
+    if (workspaceReady) void loadPortal();
+  }, [workspaceReady, loadPortal]);
+  const reloadAll = useCallback(async () => {
+    await Promise.all([loadWorkspace(month, propertyFilter), loadPortal()]);
+  }, [loadWorkspace, loadPortal, month, propertyFilter]);
+  const [tenantQuery, setTenantQuery] = useState("");
+  // Advertise a private property through one of the landlord's published
+  // listings, or stop. Returns an error message, or "" on success.
+  const advertiseProperty = async (propertyId: string, listingId: string, advertise: boolean) => {
+    try {
+      const result = await umutungoApi(`/api/v1/owner/properties/${encodeURIComponent(propertyId)}/advertise`, { method: "POST", body: JSON.stringify({ listing_id: listingId, advertise }) });
+      if (!result) return "Your session expired. Sign in again to continue.";
+      const name = workspace?.properties.find((item) => item.id === propertyId)?.name ?? "This property";
+      setError("");
+      setSuccess(advertise ? `${name} is now advertised: it shows first on the home page and is marked Recommended.` : `${name} is no longer advertised on the home page.`);
+      await loadWorkspace(month, propertyFilter);
+      window.dispatchEvent(new Event("umutungo:landlord-data-changed"));
+      return "";
+    } catch (cause) {
+      if (handlePlanError(cause)) return "Your plan has ended. Choose a plan to keep advertising.";
+      return cause instanceof Error ? cause.message : "Could not update advertising.";
+    }
+  };
+  // Live alerts for the top bar: overdue and due-today rent, urgent open repairs.
+  const workspaceAlerts: WorkspaceAlert[] = [
+    ...(portal?.tenants ?? [])
+      .filter((tenant) => tenant.status === "overdue" || tenant.status === "due_today")
+      .sort((a, b) => b.days_overdue - a.days_overdue)
+      .map((tenant): WorkspaceAlert => ({
+        id: `rent-${tenant.key}`,
+        tone: tenant.status === "overdue" ? "danger" : "warning",
+        title: tenant.status === "overdue" ? `${tenant.name} is ${tenant.days_overdue} day${tenant.days_overdue === 1 ? "" : "s"} overdue` : `${tenant.name}'s rent is due today`,
+        detail: `${tenant.property} · ${tenant.unit} · RWF ${(tenant.status === "overdue" ? tenant.overdue_balance : tenant.balance).toLocaleString("en-US")}`,
+        page: "Tenants",
+      })),
+    ...(workspace?.maintenance ?? [])
+      .filter((repair) => repair.priority === "urgent" && repair.status !== "resolved")
+      .map((repair): WorkspaceAlert => ({ id: `repair-${repair.id}`, tone: "danger", title: "Urgent repair open", detail: repair.description.slice(0, 90), page: "Repair advice" })),
+  ];
+  const openAddTenant = (unitId = "") => {
+    const unit = workspace?.properties.flatMap((property) => property.units).find((item) => item.id === unitId);
+    setChargeForm({ unit_id: unitId, tenant_name: "", tenant_phone: "+250", amount_due: unit ? String(unit.monthly_rent) : "", due_date: todayKigali() });
+    setModal("charge");
+  };
+  const openRecordPayment = (charge?: { id: string; balance: number }) => {
+    // A fresh key per form opening lets the backend ignore double submissions.
+    setPaymentForm({ charge_id: charge?.id ?? "", amount: charge ? String(charge.balance) : "", method: "cash", reference: "", idempotency_key: crypto.randomUUID() });
+    setModal("payment");
+  };
+  const logRepair = async (input: { description: string; priority: "low" | "normal" | "urgent"; unit_id: string }) => {
+    setError("");
+    try {
+      const result = await umutungoApi("/api/v1/owner/workspace?action=maintenance", { method: "POST", body: JSON.stringify(input) });
+      if (!result) throw new Error("Your session expired. Sign in again to continue.");
+      await loadWorkspace(month, propertyFilter);
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not log the repair.");
+      return false;
+    }
+  };
+  useEffect(() => {
+    if (!workspaceReady) return;
     let cancelled = false;
     const loadAdvertising = async () => {
       try {
@@ -286,7 +394,7 @@ export function LandlordWorkspace({
       window.removeEventListener("umutungo:landlord-data-changed", refresh);
       window.removeEventListener("storage", refresh);
     };
-  }, [session]);
+  }, [workspaceReady]);
   const toggleMarketplacePromotion = async (listing: AdvertiseListing) => {
     const featured = !listing.featured;
     setAdvertiseNotice(featured ? `Recommending ${listing.title}…` : `Removing ${listing.title} from recommendations…`);
@@ -351,7 +459,7 @@ export function LandlordWorkspace({
           reference: "",
           idempotency_key: "",
         });
-      await loadWorkspace(month, propertyFilter);
+      await reloadAll();
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -441,126 +549,77 @@ export function LandlordWorkspace({
     );
   if (session === "guest" || session === "denied")
     return (
+      <OwnerSignIn
+        audience={ownerRoute ? "Property Owner" : "Landlord"}
+        denied={session === "denied"}
+        onSignedIn={() => window.location.reload()}
+      />
+    );
+  if (!accessData)
+    return (
       <main className="owner-workspace-access">
-        <section>
-          <span className="owner-eyebrow">UMUTUNGO OWNER WORKSPACE</span>
-          <h1>
-            {session === "denied"
-              ? "This workspace is for property owners"
-              : "Sign in to manage your properties"}
-          </h1>
-          <p>
-            Your private portfolio, rent and repair records are available after
-            the backend confirms your account.
-          </p>
-          <button className="owner-primary" onClick={() => setAuthOpen(true)}>
-            Sign in <Icon name="arrow" size={15} />
-          </button>
-          <Link href="/">Back to marketplace</Link>
-        </section>
-        <AuthModal
-          open={authOpen}
-          role={ownerRoute ? "Property Owner" : "Landlord"}
-          onClose={() => setAuthOpen(false)}
-          onSuccess={() => {
-            setAuthOpen(false);
-            window.location.reload();
-          }}
-        />
+        <p>Checking your plan </p>
       </main>
     );
+  if (planLocked)
+    return (
+      <main className={`${portalStyles.workspace} ${portalStyles.lockShell}`}>
+        <header className={portalStyles.lockTop}>
+          <Link href="/" aria-label="Umutungo home"><Logo darkMode /></Link>
+          <button type="button" className={portalStyles.lockSignOut} onClick={() => void signOut()}>Sign out</button>
+        </header>
+        <div className={portalStyles.lockBody}>
+          <LandlordPlanPage data={accessData} onChanged={loadAccess} locked />
+        </div>
+      </main>
+    );
+  const showPlan = accessData.access.required;
   return (
-    <main className="owner-workspace">
+    <main className={`owner-workspace ${portalStyles.workspace}`}>
       {" "}
-      <aside className="owner-sidebar">
-        <Link href="/" className="owner-brand" aria-label="Umutungo home">
+      <aside className={`owner-sidebar ${portalStyles.sidebar}`}>
+        <Link href="/" className={`owner-brand ${portalStyles.brand}`} aria-label="Umutungo home">
           <Logo darkMode />
         </Link>
-        <div className="owner-sidebar-label">PROPERTY WORKSPACE</div>
         <nav>
-          <button type="button" className={activePage === "Overview" ? "is-active" : ""} onClick={() => setActivePage("Overview")}>
-            <Icon name="home" size={17} />
-            Overview
+          {([
+            ["Home", "home"],
+            ["Properties", "building"],
+            ["Tenants", "users"],
+            ["Payments", "creditCard"],
+            ["Announcements", "bell"],
+            ["Repair advice", "wrench"],
+            ...(showPlan ? [["Plan", "sparkles"] as const] : []),
+            ["Settings", "user"],
+          ] as const).map(([page, icon]) => (
+            <button key={page} type="button" className={activePage === page ? "is-active" : ""} aria-current={activePage === page ? "page" : undefined} onClick={() => setActivePage(page)}>
+              <Icon name={icon} size={17} />
+              {page}
+            </button>
+          ))}
+          <button type="button" className={portalStyles.navSignOut} onClick={() => void signOut()}>
+            <Icon name="arrow" size={17} />
+            Sign out
           </button>
-          <button type="button" className={activePage === "Tenants" ? "is-active" : ""} onClick={() => setActivePage("Tenants")}>
-            <Icon name="creditCard" size={17} />
-            Tenants
-          </button>
-          <button type="button" className={activePage === "Properties" ? "is-active" : ""} onClick={() => setActivePage("Properties")}>
-            <Icon name="building" size={17} />
-            Properties
-          </button>
-          <button type="button" className={activePage === "Advertise property" ? "is-active" : ""} onClick={() => setActivePage("Advertise property")}>
-            <Icon name="sparkles" size={17} />
-            Advertise property
-          </button>
-          <a href="/messages">
-            <Icon name="users" size={17} />
-            Inbox
-          </a>
-          <button type="button" className={activePage === "Maintenance" ? "is-active" : ""} onClick={() => setActivePage("Maintenance")}>
-            <Icon name="wrench" size={17} />
-            Maintenance
-          </button>
-          <button type="button" className={activePage === "Enquiries" ? "is-active" : ""} onClick={() => setActivePage("Enquiries")}>
-            <Icon name="users" size={17} />
-            Enquiries
-          </button>
-          <button type="button" className={activePage === "Reports" ? "is-active" : ""} onClick={() => setActivePage("Reports")}>
-            <Icon name="area" size={17} />
-            Reports
-          </button>
-          <Link href="/upgrade/owner">
-            <Icon name="sparkles" size={17} />
-            Upgrades
-          </Link>
         </nav>
-        <div className="owner-sidebar-bottom">
-          <Link href="/"> Back to marketplace</Link>
-          <span>Private owner account</span>
-        </div>
+        <button type="button" className={portalStyles.signOut} onClick={() => void signOut()}>
+          <Icon name="arrow" size={16} />
+          Sign out
+        </button>
       </aside>{" "}
-      <section className="owner-main">
-        <header className="owner-topbar">
-          <div>
-            <span>Workspace</span>
-            <strong>{activePage}</strong>
-          </div>
-          <div>
-            <span>RWF · Africa/Kigali</span>
-            <span className="owner-avatar">
-              {firstName.slice(0, 1).toUpperCase()}
-            </span>
-          </div>
-        </header>{" "}
+      <section className={`owner-main ${portalStyles.main}`}>
+        <WorkspaceTopbar
+          name={firstName}
+          role={role}
+          alerts={workspaceAlerts}
+          onNavigate={setActivePage}
+          onSearch={(query) => { setTenantQuery(query); setActivePage("Tenants"); }}
+          onSignOut={() => void signOut()}
+          inAppPlan={showPlan}
+        />
         <div className="owner-content" id="overview" data-page={activePage}>
-          <div className="owner-welcome" hidden={activePage !== "Overview"}>
-            <div>
-              <span className="owner-eyebrow">
-                YOUR PROPERTY, CLEARLY MANAGED
-              </span>
-              <h1>
-                {greeting}, {firstName}
-              </h1>
-              <p>
-                {workspace?.summary.overdue_count
-                  ? `${workspace.summary.overdue_count} rent record${workspace.summary.overdue_count === 1 ? "" : "s"} need attention.`
-                  : "Here is your portfolio overview for the selected month."}
-              </p>
-            </div>
-            <div className="owner-actions">
-              <Link className="owner-primary" href="/post-property">
-                Add property
-              </Link>
-              <button
-                className="owner-secondary"
-                onClick={() => setModal("payment")}
-              >
-                {" "}
-                Record payment
-              </button>
-            </div>
-          </div>{" "}
+          {activePage !== "Plan" && <TrialBanner access={accessData.access} onChoose={() => setActivePage("Plan")} />}
+          {activePage === "Plan" && showPlan && <LandlordPlanPage data={accessData} onChanged={loadAccess} />}
           {error && (
             <div className="owner-alert" role="alert">
               {error}
@@ -581,157 +640,6 @@ export function LandlordWorkspace({
           ) : (
             workspace && (
               <>
-                <div className="owner-metrics" hidden={activePage !== "Overview"}>
-                  {[
-                    [
-                      "Rent expected",
-                      workspace.summary.expected,
-                      "Total rent charges due this month.",
-                    ],
-                    [
-                      "Rent collected",
-                      workspace.summary.collected,
-                      "Payments recorded against this month charges.",
-                    ],
-                    [
-                      "Outstanding balance",
-                      workspace.summary.balance,
-                      "Unpaid balance on this month rent charges.",
-                    ],
-                    [
-                      "Units with rent charges",
-                      `${workspace.summary.occupied_units} / ${workspace.summary.total_units}`,
-                      "Units with a rent charge this month, compared with all rentable units.",
-                    ],
-                  ].map(([label, value, hint]) => (
-                    <article key={String(label)} className="owner-metric">
-                      <span>
-                        {label}
-                        <span
-                          className="owner-tip"
-                          title={String(hint)}
-                          aria-label={String(hint)}
-                        >
-                          i
-                        </span>
-                      </span>
-                      <strong>
-                        {typeof value === "number" ? money(value) : value}
-                      </strong>
-                      <small>{hint}</small>
-                    </article>
-                  ))}
-                </div>{" "}
-                <section className="owner-panel owner-attention" hidden={activePage !== "Overview"}>
-                  <div className="owner-panel-heading">
-                    <div>
-                      <span className="owner-eyebrow">PRIORITY QUEUE</span>
-                      <h2>Needs attention</h2>
-                    </div>
-                    <span className="owner-count">
-                      {workspace.summary.overdue_count +
-                        workspace.maintenance.filter(
-                          (x) =>
-                            x.priority === "urgent" && x.status !== "resolved",
-                        ).length}{" "}
-                      items
-                    </span>
-                  </div>
-                  <div className="owner-attention-grid">
-                    {" "}
-                    {workspace.rent
-                      .filter(
-                        (x) =>
-                          x.status.includes("overdue") ||
-                          x.status === "due_today",
-                      )
-                      .slice(0, 5)
-                      .map((item) => (
-                        <div className="owner-attention-item" key={item.id}>
-                          <span
-                            className={`owner-dot ${item.status.includes("overdue") ? "is-red" : "is-amber"}`}
-                          />
-                          <div>
-                            <strong>
-                              {item.status.includes("overdue")
-                                ? "Overdue rent"
-                                : "Due today"}{" "}
-                              {item.tenant_name}
-                            </strong>
-                            <small>
-                              {item.property} {item.unit} {money(item.balance)}
-                            </small>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setPaymentForm({
-                                charge_id: item.id,
-                                amount: String(item.balance),
-                                method: "cash",
-                                reference: "",
-                                idempotency_key: crypto.randomUUID(),
-                              });
-                              setModal("payment");
-                            }}
-                          >
-                            Record
-                          </button>
-                        </div>
-                      ))}{" "}
-                    {workspace.maintenance
-                      .filter(
-                        (x) =>
-                          x.priority === "urgent" && x.status !== "resolved",
-                      )
-                      .slice(0, 3)
-                      .map((item) => (
-                        <div className="owner-attention-item" key={item.id}>
-                          <span className="owner-dot is-red" />
-                          <div>
-                            <strong>Urgent repair</strong>
-                            <small>
-                              {item.property || "Property"} {item.description}
-                            </small>
-                          </div>
-                          <a href="#maintenance">Review</a>
-                        </div>
-                      ))}{" "}
-                    {!workspace.summary.overdue_count &&
-                      !workspace.maintenance.some(
-                        (x) =>
-                          x.priority === "urgent" && x.status !== "resolved",
-                      ) && (
-                        <p className="owner-empty-inline">
-                          You re up to date. New rent and repair items will
-                          appear here.
-                        </p>
-                      )}{" "}
-                  </div>
-                </section>{" "}
-                <section className="owner-panel owner-overview-portfolio" hidden={activePage !== "Overview"}>
-                  <div className="owner-panel-heading">
-                    <div>
-                      <span className="owner-eyebrow">TENANT CONTACTS</span>
-                      <h2>Talk to a tenant</h2>
-                    </div>
-                  </div>
-                  <div className="owner-tenant-contact">
-                    <label htmlFor="owner-tenant-contact-select">Select a tenant</label>
-                    <select id="owner-tenant-contact-select" value={selectedTenantPhone} onChange={(event) => setSelectedTenantPhone(event.target.value)}>
-                      <option value="">Choose a tenant to contact</option>
-                      {Array.from(tenantContacts.values()).map((tenant) => (
-                        <option key={tenant.phone} value={tenant.phone}>{tenant.name}{tenant.context ? ` · ${tenant.context}` : ""}</option>
-                      ))}
-                    </select>
-                    {tenantMessageLink ? (
-                      <a className="owner-primary" href={tenantMessageLink} target="_blank" rel="noreferrer">
-                        <Icon name="whatsapp" size={16} /> Message {selectedTenant?.name}
-                      </a>
-                    ) : (
-                      <p>{tenantContacts.size ? "Choose a tenant with a valid phone number to start a WhatsApp conversation." : "Tenant contacts appear here when a rent charge or application includes their phone number."}</p>
-                    )}
-                  </div>
-                </section>{" "}
                 <section className="owner-panel owner-report-panel" hidden={activePage !== "Reports"}>
                   <div className="owner-panel-heading">
                     <div><span className="owner-eyebrow">PROPERTY PERFORMANCE</span><h2>Portfolio report</h2></div>
@@ -754,249 +662,6 @@ export function LandlordWorkspace({
                     audience="Owner"
                     upgradeHref="/upgrade/owner"
                   />
-                </div>
-                <div className="owner-section-grid" hidden={activePage !== "Tenants" && activePage !== "Properties"}>
-                  <section className="owner-panel owner-rent-panel" id="rent" hidden={activePage !== "Tenants"}>
-                    <div className="owner-panel-heading">
-                      <div>
-                        <span className="owner-eyebrow">TENANT MANAGEMENT</span>
-                        <h2>Tenants</h2>
-                      </div>
-                      <button
-                        className="owner-link-button"
-                        onClick={() => setModal("charge")}
-                      >
-                        {" "}
-                        Add rent charge
-                      </button>
-                    </div>
-                    {workspace.rent.length ? (
-                      <div className="owner-table-wrap">
-                        <table className="owner-table">
-                          <thead>
-                            <tr>
-                              <th>Tenant / unit</th>
-                              <th>Due</th>
-                              <th>Paid</th>
-                              <th>Balance</th>
-                              <th>Due date</th>
-                              <th>Status</th>
-                              <th />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {workspace.rent.map((item) => (
-                              <tr key={item.id}>
-                                <td>
-                                  <strong>{item.tenant_name}</strong>
-                                  <small>
-                                    {item.property} {item.unit}
-                                  </small>
-                                </td>
-                                <td>{money(item.amount_due)}</td>
-                                <td>{money(item.amount_paid)}</td>
-                                <td>{money(item.balance)}</td>
-                                <td>{fmtDate(item.due_date)}</td>
-                                <td>
-                                  <span
-                                    className={`owner-status status-${item.status.includes("overdue") ? "overdue" : item.status.replace("partial_", "")}`}
-                                  >
-                                    {item.status.replace("_", " ")}
-                                  </span>
-                                </td>
-                                <td>
-                                  {item.balance > 0 && (
-                                    <button
-                                      aria-label={`Record payment from ${item.tenant_name}`}
-                                      className="owner-row-action"
-                                      onClick={() => {
-                                        setPaymentForm({
-                                          charge_id: item.id,
-                                          amount: String(item.balance),
-                                          method: "cash",
-                                          reference: "",
-                                          idempotency_key: crypto.randomUUID(),
-                                        });
-                                        setModal("payment");
-                                      }}
-                                    >
-                                      Record
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="owner-empty">
-                        <strong>No rent charges for {month}</strong>
-                        <span>
-                          Add a tenant s charge to begin tracking balances.
-                          Nothing is counted as income until a payment is
-                          recorded.
-                        </span>
-                        <button onClick={() => setModal("charge")}>
-                          Add rent charge
-                        </button>
-                      </div>
-                    )}
-                  </section>{" "}
-                  <section
-                    className="owner-panel owner-portfolio"
-                    id="properties"
-                    hidden={activePage !== "Properties"}
-                  >
-                    <div className="owner-panel-heading">
-                      <div>
-                        <span className="owner-eyebrow">PRIVATE PORTFOLIO</span>
-                        <h2>Properties & units</h2>
-                      </div>
-                      <button
-                        className="owner-link-button"
-                        onClick={() => setModal("property")}
-                      >
-                        {" "}
-                        Add
-                      </button>
-                    </div>
-                    {workspace.properties.length ? (
-                      workspace.properties.map((property) => (
-                        <article
-                          className="owner-property-card"
-                          key={property.id}
-                        >
-                          <div className="owner-property-monogram">
-                            {property.name.slice(0, 1).toUpperCase()}
-                          </div>
-                          <div>
-                            <strong>{property.name}</strong>
-                            <small>
-                              {property.sector}, {property.district}
-                            </small>
-                            <span>
-                              {property.occupied_units} of {property.unit_count}{" "}
-                              units with rent records
-                            </span>
-                            <button
-                              className="owner-link-button"
-                              onClick={() => {
-                                setUnitForm({ property_id: property.id, name: "", monthly_rent: "" });
-                                setModal("unit");
-                              }}
-                            >
-                              Add unit
-                            </button>
-                          </div>
-                          <span className="owner-property-count">
-                            {property.unit_count} units
-                          </span>
-                        </article>
-                      ))
-                    ) : (
-                      <div className="owner-empty">
-                        <strong>Your portfolio starts here</strong>
-                        <span>
-                          Add a property and units for private management. This
-                          does not publish a marketplace listing.
-                        </span>
-                        <button onClick={() => setModal("property")}>
-                          Add first property
-                        </button>
-                      </div>
-                    )}
-                  </section>
-                </div>{" "}
-                <div className="owner-section-grid owner-lower-grid" hidden={activePage !== "Overview" && activePage !== "Maintenance"}>
-                  <section className="owner-panel" id="maintenance" hidden={activePage !== "Maintenance"}>
-                    <div className="owner-panel-heading">
-                      <div>
-                        <span className="owner-eyebrow">PROPERTY CARE</span>
-                        <h2>Maintenance</h2>
-                      </div>
-                      <button
-                        className="owner-link-button"
-                        onClick={() => setModal("maintenance")}
-                      >
-                        {" "}
-                        New request
-                      </button>
-                    </div>
-                    {workspace.maintenance.length ? (
-                      workspace.maintenance.map((item) => (
-                        <article className="owner-repair-row" key={item.id}>
-                          <span
-                            className={`owner-priority priority-${item.priority}`}
-                          >
-                            {item.priority}
-                          </span>
-                          <div>
-                            <strong>{item.description}</strong>
-                            <small>
-                              {item.property} {item.unit && `  ${item.unit}`}
-                            </small>
-                          </div>
-                          <select
-                            className="owner-repair-status"
-                            aria-label="Repair status"
-                            value={item.status}
-                            onChange={(event) =>
-                              void updateRepair(item.id, event.target.value)
-                            }
-                          >
-                            <option value="submitted">Submitted</option>
-                            <option value="in_progress">In progress</option>
-                            <option value="resolved">Resolved</option>
-                          </select>
-                        </article>
-                      ))
-                    ) : (
-                      <div className="owner-empty">
-                        <strong>No repair requests</strong>
-                        <span>
-                          Requests you add will stay visible with their priority
-                          and progress.
-                        </span>
-                        <button onClick={() => setModal("maintenance")}>
-                          Create request
-                        </button>
-                      </div>
-                    )}
-                  </section>{" "}
-                  <section className="owner-panel" id="portfolio" hidden={activePage !== "Overview"}>
-                    <div className="owner-panel-heading">
-                      <div>
-                        <span className="owner-eyebrow">ACCOUNT</span>
-                        <h2>Workspace setup</h2>
-                      </div>
-                    </div>
-                    <div className="owner-setup-row">
-                      <span className="owner-setup-check"> </span>
-                      <div>
-                        <strong>Owner workspace is ready</strong>
-                        <small>
-                          Property management can be private and does not create
-                          a public listing.
-                        </small>
-                      </div>
-                    </div>
-                    {!ownerRoute && <div className="owner-setup-row">
-                      <span className="owner-setup-pending"> </span>
-                      <div>
-                        <strong>Subscription billing</strong>
-                        <small>
-                          {workspace.billing.configured
-                            ? "Configured"
-                            : "Not configured"}{" "}
-                          no subscription charge will be made here.
-                        </small>
-                      </div>
-                    </div>}
-                    <Link className="owner-muted-link" href="/upgrade/owner">
-                      View existing one-time listing upgrades <span> </span>
-                    </Link>
-                  </section>
                 </div>
                 <section className="owner-panel owner-enquiries" id="enquiries" hidden={activePage !== "Enquiries"}>
                   <div className="owner-panel-heading">
@@ -1061,11 +726,30 @@ export function LandlordWorkspace({
                     </div>
                   )}
                 </section>
-                <p className="owner-footnote">
-                  Payments shown here are records entered by you. Record payment
-                  does not collect money through MTN MoMo, Airtel Money or a
-                  bank.
-                </p>{" "}
+                {PORTAL_PAGES.includes(activePage) && (
+                  <LandlordPortalPage
+                    page={activePage}
+                    portal={portal}
+                    properties={workspace.properties}
+                    repairs={workspace.maintenance}
+                    onReload={reloadAll}
+                    onAddProperty={() => setModal("property")}
+                    onAddUnit={(propertyId) => {
+                      setUnitForm({ property_id: propertyId, name: "", monthly_rent: "" });
+                      setModal("unit");
+                    }}
+                    onAddTenant={openAddTenant}
+                    onRecordPayment={openRecordPayment}
+                    onLogRepair={logRepair}
+                    onUpdateRepair={(id, status) => void updateRepair(id, status)}
+                    onNavigate={setActivePage}
+                    tenantQuery={tenantQuery}
+                    greeting={`${greeting}, ${firstName}`}
+                    summary={workspace.summary}
+                    listings={marketplaceListings}
+                    onAdvertise={advertiseProperty}
+                  />
+                )}{" "}
               </>
             )
           )}{" "}
@@ -1090,7 +774,7 @@ export function LandlordWorkspace({
               onClick={() => setModal("")}
               aria-label="Close"
             >
-              {" "}
+              <span aria-hidden="true">×</span>
             </button>
             <span className="owner-eyebrow">OWNER WORKSPACE</span>
             <h2 id="owner-modal-title">
@@ -1099,7 +783,7 @@ export function LandlordWorkspace({
                 : modal === "unit"
                   ? "Add a unit"
                 : modal === "charge"
-                  ? "Add a rent charge"
+                  ? "Add a tenant"
                   : modal === "payment"
                     ? "Record a payment"
                     : "Create a maintenance request"}
@@ -1309,7 +993,7 @@ export function LandlordWorkspace({
                     />
                   </label>
                   <label>
-                    Amount due (RWF)
+                    Monthly rent (RWF)
                     <input
                       required
                       type="number"
@@ -1325,7 +1009,7 @@ export function LandlordWorkspace({
                     />
                   </label>
                   <label>
-                    Due date
+                    Rent due date
                     <input
                       required
                       type="date"
@@ -1340,7 +1024,33 @@ export function LandlordWorkspace({
                   </label>
                 </>
               )}{" "}
-              {modal === "payment" && (
+              {modal === "payment" && !(portal?.open_charges.length) && (
+                // Payments are recorded against a tenant's unpaid rent. With
+                // none yet, point to the next setup step instead.
+                <div className="owner-empty">
+                  <strong>No unpaid rent to record against yet</strong>
+                  <span>
+                    {!workspace?.properties.length
+                      ? "A payment is recorded against a tenant's rent. Start by adding your property, then a unit and its tenant."
+                      : !workspace.properties.some((property) => property.units.length)
+                        ? "A payment is recorded against a tenant's rent. Add a unit to your property, then add its tenant with their rent and due date."
+                        : "A payment is recorded against a tenant's rent. Add a tenant with their rent and first due date, then record what they pay here."}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!workspace?.properties.length) setModal("property");
+                      else if (!workspace.properties.some((property) => property.units.length)) {
+                        setUnitForm({ property_id: workspace.properties[0].id, name: "", monthly_rent: "" });
+                        setModal("unit");
+                      } else openAddTenant();
+                    }}
+                  >
+                    {!workspace?.properties.length ? "Add a property" : !workspace.properties.some((property) => property.units.length) ? "Add a unit" : "Add a tenant"}
+                  </button>
+                </div>
+              )}
+              {modal === "payment" && Boolean(portal?.open_charges.length) && (
                 <>
                   <label>
                     Rent charge
@@ -1355,14 +1065,11 @@ export function LandlordWorkspace({
                       }
                     >
                       <option value="">Choose an unpaid charge</option>
-                      {workspace?.rent
-                        .filter((x) => x.balance > 0)
-                        .map((x) => (
-                          <option key={x.id} value={x.id}>
-                            {x.tenant_name} {x.unit} {money(x.balance)}{" "}
-                            remaining
-                          </option>
-                        ))}
+                      {(portal?.open_charges ?? []).map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.tenant_name} · {x.unit} · due {fmtDate(x.due_date)} · {money(x.balance)} remaining
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label>
@@ -1480,13 +1187,13 @@ export function LandlordWorkspace({
                   {error}
                 </p>
               )}
-              <button
+              {!(modal === "payment" && !portal?.open_charges.length) && <button
                 className="owner-primary owner-submit"
                 type="submit"
                 disabled={saving}
               >
                 {saving ? "Saving   " : "Save"}
-              </button>{" "}
+              </button>}{" "}
             </form>
           </section>
         </div>

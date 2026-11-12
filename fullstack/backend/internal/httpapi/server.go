@@ -13,7 +13,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"net/mail"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -29,6 +28,8 @@ import (
 type Server struct {
 	db  *pgxpool.Pool
 	cfg config.Config
+	// otpDeliver replaces real SMS/email delivery in tests. nil = real delivery.
+	otpDeliver func(channel, destination, code string)
 }
 
 type CurrentUser struct {
@@ -40,6 +41,8 @@ type CurrentUser struct {
 	Status               string `json:"status"`
 	WorkspaceKind        string `json:"workspace_kind,omitempty"`
 	PropertyOwnerEnabled bool   `json:"property_owner_enabled"`
+	EmailVerified        bool   `json:"email_verified"`
+	PhoneVerified        bool   `json:"phone_verified"`
 }
 
 type profileResponse struct {
@@ -60,8 +63,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/health", s.health)
 	mux.HandleFunc("/readyz", s.ready)
 	mux.HandleFunc("/api/v1/auth/register", s.register)
-	mux.HandleFunc("/api/v1/auth/dev-admin", s.devAdminLogin)
-	mux.HandleFunc("/api/v1/auth/dev-login", s.devLogin)
+	// Test-account logins exist only on a development server. In production
+	// the routes are not registered at all (they fall through to the 404 root),
+	// and the handlers check again in case they are ever wired up elsewhere.
+	if s.testLoginsEnabled() {
+		mux.HandleFunc("/api/v1/auth/dev-admin", s.devAdminLogin)
+		mux.HandleFunc("/api/v1/auth/dev-login", s.devLogin)
+	}
 	mux.HandleFunc("/api/v1/auth/request-otp", s.requestOTP)
 	mux.HandleFunc("/api/v1/auth/verify-otp", s.verifyOTP)
 	mux.HandleFunc("/api/v1/auth/google", s.googleAuth)
@@ -69,6 +77,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/me", s.me)
 	mux.HandleFunc("/api/v1/me/property-owner-access", s.activatePropertyOwnerAccess)
 	mux.HandleFunc("/api/v1/me/phone", s.mePhone)
+	mux.HandleFunc("/api/v1/verification/send", s.verificationSend)
+	mux.HandleFunc("/api/v1/verification/resend", s.verificationSend)
+	mux.HandleFunc("/api/v1/verification/verify", s.verificationVerify)
 	mux.HandleFunc("/api/v1/directory", s.directory)
 	mux.HandleFunc("/api/v1/listings", s.listings)
 	mux.HandleFunc("/api/v1/listings/", s.listingRoute)
@@ -78,6 +89,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/owner/listing-upload-purchases", s.createUploadSlotPurchase)
 	mux.HandleFunc("/api/v1/listing-fee", s.listingFeeQuote)
 	mux.HandleFunc("/api/v1/admin/marketplace-pricing", s.adminMarketplacePricing)
+	mux.HandleFunc("/api/v1/plans", s.publicPlans)
+	mux.HandleFunc("/api/v1/business/entitlements", s.businessEntitlements)
+	mux.HandleFunc("/api/v1/business/subscriptions", s.businessSubscriptions)
+	mux.HandleFunc("/api/v1/business/subscriptions/", s.businessSubscriptionItem)
+	mux.HandleFunc("/api/v1/business/subscription-payments/verify", s.verifyBusinessSubscriptionPayment)
+	mux.HandleFunc("/api/v1/admin/business-plans", s.adminBusinessPlans)
 	mux.HandleFunc("/uploads/", s.mediaFile)
 	mux.HandleFunc("/api/v1/applications", s.applications)
 	mux.HandleFunc("/api/v1/applications/", s.applicationRoute)
@@ -105,6 +122,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/owner/listings", s.ownerListings)
 	mux.HandleFunc("/api/v1/owner/workspace", s.ownerWorkspace)
 	mux.HandleFunc("/api/v1/owner/workspace/", s.ownerWorkspaceItem)
+	mux.HandleFunc("/api/v1/owner/properties/", s.ownerPropertyAdvertise)
+	mux.HandleFunc("/api/v1/owner/portal", s.ownerPortal)
+	mux.HandleFunc("/api/v1/owner/access", s.ownerAccess)
 	mux.HandleFunc("/api/v1/subscription", s.subscriptionLevel)
 	mux.HandleFunc("/api/v1/tenant/dashboard", s.tenantDashboard)
 	mux.HandleFunc("/api/v1/maintenance", s.maintenance)
@@ -181,77 +201,87 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 			input.WorkspaceKind = "property_owner"
 		}
 	}
-	phone, err := normalizeRwandaPhone(input.Phone)
+	phone, err := normalizePhone(input.Phone)
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if s.cfg.AppEnv != "development" && !smsProviderConfigured(s.cfg) {
-		errorJSON(w, http.StatusServiceUnavailable, "SMS verification is not configured. Set MTN SMS or Twilio credentials.")
+	email := ""
+	if strings.TrimSpace(input.Email) != "" {
+		if email, err = normalizeEmail(input.Email); err != nil {
+			errorJSON(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	if err := s.otpReady(purposeLogin); err != nil {
+		writeOTPError(w, err)
 		return
 	}
-	input.Phone = phone
+	name := strings.TrimSpace(input.Name)
+	businessRole := input.Role == "komisiyoneri" || input.Role == "property_owner"
 
-	var user CurrentUser
-	err = s.db.QueryRow(r.Context(), `
-		INSERT INTO users(name, email, phone, role, workspace_kind) VALUES($1, NULLIF($2, ''), $3, $4, $5)
-		RETURNING id, name, COALESCE(email, ''), phone, role, status, workspace_kind`,
-		strings.TrimSpace(input.Name), strings.TrimSpace(input.Email), strings.TrimSpace(input.Phone), input.Role, input.WorkspaceKind).
-		Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind)
+	// The account is created (or found) now; the person proves they own the
+	// number by entering the SMS code at /auth/verify-otp, which signs them in.
+	tx, err := s.db.Begin(r.Context())
 	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
-			errorJSON(w, http.StatusConflict, "a user with this phone already exists")
-			return
-		}
-		errorJSON(w, http.StatusInternalServerError, "could not create user")
+		errorJSON(w, http.StatusInternalServerError, "could not create account")
 		return
 	}
-	_, _ = s.db.Exec(r.Context(), `INSERT INTO profiles(user_id) VALUES($1)`, user.ID)
-	if input.Role == "komisiyoneri" || input.Role == "property_owner" {
-		_, _ = s.db.Exec(r.Context(), `INSERT INTO business_profiles(user_id) VALUES($1)`, user.ID)
-	}
-	code := "111111"
-	if s.cfg.AppEnv != "development" {
-		code, err = randomDigits(6)
-		if err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not create verification code")
-			return
+	defer tx.Rollback(r.Context())
+	var userID, status string
+	var phoneVerified bool
+	err = tx.QueryRow(r.Context(), `SELECT id, status, phone_verified_at IS NOT NULL FROM users WHERE phone=$1 FOR UPDATE`, phone).Scan(&userID, &status, &phoneVerified)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		status = "active"
+		err = tx.QueryRow(r.Context(), `
+			INSERT INTO users(name, email, phone, role, workspace_kind) VALUES($1, NULLIF($2, ''), $3, $4, $5) RETURNING id`,
+			name, email, phone, input.Role, input.WorkspaceKind).Scan(&userID)
+		if err == nil {
+			_, err = tx.Exec(r.Context(), `INSERT INTO profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, userID)
 		}
+	case err != nil:
+	case !phoneVerified:
+		// Someone signed up with this number earlier but never entered the code,
+		// so nobody has proven they own it. Whoever proves it now sets the details.
+		_, err = tx.Exec(r.Context(), `
+			UPDATE users SET name=$2, email=NULLIF($3, ''), email_verified_at=NULL, role=$4, workspace_kind=$5, updated_at=NOW()
+			WHERE id=$1`, userID, name, email, input.Role, input.WorkspaceKind)
+	default:
+		// The number already belongs to a verified account. Change nothing and
+		// don't say so: the owner simply receives a sign-in code.
+		businessRole = false
 	}
-	otpID, err := s.issueOTP(r.Context(), input.Phone, code)
+	if err == nil && businessRole {
+		_, err = tx.Exec(r.Context(), `INSERT INTO business_profiles(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, userID)
+	}
+	if err == nil {
+		err = tx.Commit(r.Context())
+	}
 	if err != nil {
-		if errors.Is(err, errOTPResendLimited) {
-			errorJSON(w, http.StatusTooManyRequests, "request another verification code after the resend limit resets")
-			return
-		}
-		errorJSON(w, http.StatusInternalServerError, "could not create OTP challenge")
+		log.Printf("register: %v", err)
+		errorJSON(w, http.StatusInternalServerError, "could not create account")
 		return
 	}
-	smsConfigured := smsProviderConfigured(s.cfg)
-	if s.cfg.AppEnv != "development" || smsConfigured {
-		if err := sendVerificationSMS(r.Context(), s.cfg, input.Phone, code); err != nil {
-			log.Printf("registration verification message delivery failed")
-			s.invalidateOTP(r.Context(), otpID)
-			errorJSON(w, http.StatusBadGateway, "could not deliver the verification code; try again later")
-			return
-		}
+
+	req := otpSendRequest{Purpose: purposeLogin, Destination: phone, IP: clientIP(r, s.cfg.TrustedProxyHops)}
+	if status == "active" {
+		req.UserID = userID
 	}
-	message := "Registration created; verification code sent by SMS."
-	if s.cfg.AppEnv == "development" && !smsConfigured {
-		message = "Registration created; use the development verification code."
+	if err := s.sendOTP(r.Context(), req); err != nil {
+		writeOTPError(w, err)
+		return
 	}
-	response := map[string]any{"user": user, "message": message}
-	if s.cfg.AppEnv == "development" && !smsConfigured {
-		response["development_code"] = code
-	}
-	writeJSON(w, http.StatusCreated, response)
+	writeJSON(w, http.StatusOK, otpCodeSentResponse())
 }
 
-// devAdminLogin provides a real API session for the documented local Admin
-// test account. It is unavailable outside development and cannot promote an
-// existing non-admin account.
+// devAdminLogin provides a real API session for the local Admin test account.
+// It exists only on a development server (see testLoginsEnabled) and cannot
+// promote an existing non-admin account. There is no password: on a development
+// server the test accounts are picked by email, and in production the route
+// does not exist. Any "password" a client sends is ignored.
 func (s *Server) devAdminLogin(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.AppEnv != "development" {
+	if !s.testLoginsEnabled() {
 		errorJSON(w, http.StatusNotFound, "route not found")
 		return
 	}
@@ -260,11 +290,10 @@ func (s *Server) devAdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email string `json:"email"`
 	}
-	if !decodeJSON(w, r, &input) || !strings.EqualFold(strings.TrimSpace(input.Email), "admin@umutungo.test") || input.Password != "Admin123!" {
-		errorJSON(w, http.StatusUnauthorized, "invalid development Admin credentials")
+	if !decodeJSON(w, r, &input) || !strings.EqualFold(strings.TrimSpace(input.Email), "admin@umutungo.test") {
+		errorJSON(w, http.StatusUnauthorized, "unknown development Admin account")
 		return
 	}
 	var user CurrentUser
@@ -301,9 +330,11 @@ func (s *Server) devAdminLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // devLogin creates real database sessions for the documented demo accounts.
-// It is available only in development and must never be exposed by production.
+// It is available only on a development server and is never registered in
+// production. Accounts are picked by email; there are no passwords to leak
+// into client code. Any "password" a client sends is ignored.
 func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.AppEnv != "development" {
+	if !s.testLoginsEnabled() {
 		errorJSON(w, http.StatusNotFound, "route not found")
 		return
 	}
@@ -313,24 +344,23 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	var input struct {
 		Email    string                   `json:"email"`
-		Password string                   `json:"password"`
 		Listings []developmentListingSeed `json:"listings"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	demoAccounts := map[string]struct{ password, name, role string }{
-		"tenant@umutungo.test":       {"Tenant123!", "Umutungo Development Tenant", "tenant"},
-		"client@umutungo.test":       {"Client123!", "Umutungo Development Client", "client"},
-		"commissioner@umutungo.test": {"Commissioner123!", "Umutungo Development Komisiyoneri", "komisiyoneri"},
-		"landlord@umutungo.test":     {"Landlord123!", "Umutungo Development Landlord", "property_owner"},
-		"owner@umutungo.test":        {"Owner123!", "Umutungo Development Property Owner", "property_owner"},
-		"admin@umutungo.test":        {"Admin123!", "Umutungo Development Admin", "admin"},
+	demoAccounts := map[string]struct{ name, role string }{
+		"tenant@umutungo.test":       {"Umutungo Development Tenant", "tenant"},
+		"client@umutungo.test":       {"Umutungo Development Client", "client"},
+		"commissioner@umutungo.test": {"Umutungo Development Komisiyoneri", "komisiyoneri"},
+		"landlord@umutungo.test":     {"Umutungo Development Landlord", "property_owner"},
+		"owner@umutungo.test":        {"Umutungo Development Property Owner", "property_owner"},
+		"admin@umutungo.test":        {"Umutungo Development Admin", "admin"},
 	}
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	account, ok := demoAccounts[email]
-	if !ok || input.Password != account.password {
-		errorJSON(w, http.StatusUnauthorized, "invalid development credentials")
+	if !ok {
+		errorJSON(w, http.StatusUnauthorized, "unknown development account")
 		return
 	}
 	var user CurrentUser
@@ -380,6 +410,22 @@ func (s *Server) devLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": user, "access_token": token})
+}
+
+// testLoginsEnabled reports whether the test-account login routes may work.
+// Both conditions are required: the server must be positively identified as
+// development (config.Load maps a missing or unknown APP_ENV to production) and
+// TEST_LOGIN_ENABLED must not have switched them off. No flag can turn them on
+// in production.
+func (s *Server) testLoginsEnabled() bool {
+	return s.cfg.AppEnv == config.EnvDevelopment && s.cfg.TestLoginEnabled
+}
+
+// demoPaymentsEnabled reports whether no-charge demo checkouts may activate
+// plans or listings. config.Load already forces this off in production; the
+// extra AppEnv check keeps it off even if a Config is built by hand.
+func (s *Server) demoPaymentsEnabled() bool {
+	return s.cfg.DemoPaymentsEnabled && s.cfg.AppEnv != config.EnvProduction
 }
 
 type developmentListingSeed struct {
@@ -523,134 +569,6 @@ func (s *Server) seedDevelopmentListings(r *http.Request, ownerID string, fixtur
 		return 0, err
 	}
 	return len(seededListings), nil
-}
-
-func (s *Server) requestOTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var input struct {
-		Phone string `json:"phone"`
-	}
-	if !decodeJSON(w, r, &input) || strings.TrimSpace(input.Phone) == "" {
-		errorJSON(w, http.StatusBadRequest, "phone is required")
-		return
-	}
-	phone, err := normalizeRwandaPhone(input.Phone)
-	if err != nil {
-		errorJSON(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if s.cfg.AppEnv != "development" && !smsProviderConfigured(s.cfg) {
-		errorJSON(w, http.StatusServiceUnavailable, "SMS verification is not configured. Set MTN SMS or Twilio credentials.")
-		return
-	}
-	var code string
-	if s.cfg.AppEnv == "development" {
-		code = "111111"
-	} else {
-		code, err = randomDigits(6)
-		if err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not create verification code")
-			return
-		}
-	}
-	otpID, err := s.issueOTP(r.Context(), phone, code)
-	if err != nil {
-		if errors.Is(err, errOTPResendLimited) {
-			errorJSON(w, http.StatusTooManyRequests, "request another verification code after the resend limit resets")
-			return
-		}
-		errorJSON(w, http.StatusInternalServerError, "could not create OTP challenge")
-		return
-	}
-	smsConfigured := smsProviderConfigured(s.cfg)
-	if s.cfg.AppEnv != "development" || smsConfigured {
-		if err := sendVerificationSMS(r.Context(), s.cfg, phone, code); err != nil {
-			log.Printf("verification message delivery failed")
-			s.invalidateOTP(r.Context(), otpID)
-			errorJSON(w, http.StatusBadGateway, "could not deliver the verification code; try again later")
-			return
-		}
-	}
-	message := "Verification code sent by SMS."
-	if s.cfg.AppEnv == "development" && !smsConfigured {
-		message = "Use the development verification code."
-	}
-	response := map[string]any{"message": message}
-	if s.cfg.AppEnv == "development" && !smsConfigured {
-		response["development_code"] = code
-	}
-	writeJSON(w, http.StatusOK, response)
-}
-
-func (s *Server) verifyOTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		errorJSON(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var input struct {
-		Phone string `json:"phone"`
-		Code  string `json:"code"`
-	}
-	if !decodeJSON(w, r, &input) || input.Phone == "" || input.Code == "" {
-		errorJSON(w, http.StatusBadRequest, "phone and code are required")
-		return
-	}
-	phone, phoneErr := normalizeRwandaPhone(input.Phone)
-	if phoneErr != nil {
-		errorJSON(w, http.StatusBadRequest, phoneErr.Error())
-		return
-	}
-	tx, err := s.db.Begin(r.Context())
-	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var challengeID, codeHash, userID string
-	var attempts int
-	err = tx.QueryRow(r.Context(), `
-		SELECT c.id, c.code_hash, u.id, c.attempts
-		FROM otp_challenges c JOIN users u ON u.phone = c.phone
-		WHERE c.phone=$1 AND c.used_at IS NULL AND c.expires_at > NOW() AND c.attempts < $2 AND u.status='active'
-		ORDER BY c.created_at DESC LIMIT 1 FOR UPDATE OF c`, phone, otpAttemptLimit).Scan(&challengeID, &codeHash, &userID, &attempts)
-	if err != nil {
-		errorJSON(w, http.StatusUnauthorized, "invalid or expired OTP")
-		return
-	}
-	if hash(input.Code) != codeHash {
-		_, updateErr := tx.Exec(r.Context(), `UPDATE otp_challenges SET attempts=attempts+1,used_at=CASE WHEN attempts+1>=$2 THEN NOW() ELSE used_at END WHERE id=$1`, challengeID, otpAttemptLimit)
-		if updateErr == nil {
-			updateErr = tx.Commit(r.Context())
-		}
-		if updateErr != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
-			return
-		}
-		errorJSON(w, http.StatusUnauthorized, "invalid or expired OTP")
-		return
-	}
-	if _, err := tx.Exec(r.Context(), `UPDATE otp_challenges SET used_at=NOW() WHERE id=$1 AND used_at IS NULL`, challengeID); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
-		return
-	}
-	if _, err := tx.Exec(r.Context(), `UPDATE users SET verified_at=COALESCE(verified_at,NOW()),phone_verified_at=NOW() WHERE id=$1`, userID); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not verify account")
-		return
-	}
-	if err := tx.Commit(r.Context()); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not verify OTP")
-		return
-	}
-	token, err := s.createSession(r, userID)
-	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not create session")
-		return
-	}
-	user, _ := s.userByID(r, userID)
-	writeJSON(w, http.StatusOK, map[string]any{"user": user, "access_token": token})
 }
 
 func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
@@ -818,6 +736,15 @@ func (s *Server) googleAuth(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "this account is not active")
 		return
 	}
+	// Google only signs people in with an address it has verified (checked
+	// above), so this sign-in proves they own the email.
+	if _, err := s.db.Exec(r.Context(), `UPDATE users SET email_verified_at=COALESCE(email_verified_at,NOW()) WHERE id=$1 AND LOWER(email)=LOWER($2)`, user.ID, googleProfile.Email); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not update account")
+		return
+	}
+	if refreshed, ok := s.userByID(r, user.ID); ok {
+		user = refreshed
+	}
 	token, err := s.createSession(r, user.ID)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not create session")
@@ -976,16 +903,24 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		input.Name = &value
 	}
+	// The email address cannot be changed here. A new address only replaces the
+	// current one after the person enters the code sent to it
+	// (POST /api/v1/verification/send then /verify, purpose "verify_email"),
+	// which also sets email_verified_at. Changing it here would keep the old
+	// address's verified status. Sending the current address back unchanged is
+	// allowed, because profile forms send every field.
+	emailUnchanged := false
 	if input.Email != nil {
 		value := strings.TrimSpace(strings.ToLower(*input.Email))
-		if value != "" {
-			parsed, err := mail.ParseAddress(value)
-			if err != nil || parsed.Address != value || len(value) > 254 {
-				errorJSON(w, http.StatusBadRequest, "email is invalid")
-				return
-			}
+		if value != strings.ToLower(strings.TrimSpace(user.Email)) {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error": "To change your email address, verify the new address with the code we send to it.",
+				"code":  "email_verification_required",
+			})
+			return
 		}
-		input.Email = &value
+		input.Email = nil
+		emailUnchanged = true
 	}
 	if input.Bio != nil {
 		value := strings.TrimSpace(*input.Bio)
@@ -1031,7 +966,7 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		input.ListingPriceBand = &value
 	}
-	if input.Name == nil && input.Email == nil && input.Bio == nil && input.PhotoURL == nil && input.Language == nil && input.ListingPriceBand == nil {
+	if input.Name == nil && !emailUnchanged && input.Bio == nil && input.PhotoURL == nil && input.Language == nil && input.ListingPriceBand == nil {
 		errorJSON(w, http.StatusBadRequest, "at least one profile field is required")
 		return
 	}
@@ -1045,14 +980,9 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 	_, err = tx.Exec(r.Context(), `
 		UPDATE users SET
 		name=CASE WHEN $1::text IS NULL THEN name ELSE $1 END,
-		email=CASE WHEN $2::text IS NULL THEN email ELSE NULLIF($2,'') END,
 		updated_at=NOW()
-		WHERE id=$3`, input.Name, input.Email, user.ID)
+		WHERE id=$2`, input.Name, user.ID)
 	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "unique") {
-			errorJSON(w, http.StatusConflict, "that email is already in use")
-			return
-		}
 		errorJSON(w, http.StatusInternalServerError, "could not update account")
 		return
 	}
@@ -1249,7 +1179,7 @@ func (s *Server) listListing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) publishDueListings(ctx context.Context) error {
-	_, err := s.db.Exec(ctx, `UPDATE listings l SET status='published', updated_at=NOW() WHERE l.status='scheduled' AND l.publish_at IS NOT NULL AND l.publish_at <= NOW() AND l.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM listing_subscriptions ls WHERE ls.listing_id=l.id AND ls.status='active') OR EXISTS(SELECT 1 FROM listing_upload_slots s WHERE s.listing_id=l.id AND s.status='consumed'))`)
+	_, err := s.db.Exec(ctx, `UPDATE listings l SET status='published', updated_at=NOW() WHERE l.status='scheduled' AND l.publish_at IS NOT NULL AND l.publish_at <= NOW() AND l.deleted_at IS NULL AND (l.entitlement_source='plan' OR EXISTS(SELECT 1 FROM listing_subscriptions ls WHERE ls.listing_id=l.id AND ls.status='active') OR EXISTS(SELECT 1 FROM listing_upload_slots s WHERE s.listing_id=l.id AND s.status='consumed'))`)
 	return err
 }
 
@@ -1342,7 +1272,7 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 	input.PriceRange = listingPriceBandForAmount(input.Price)
 	monthlyFee := 0.0
 	if postingRole(user) != "komisiyoneri" {
-		_, configuredFee, feeErr := s.configuredListingFee(r.Context(), user, input.Price)
+		_, configuredFee, feeErr := s.configuredListingFee(r.Context(), user, input.Price, input.Category, input.TransactionType)
 		if feeErr == nil {
 			monthlyFee = configuredFee
 		}
@@ -1476,6 +1406,29 @@ func (s *Server) listingRoute(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// canFeatureListing reports whether user may recommend listingID on the home
+// page: an active Silver, Gold or Platinum plan (a landlord trial counts), or a
+// Diamond promotion bought for that listing.
+func (s *Server) canFeatureListing(ctx context.Context, user CurrentUser, listingID string) (bool, error) {
+	if user.Role == "admin" {
+		return true, nil
+	}
+	entitlements, err := resolveEntitlements(ctx, s.db, user)
+	if err != nil {
+		return false, err
+	}
+	canFeature := entitlements.CanFeature
+	if !canFeature && user.Role == "property_owner" {
+		if err := s.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM owner_upgrade_purchases WHERE owner_id=$1 AND status='active' AND plan='diamond' AND listing_id::text=$2)`, user.ID, listingID).Scan(&canFeature); err != nil {
+			return false, err
+		}
+	}
+	if !canFeature && s.cfg.AppEnv == "development" && strings.EqualFold(user.Email, "commissioner@umutungo.test") {
+		canFeature = true
+	}
+	return canFeature, nil
+}
+
 func (s *Server) updateListingFeatured(w http.ResponseWriter, r *http.Request, listingID string) {
 	user, ok := s.authUser(r)
 	if !ok {
@@ -1494,32 +1447,14 @@ func (s *Server) updateListingFeatured(w http.ResponseWriter, r *http.Request, l
 		return
 	}
 	if *input.Featured && user.Role != "admin" {
-		if user.Role == "komisiyoneri" {
-			var hasActivePlan bool
-			if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM subscriptions WHERE user_id=$1 AND status='active' AND tier IN ('silver','gold','platinum') AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at > NOW()))`, user.ID).Scan(&hasActivePlan); err != nil {
-				errorJSON(w, http.StatusInternalServerError, "could not verify the Komisiyoneri plan")
-				return
-			}
-			if !hasActivePlan && s.cfg.AppEnv == "development" && strings.EqualFold(user.Email, "commissioner@umutungo.test") {
-				hasActivePlan = true
-			}
-			if !hasActivePlan {
-				errorJSON(w, http.StatusForbidden, "an active Silver, Gold, or Platinum Komisiyoneri plan is required to advertise listings")
-				return
-			}
-		} else if user.Role != "property_owner" {
-			errorJSON(w, http.StatusForbidden, "an active Property Owner plan is required to advertise listings")
+		canFeature, err := s.canFeatureListing(r.Context(), user, listingID)
+		if err != nil {
+			errorJSON(w, http.StatusInternalServerError, "could not verify your plan")
 			return
-		} else {
-			var hasActivePlan bool
-			if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM owner_upgrade_purchases WHERE owner_id=$1 AND status='active' AND (expires_at > NOW() OR (plan='diamond' AND listing_id=$2)))`, user.ID, listingID).Scan(&hasActivePlan); err != nil {
-				errorJSON(w, http.StatusInternalServerError, "could not verify the Property Owner plan")
-				return
-			}
-			if !hasActivePlan {
-				errorJSON(w, http.StatusForbidden, "an active Owner plan or Diamond promotion for this land listing is required")
-				return
-			}
+		}
+		if !canFeature {
+			errorJSON(w, http.StatusForbidden, "an active Silver, Gold, or Platinum plan is required to feature listings")
+			return
 		}
 	}
 	query := `UPDATE listings SET is_featured=$1,updated_at=NOW() WHERE id=$2 AND deleted_at IS NULL AND ($1=FALSE OR status='published')`
@@ -1874,9 +1809,9 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	var ownerID, currentStatus string
+	var ownerID, currentStatus, currentCategory, currentTransaction, currentSource, currentPausedReason string
 	var currentPrice float64
-	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,status,price FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &currentStatus, &currentPrice); err != nil {
+	if err := s.db.QueryRow(r.Context(), `SELECT owner_id,status,price,category,transaction_type,entitlement_source,paused_reason FROM listings WHERE id=$1 AND deleted_at IS NULL`, id).Scan(&ownerID, &currentStatus, &currentPrice, &currentCategory, &currentTransaction, &currentSource, &currentPausedReason); err != nil {
 		errorJSON(w, http.StatusNotFound, "listing not found")
 		return
 	}
@@ -1916,10 +1851,24 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	if input.Status == "published" && input.Status != currentStatus {
+		if currentPausedReason == "plan_expired" || currentPausedReason == "plan_limit" {
+			errorJSON(w, http.StatusPaymentRequired, "this listing was paused by your plan; publish it again from your listings to use your plan, a listing payment, or a credit")
+			return
+		}
 		var paidEntitlement bool
 		if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE listing_id=$1 AND status='active') OR EXISTS(SELECT 1 FROM listing_upload_slots WHERE listing_id=$1 AND status='consumed')`, id).Scan(&paidEntitlement); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not verify listing entitlement")
 			return
+		}
+		if !paidEntitlement && currentSource == publishViaPlan {
+			// A plan-covered listing the owner paused manually may come back
+			// only while the plan still has room for it.
+			owner, found := s.userByID(r, ownerID)
+			if found {
+				if entitlements, err := resolveEntitlements(r.Context(), s.db, owner); err == nil && coveredByPlan(entitlements) {
+					paidEntitlement = true
+				}
+			}
 		}
 		if !paidEntitlement {
 			errorJSON(w, http.StatusPaymentRequired, "a verified posting payment or unused upload slot is required to publish this listing")
@@ -1958,7 +1907,7 @@ func (s *Server) updateListing(w http.ResponseWriter, r *http.Request, id string
 		if postingRole(owner) == "komisiyoneri" {
 			fee := float64(0)
 			monthlyFee = &fee
-		} else if _, fee, err := s.configuredListingFee(r.Context(), owner, *input.Price); err == nil {
+		} else if _, fee, err := s.configuredListingFee(r.Context(), owner, *input.Price, firstNonEmpty(input.Category, currentCategory), firstNonEmpty(input.TransactionType, currentTransaction)); err == nil {
 			monthlyFee = &fee
 		} else {
 			fee := float64(0)
@@ -2815,19 +2764,30 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	}
 	listingTitle := ""
 	if input.ListingID != "" {
-		var listingOwnerID string
-		if err := s.db.QueryRow(r.Context(), `SELECT owner_id,title FROM listings WHERE id=$1 AND status='published'`, input.ListingID).Scan(&listingOwnerID, &listingTitle); err != nil {
+		var listingOwnerID, listingStatus string
+		if err := s.db.QueryRow(r.Context(), `SELECT owner_id,title,status FROM listings WHERE id::text=$1 AND deleted_at IS NULL`, input.ListingID).Scan(&listingOwnerID, &listingTitle, &listingStatus); err != nil {
 			errorJSON(w, http.StatusNotFound, "listing is unavailable")
 			return
 		}
 		if user.ID != listingOwnerID {
 			// Property enquiries always go to the account that owns the listing.
-			// Only the owner may choose a recipient when replying to a conversation.
 			input.RecipientID = listingOwnerID
+			if listingStatus != "published" && !s.sharesConversation(r, user.ID, listingOwnerID, input.ListingID) {
+				errorJSON(w, http.StatusNotFound, "listing is unavailable")
+				return
+			}
+		} else if input.RecipientID == "" || !s.sharesConversation(r, user.ID, input.RecipientID, input.ListingID) {
+			// The owner may only reply to someone who already asked about this listing.
+			errorJSON(w, http.StatusForbidden, "you can only reply to people who contacted you about this listing")
+			return
 		}
 	}
 	if input.RecipientID == "" || input.RecipientID == user.ID {
 		errorJSON(w, http.StatusBadRequest, "a valid landlord recipient is required")
+		return
+	}
+	if input.ListingID == "" && user.Role != "admin" && !s.sharesConversation(r, user.ID, input.RecipientID, "") && !s.sharesRental(r, user.ID, input.RecipientID) {
+		errorJSON(w, http.StatusForbidden, "start a conversation from a property listing or with your landlord or tenant")
 		return
 	}
 	tx, err := s.db.Begin(r.Context())
@@ -2857,6 +2817,21 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "sent"})
+}
+
+// sharesConversation reports whether the other user has already messaged this
+// user (optionally about one listing), which makes a reply legitimate.
+func (s *Server) sharesConversation(r *http.Request, userID, otherID, listingID string) bool {
+	var exists bool
+	err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM messages WHERE sender_id::text=$2 AND recipient_id=$1 AND ($3='' OR listing_id::text=$3))`, userID, otherID, listingID).Scan(&exists)
+	return err == nil && exists
+}
+
+// sharesRental reports whether two users are landlord and tenant.
+func (s *Server) sharesRental(r *http.Request, userID, otherID string) bool {
+	var exists bool
+	err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_agreements WHERE status IN ('active','pending') AND ((tenant_id=$1 AND landlord_id::text=$2) OR (landlord_id=$1 AND tenant_id::text=$2)))`, userID, otherID).Scan(&exists)
+	return err == nil && exists
 }
 
 func (s *Server) reviews(w http.ResponseWriter, r *http.Request) {
@@ -3802,18 +3777,15 @@ func (s *Server) subscriptionLevel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var tier string
-	var startsAt, endsAt *time.Time
-	err := s.db.QueryRow(r.Context(), `SELECT tier,starts_at,ends_at FROM subscriptions WHERE user_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at <= NOW()) AND (ends_at IS NULL OR ends_at > NOW()) ORDER BY created_at DESC LIMIT 1`, user.ID).Scan(&tier, &startsAt, &endsAt)
-	if err == pgx.ErrNoRows {
-		writeJSON(w, http.StatusOK, map[string]any{"tier": "free", "status": "active"})
-		return
-	}
+	// Uses the same entitlement resolver as publishing, so the plan a user is
+	// shown is always the plan the backend enforces.
+	entitlements, err := resolveEntitlements(r.Context(), s.db, user)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load your plan level")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tier": tier, "status": "active", "starts_at": startsAt, "ends_at": endsAt})
+	writeJSON(w, http.StatusOK, map[string]any{"tier": entitlements.Tier, "status": "active", "source": entitlements.Source, "business_role": entitlements.BusinessRole,
+		"starts_at": entitlements.PeriodStart, "ends_at": entitlements.PeriodEnd, "entitlements": entitlements})
 }
 
 func (s *Server) maintenance(w http.ResponseWriter, r *http.Request) {
@@ -3832,14 +3804,48 @@ func (s *Server) maintenance(w http.ResponseWriter, r *http.Request) {
 		Title          string `json:"title"`
 		Description    string `json:"description"`
 	}
-	if !decodeJSON(w, r, &input) || input.LandlordID == "" || input.Title == "" || input.Description == "" {
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.Title, input.Description = strings.TrimSpace(input.Title), strings.TrimSpace(input.Description)
+	if input.LandlordID == "" || input.Title == "" || input.Description == "" {
 		errorJSON(w, http.StatusBadRequest, "landlord_id, title, and description are required")
 		return
 	}
-	var id string
-	err := s.db.QueryRow(r.Context(), `INSERT INTO maintenance_requests(tenant_id,landlord_id,property_unit_id,title,description) VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5) RETURNING id`, user.ID, input.LandlordID, input.PropertyUnitID, input.Title, input.Description).Scan(&id)
+	if len(input.Title) > 200 || len(input.Description) > 4000 {
+		errorJSON(w, http.StatusBadRequest, "title or description is too long")
+		return
+	}
+	// Only a tenant with a current rental agreement may file a request with
+	// that landlord, and only for a unit that belongs to the landlord.
+	var allowed bool
+	if err := s.db.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM rental_agreements ra WHERE ra.tenant_id=$1 AND ra.landlord_id::text=$2 AND ra.status IN ('active','pending')
+		AND ($3='' OR ra.property_unit_id::text=$3 OR EXISTS(SELECT 1 FROM property_units pu WHERE pu.id::text=$3 AND pu.owner_id=ra.landlord_id)))`,
+		user.ID, input.LandlordID, input.PropertyUnitID).Scan(&allowed); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not verify your rental")
+		return
+	}
+	if !allowed {
+		errorJSON(w, http.StatusForbidden, "you can only send repair requests to a landlord you currently rent from")
+		return
+	}
+	tx, err := s.db.Begin(r.Context())
 	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create maintenance request")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var id string
+	if err := tx.QueryRow(r.Context(), `INSERT INTO maintenance_requests(tenant_id,landlord_id,property_unit_id,title,description) VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5) RETURNING id`, user.ID, input.LandlordID, input.PropertyUnitID, input.Title, input.Description).Scan(&id); err != nil {
 		errorJSON(w, http.StatusBadRequest, "could not create maintenance request")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `INSERT INTO notifications(user_id,type,title,body) VALUES($1,'maintenance_requested','New repair request',$2)`, input.LandlordID, fmt.Sprintf("%s reported: %s", user.Name, input.Title)); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not notify your landlord")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not create maintenance request")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "status": "open"})
@@ -3858,13 +3864,13 @@ func (s *Server) authUser(r *http.Request) (CurrentUser, bool) {
 		return CurrentUser{}, false
 	}
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status,u.workspace_kind,u.property_owner_enabled FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.token_hash=$1 AND se.expires_at > NOW() AND u.status='active'`, hash(token)).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind, &user.PropertyOwnerEnabled)
+	err := s.db.QueryRow(r.Context(), `SELECT u.id,u.name,COALESCE(u.email,''),COALESCE(u.phone,''),u.role,u.status,u.workspace_kind,u.property_owner_enabled,u.email_verified_at IS NOT NULL,u.phone_verified_at IS NOT NULL FROM sessions se JOIN users u ON u.id=se.user_id WHERE se.token_hash=$1 AND se.expires_at > NOW() AND u.status='active'`, hash(token)).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind, &user.PropertyOwnerEnabled, &user.EmailVerified, &user.PhoneVerified)
 	return user, err == nil
 }
 
 func (s *Server) userByID(r *http.Request, id string) (CurrentUser, bool) {
 	var user CurrentUser
-	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind,property_owner_enabled FROM users WHERE id=$1`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind, &user.PropertyOwnerEnabled)
+	err := s.db.QueryRow(r.Context(), `SELECT id,name,COALESCE(email,''),COALESCE(phone,''),role,status,workspace_kind,property_owner_enabled,email_verified_at IS NOT NULL,phone_verified_at IS NOT NULL FROM users WHERE id=$1`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Phone, &user.Role, &user.Status, &user.WorkspaceKind, &user.PropertyOwnerEnabled, &user.EmailVerified, &user.PhoneVerified)
 	return user, err == nil
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
 	"net/mail"
@@ -45,13 +44,22 @@ func calculateRolePostingFee(role string, price, ratePercent, fixedFee float64) 
 	}
 }
 
-func (s *Server) configuredListingFee(ctx context.Context, user CurrentUser, price float64) (float64, float64, error) {
+// configuredListingFee finds the enabled fee rule for the account's role and
+// the listing's price band. A rule may also target a category and/or a
+// transaction type; the most specific matching rule wins, and rules without a
+// category or type apply to every listing.
+func (s *Server) configuredListingFee(ctx context.Context, user CurrentUser, price float64, category, transactionType string) (float64, float64, error) {
 	if price <= 0 || math.IsNaN(price) || math.IsInf(price, 0) {
 		return 0, 0, fmt.Errorf("listing price must be greater than zero")
 	}
 	role := postingRole(user)
 	var rate, fixed float64
-	err := s.db.QueryRow(ctx, `SELECT rate_percent,fixed_fee FROM marketplace_listing_fee_rules WHERE role=$1 AND enabled AND (($2=0 AND price_min=0 AND price_max IS NOT NULL AND $3<=price_max) OR ($2>price_min AND (price_max IS NULL OR $2<=price_max))) ORDER BY price_min DESC LIMIT 1`, role, price, price).Scan(&rate, &fixed)
+	err := s.db.QueryRow(ctx, `SELECT rate_percent,fixed_fee FROM marketplace_listing_fee_rules
+		WHERE role=$1 AND enabled
+		AND (category IS NULL OR category=$3) AND (transaction_type IS NULL OR transaction_type=$4)
+		AND (($2=0 AND price_min=0 AND price_max IS NOT NULL AND $2<=price_max) OR ($2>price_min AND (price_max IS NULL OR $2<=price_max)))
+		ORDER BY (category IS NOT NULL)::int + (transaction_type IS NOT NULL)::int DESC, (category IS NOT NULL) DESC, price_min DESC LIMIT 1`,
+		role, price, strings.TrimSpace(category), strings.TrimSpace(transactionType)).Scan(&rate, &fixed)
 	if err != nil {
 		return 0, 0, fmt.Errorf("no enabled marketplace posting price is configured for this account")
 	}
@@ -124,13 +132,22 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	if postingRole(user) == "komisiyoneri" {
-		var slots int
-		if err := s.db.QueryRow(r.Context(), `SELECT COUNT(*) FROM listing_upload_slots WHERE owner_id=$1 AND status='available'`, user.ID).Scan(&slots); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not check upload slots")
-			return
+	// Every quote says whether the account's plan already covers the next
+	// listing, so clients publish directly instead of charging twice.
+	entitlements, err := resolveEntitlements(r.Context(), s.db, user)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not check your plan")
+		return
+	}
+	planFields := map[string]any{"covered_by_plan": coveredByPlan(entitlements), "plan_tier": entitlements.Tier, "plan_allowance_remaining": entitlements.AllowanceRemaining, "available_credits": entitlements.AvailableCredits}
+	withPlan := func(body map[string]any) map[string]any {
+		for key, value := range planFields {
+			body[key] = value
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"payment_type": "paid_upload_slot", "payment_model": "upload_slot", "available_slots": slots, "currency": "RWF", "demo_mode": false})
+		return body
+	}
+	if postingRole(user) == "komisiyoneri" {
+		writeJSON(w, http.StatusOK, withPlan(map[string]any{"payment_type": "paid_upload_slot", "payment_model": "upload_slot", "available_slots": entitlements.AvailableCredits, "currency": "RWF", "demo_mode": false}))
 		return
 	}
 	if postingRole(user) == "landlord" {
@@ -139,7 +156,7 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"fee": math.Round(fee), "rate_percent": 0, "duration_days": days, "payment_type": "monthly_landlord_plan", "payment_model": "monthly_plan", "currency": "RWF", "demo_mode": s.cfg.DemoPaymentsEnabled})
+		writeJSON(w, http.StatusOK, withPlan(map[string]any{"fee": math.Round(fee), "rate_percent": 0, "duration_days": days, "payment_type": "monthly_landlord_plan", "payment_model": "monthly_plan", "currency": "RWF", "demo_mode": s.demoPaymentsEnabled()}))
 		return
 	}
 	price, err := strconv.ParseFloat(strings.TrimSpace(r.URL.Query().Get("price")), 64)
@@ -147,7 +164,7 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusBadRequest, "enter a valid listing price")
 		return
 	}
-	rate, fee, err := s.configuredListingFee(r.Context(), user, price)
+	rate, fee, err := s.configuredListingFee(r.Context(), user, price, r.URL.Query().Get("category"), r.URL.Query().Get("transaction_type"))
 	if err != nil {
 		errorJSON(w, http.StatusBadRequest, err.Error())
 		return
@@ -158,7 +175,7 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 		paymentType = "one_time_marketplace_posting_fee"
 		paymentModel = "fixed"
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"price": price, "fee": math.Round(fee), "rate_percent": rate, "currency": "RWF", "payment_type": paymentType, "payment_model": paymentModel, "demo_mode": s.cfg.DemoPaymentsEnabled})
+	writeJSON(w, http.StatusOK, withPlan(map[string]any{"price": price, "fee": math.Round(fee), "rate_percent": rate, "currency": "RWF", "payment_type": paymentType, "payment_model": paymentModel, "demo_mode": s.demoPaymentsEnabled()}))
 }
 
 func (s *Server) createUploadSlotPurchase(w http.ResponseWriter, r *http.Request) {
@@ -332,129 +349,6 @@ func (s *Server) verifyUploadSlotPurchase(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, returnURL, http.StatusSeeOther)
 }
 
-func (s *Server) publishListingWithEntitlement(w http.ResponseWriter, r *http.Request, id string) {
-	user, ok := s.authUser(r)
-	if !ok {
-		errorJSON(w, http.StatusUnauthorized, "authentication required")
-		return
-	}
-	if user.Role != "komisiyoneri" && user.Role != "property_owner" && user.Role != "admin" {
-		errorJSON(w, http.StatusForbidden, "marketplace posting access required")
-		return
-	}
-	if r.Method != http.MethodPost {
-		errorJSON(w, http.StatusMethodNotAllowed, "use POST to publish a listing")
-		return
-	}
-	var input struct {
-		RequestedStatus string     `json:"requested_status"`
-		PublishAt       *time.Time `json:"publish_at"`
-	}
-	if r.ContentLength > 0 && !decodeJSON(w, r, &input) {
-		return
-	}
-	if input.RequestedStatus == "" {
-		input.RequestedStatus = "published"
-	}
-	if input.RequestedStatus != "published" && input.RequestedStatus != "scheduled" {
-		errorJSON(w, http.StatusBadRequest, "requested_status must be published or scheduled")
-		return
-	}
-	startAt := time.Now().UTC()
-	if input.RequestedStatus == "scheduled" {
-		if input.PublishAt == nil || !input.PublishAt.After(startAt) {
-			errorJSON(w, http.StatusBadRequest, "choose a future publish date")
-			return
-		}
-		startAt = input.PublishAt.UTC()
-	}
-	expiryDays, err := s.listingExpiryDays(r.Context(), user)
-	if err != nil {
-		errorJSON(w, http.StatusServiceUnavailable, err.Error())
-		return
-	}
-	tx, err := s.db.Begin(r.Context())
-	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not start publication")
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var status string
-	var deletedAt *time.Time
-	err = tx.QueryRow(r.Context(), `SELECT status,deleted_at FROM listings WHERE id=$1 AND owner_id=$2 FOR UPDATE`, id, user.ID).Scan(&status, &deletedAt)
-	if err != nil || deletedAt != nil {
-		errorJSON(w, http.StatusConflict, "only an active saved draft can be published")
-		return
-	}
-	if user.Role == "property_owner" {
-		var paid bool
-		if err := tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM listing_subscriptions WHERE listing_id=$1 AND owner_id=$2 AND status='active')`, id, user.ID).Scan(&paid); err != nil {
-			errorJSON(w, http.StatusInternalServerError, "could not verify the listing payment")
-			return
-		}
-		if !paid {
-			if postingRole(user) == "landlord" {
-				errorJSON(w, http.StatusPaymentRequired, "complete the monthly Landlord posting fee before publishing")
-			} else {
-				errorJSON(w, http.StatusPaymentRequired, "complete the one-time listing payment before publishing")
-			}
-			return
-		}
-		if status == input.RequestedStatus {
-			writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": input.RequestedStatus, "entitlement": "subscription"})
-			return
-		}
-		if status != "draft" {
-			errorJSON(w, http.StatusConflict, "only an active saved draft can be published")
-			return
-		}
-		expiresAt := startAt.Add(time.Duration(expiryDays) * 24 * time.Hour)
-		result, err := tx.Exec(r.Context(), `UPDATE listings SET status=$3,publish_at=$4,expires_at=$5,updated_at=NOW() WHERE id=$1 AND owner_id=$2 AND status='draft' AND deleted_at IS NULL`, id, user.ID, input.RequestedStatus, startAt, expiresAt)
-		if err != nil {
-			log.Printf("paid listing publish update failed for listing %s: %v", id, err)
-			errorJSON(w, http.StatusInternalServerError, "could not publish the paid draft")
-			return
-		}
-		if result.RowsAffected() != 1 {
-			log.Printf("paid listing publish updated %d rows for listing %s", result.RowsAffected(), id)
-			errorJSON(w, http.StatusInternalServerError, "could not publish the paid draft")
-			return
-		}
-		if err := tx.Commit(r.Context()); err != nil {
-			log.Printf("paid listing publish commit failed for listing %s: %v", id, err)
-			errorJSON(w, http.StatusInternalServerError, "could not publish the paid draft")
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": input.RequestedStatus, "entitlement": "subscription"})
-		return
-	}
-	var slotID string
-	err = tx.QueryRow(r.Context(), `SELECT id FROM listing_upload_slots WHERE owner_id=$1 AND status='available' ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, user.ID).Scan(&slotID)
-	if err == pgx.ErrNoRows {
-		errorJSON(w, http.StatusPaymentRequired, "payment required before this listing can be published")
-		return
-	}
-	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not verify upload entitlement")
-		return
-	}
-	result, err := tx.Exec(r.Context(), `UPDATE listing_upload_slots SET status='consumed',listing_id=$2,consumed_at=NOW() WHERE id=$1 AND status='available'`, slotID, id)
-	if err != nil || result.RowsAffected() != 1 {
-		errorJSON(w, http.StatusConflict, "upload slot was already used")
-		return
-	}
-	expiresAt := startAt.Add(time.Duration(expiryDays) * 24 * time.Hour)
-	if _, err = tx.Exec(r.Context(), `UPDATE listings SET status=$3,publish_at=$4,expires_at=$5,updated_at=NOW() WHERE id=$1 AND owner_id=$2 AND status='draft' AND deleted_at IS NULL`, id, user.ID, input.RequestedStatus, startAt, expiresAt); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not publish listing")
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		errorJSON(w, http.StatusInternalServerError, "could not publish listing")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": input.RequestedStatus, "entitlement": "upload_slot"})
-}
-
 func (s *Server) adminMarketplacePricing(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.authUser(r)
 	if !ok {
@@ -466,7 +360,7 @@ func (s *Server) adminMarketplacePricing(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if r.Method == http.MethodGet {
-		fees, err := s.db.Query(r.Context(), `SELECT role,price_min,price_max,rate_percent,fixed_fee,default_expiry_days,enabled FROM marketplace_listing_fee_rules ORDER BY role,price_min`)
+		fees, err := s.db.Query(r.Context(), `SELECT role,COALESCE(category,''),COALESCE(transaction_type,''),price_min,price_max,rate_percent,fixed_fee,default_expiry_days,enabled FROM marketplace_listing_fee_rules ORDER BY role,category NULLS FIRST,transaction_type NULLS FIRST,price_min`)
 		if err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not load fee rules")
 			return
@@ -474,16 +368,16 @@ func (s *Server) adminMarketplacePricing(w http.ResponseWriter, r *http.Request)
 		defer fees.Close()
 		feeRows := make([]map[string]any, 0)
 		for fees.Next() {
-			var role string
+			var role, category, transactionType string
 			var min, rate, fixed float64
 			var max *float64
 			var expiryDays int
 			var enabled bool
-			if fees.Scan(&role, &min, &max, &rate, &fixed, &expiryDays, &enabled) != nil {
+			if fees.Scan(&role, &category, &transactionType, &min, &max, &rate, &fixed, &expiryDays, &enabled) != nil {
 				errorJSON(w, http.StatusInternalServerError, "could not read fee rules")
 				return
 			}
-			feeRows = append(feeRows, map[string]any{"role": role, "price_min": min, "price_max": max, "rate_percent": rate, "fixed_fee": fixed, "expiry_days": expiryDays, "enabled": enabled})
+			feeRows = append(feeRows, map[string]any{"role": role, "category": category, "transaction_type": transactionType, "price_min": min, "price_max": max, "rate_percent": rate, "fixed_fee": fixed, "expiry_days": expiryDays, "enabled": enabled})
 		}
 		packages, err := s.db.Query(r.Context(), `SELECT package_key,label,slot_count,price,benefits,enabled FROM listing_upload_packages ORDER BY slot_count`)
 		if err != nil {
@@ -549,8 +443,10 @@ func (s *Server) adminMarketplacePricing(w http.ResponseWriter, r *http.Request)
 	}
 	var input struct {
 		Fees []struct {
-			Role       string   `json:"role"`
-			Min        float64  `json:"price_min"`
+			Role            string   `json:"role"`
+			Category        string   `json:"category"`
+			TransactionType string   `json:"transaction_type"`
+			Min             float64  `json:"price_min"`
 			Max        *float64 `json:"price_max"`
 			Rate       float64  `json:"rate_percent"`
 			Fixed      float64  `json:"fixed_fee"`
@@ -588,10 +484,22 @@ func (s *Server) adminMarketplacePricing(w http.ResponseWriter, r *http.Request)
 			errorJSON(w, http.StatusBadRequest, "invalid fee rule")
 			return
 		}
-		if _, err = tx.Exec(r.Context(), `INSERT INTO marketplace_listing_fee_rules(role,price_min,price_max,rate_percent,fixed_fee,default_expiry_days,enabled,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,NOW()) ON CONFLICT(role,price_min) DO UPDATE SET price_max=EXCLUDED.price_max,rate_percent=EXCLUDED.rate_percent,fixed_fee=EXCLUDED.fixed_fee,default_expiry_days=EXCLUDED.default_expiry_days,enabled=EXCLUDED.enabled,updated_at=NOW()`, rule.Role, rule.Min, rule.Max, rule.Rate, rule.Fixed, rule.ExpiryDays, rule.Enabled); err != nil {
+		category, transactionType := strings.TrimSpace(rule.Category), strings.TrimSpace(rule.TransactionType)
+		if len(category) > 60 || (transactionType != "" && !validTransaction(transactionType)) {
+			errorJSON(w, http.StatusBadRequest, "invalid fee rule category or transaction type")
+			return
+		}
+		if _, err = tx.Exec(r.Context(), `INSERT INTO marketplace_listing_fee_rules(role,category,transaction_type,price_min,price_max,rate_percent,fixed_fee,default_expiry_days,enabled,updated_at)
+			VALUES($1,NULLIF($2,''),NULLIF($3,''),$4,$5,$6,$7,$8,$9,NOW())
+			ON CONFLICT(role,(COALESCE(category,'')),(COALESCE(transaction_type,'')),price_min) DO UPDATE SET price_max=EXCLUDED.price_max,rate_percent=EXCLUDED.rate_percent,fixed_fee=EXCLUDED.fixed_fee,default_expiry_days=EXCLUDED.default_expiry_days,enabled=EXCLUDED.enabled,updated_at=NOW()`,
+			rule.Role, category, transactionType, rule.Min, rule.Max, rule.Rate, rule.Fixed, rule.ExpiryDays, rule.Enabled); err != nil {
 			errorJSON(w, http.StatusInternalServerError, "could not save fee rule")
 			return
 		}
+	}
+	if err := writeAudit(r.Context(), tx, user.ID, "pricing.updated", "marketplace_pricing", "", nil, input); err != nil {
+		errorJSON(w, http.StatusInternalServerError, "could not record the pricing change")
+		return
 	}
 	for _, pkg := range input.Packages {
 		if pkg.Key == "" || pkg.Label == "" || pkg.Slots < 1 || pkg.Price <= 0 {

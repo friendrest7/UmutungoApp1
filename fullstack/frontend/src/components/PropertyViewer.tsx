@@ -6,9 +6,8 @@ import { FormEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPo
 import { Icon } from './Icons';
 import { Language, t } from '../data/translations';
 import { PropertyPlaceholder } from './PropertyCard';
-import { AuthModal } from './AuthModal';
+import { goToSignIn } from '../lib/signIn';
 import { umutungoApi } from '../lib/umutungoApi';
-import { dashboardPathForAccountRole } from '../lib/accountRouting';
 import { supportsSpatialPreview } from '../lib/listings';
 
 type ViewerMode = 'photos' | 'tour' | 'plan';
@@ -131,7 +130,6 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
   const [securityChallenge, setSecurityChallenge] = useState({ first: 4, second: 3, answer: '7' });
   const [securityAnswer, setSecurityAnswer] = useState('');
   const [humanConfirmed, setHumanConfirmed] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('momo');
   const [paymentPhone, setPaymentPhone] = useState('');
@@ -167,12 +165,12 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     const first = 2 + Math.floor(Math.random() * 7);
     const second = 1 + Math.floor(Math.random() * 6);
     setSecurityChallenge({ first, second, answer: String(first + second) });
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape' && !authOpen) onClose(); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     const previousOverflow = document.body.style.overflow;
     if (!embedded) document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', closeOnEscape);
     return () => { if (!embedded) document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', closeOnEscape); };
-  }, [authOpen, embedded, onClose]);
+  }, [embedded, onClose]);
 
   const changeImage = (direction: number) => setActiveImage((current) => (current + direction + images.length) % images.length);
   const startPhotoSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -224,7 +222,7 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
     setTransactionOpen(true);
   };
   const handleTransactionContinue = () => {
-    if (!signedIn) { setAuthOpen(true); return; }
+    if (!signedIn) { goToSignIn('Client', `/property/${encodeURIComponent(property.id)}`); return; }
     setPaymentError('');
     setTransactionStep(transactionType === 'rent' ? isHouse ? 'application' : 'acquisition' : 'security');
   };
@@ -694,6 +692,5 @@ export function PropertyViewer({ language, property, onClose, initialMode = 'pho
         </div>, document.body)}
       </div>
     )}
-    <AuthModal open={authOpen} role="Client" onClose={() => setAuthOpen(false)} onSuccess={(accountRole) => { if (accountRole !== 'Client' && accountRole !== 'Tenant') { window.location.assign(dashboardPathForAccountRole(accountRole)); return; } setSignedIn(true); setAuthOpen(false); setPaymentError(''); setTransactionStep(transactionType === 'rent' ? isHouse ? 'application' : 'acquisition' : 'security'); }} />
   </div>;
 }

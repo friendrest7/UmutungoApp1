@@ -1506,6 +1506,11 @@ button.role-dashboard-profile { border: 0; padding: 0; background: transparent; 
 .auth-method-button strong { color: #1b211b; font-size: 10px; }
 .auth-method-button small { color: #7a8179; font-size: 9px; font-weight: 500; }
 .auth-method-button > svg:last-child { margin-left: auto; }
+/* Development-only test account buttons in the sign-in window. */
+.auth-test-accounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 8px; margin-top: 6px; }
+.auth-test-accounts .auth-divider { grid-column: 1 / -1; }
+.auth-test-accounts .auth-method-button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 380px) { .auth-test-accounts { grid-template-columns: 1fr; } }
 .auth-testing { margin-top: 21px; border-top: 1px solid #e5e0d7; padding-top: 14px; }
 .auth-testing summary { color: #00C763; cursor: pointer; font-size: 10px; font-weight: 800; }
 .auth-testing > div { margin-top: 12px; padding: 10px; border-radius: 8px; background: #f5f1e9; }
@@ -7051,5 +7056,38 @@ body.theme-dark .landlord-phone-code-button { border-color: #258052; background:
 @media (max-width: 520px) { .owner-tenant-contact { grid-template-columns: 1fr; } .owner-tenant-contact .owner-primary { width: 100%; } }
 
 /* Footer: brand plus four grouped link columns (Explore, For business, Company, Support). */
-@media (min-width: 1001px) { .footer-main { grid-template-columns: 1.4fr repeat(4, 1fr); } }
+@media (min-width: 1001px) { .footer-main { grid-template-columns: 1.4fr repeat(4, 1fr); align-items: start; } }
+.footer-brand-block { display: grid; justify-items: start; gap: 14px; }
+.footer-brand-block p { max-width: 260px; margin: 0 !important; }
+.footer-brand-block .footer-register-link { margin: 0; }
 .footer-column a { min-height: 28px; display: inline-flex; align-items: center; }
+
+/* ---------- Footer: black with white text in light and dark mode ----------
+   Keyed on the footer's id so it wins over the many theme-specific
+   .site-footer rules above. */
+#footer-contact {
+  --footer-bg: #000000;
+  --footer-card: #111111;
+  --footer-line: rgba(255, 255, 255, .14);
+  --footer-text: #ffffff;
+  --footer-muted: rgba(255, 255, 255, .64);
+  border-top: 0 !important;
+  background: var(--footer-bg) !important;
+  color: var(--footer-text) !important;
+}
+#footer-contact :is(h2, h3, strong, blockquote, label, a, p, span, small, figcaption, time) { color: var(--footer-text) !important; }
+#footer-contact :is(.app-download-copy p, .footer-brand-block p, .footer-bottom, .footer-bottom span, .community-testimonial figcaption span, .community-testimonial-submit p, .testimonial-form-footer span, .app-download-option small) { color: var(--footer-muted) !important; }
+#footer-contact .footer-column > span { color: var(--footer-muted) !important; }
+#footer-contact :is(.footer-column a, .footer-bottom a):hover { color: #ffffff !important; text-decoration: underline; text-underline-offset: 3px; }
+#footer-contact :is(.app-download, .community-testimonials, .footer-bottom) { border-color: var(--footer-line) !important; }
+#footer-contact :is(.community-testimonial, .community-testimonial-submit, .app-download-option) { border-color: var(--footer-line) !important; background: var(--footer-card) !important; box-shadow: none !important; }
+#footer-contact .app-download-option:hover { border-color: rgba(255, 255, 255, .4) !important; }
+#footer-contact .app-download-icon { background: rgba(255, 255, 255, .1) !important; color: #ffffff !important; }
+#footer-contact .community-testimonial-submit textarea { border-color: var(--footer-line) !important; background: #000000 !important; color: #ffffff !important; }
+#footer-contact .community-testimonial-submit textarea::placeholder { color: rgba(255, 255, 255, .45); }
+#footer-contact :is(.footer-register-link, .testimonial-sign-in, .community-testimonial-submit button) { border-color: #ffffff !important; background: #ffffff !important; color: #000000 !important; }
+#footer-contact :is(.footer-register-link, .testimonial-sign-in, .community-testimonial-submit button) :is(span, svg) { color: #000000 !important; }
+#footer-contact :is(.footer-register-link, .testimonial-sign-in, .community-testimonial-submit button):hover { background: #e5e5e5 !important; }
+#footer-contact .community-testimonial-submit button:disabled { opacity: .5; }
+#footer-contact .community-testimonial-submit .testimonial-form-error { color: #fda29b !important; }
+#footer-contact svg { color: inherit; }

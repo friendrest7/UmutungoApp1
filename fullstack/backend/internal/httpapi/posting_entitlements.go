@@ -156,7 +156,7 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 			errorJSON(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, withPlan(map[string]any{"fee": math.Round(fee), "rate_percent": 0, "duration_days": days, "payment_type": "monthly_landlord_plan", "payment_model": "monthly_plan", "currency": "RWF", "demo_mode": s.cfg.DemoPaymentsEnabled}))
+		writeJSON(w, http.StatusOK, withPlan(map[string]any{"fee": math.Round(fee), "rate_percent": 0, "duration_days": days, "payment_type": "monthly_landlord_plan", "payment_model": "monthly_plan", "currency": "RWF", "demo_mode": s.demoPaymentsEnabled()}))
 		return
 	}
 	price, err := strconv.ParseFloat(strings.TrimSpace(r.URL.Query().Get("price")), 64)
@@ -175,7 +175,7 @@ func (s *Server) listingFeeQuote(w http.ResponseWriter, r *http.Request) {
 		paymentType = "one_time_marketplace_posting_fee"
 		paymentModel = "fixed"
 	}
-	writeJSON(w, http.StatusOK, withPlan(map[string]any{"price": price, "fee": math.Round(fee), "rate_percent": rate, "currency": "RWF", "payment_type": paymentType, "payment_model": paymentModel, "demo_mode": s.cfg.DemoPaymentsEnabled}))
+	writeJSON(w, http.StatusOK, withPlan(map[string]any{"price": price, "fee": math.Round(fee), "rate_percent": rate, "currency": "RWF", "payment_type": paymentType, "payment_model": paymentModel, "demo_mode": s.demoPaymentsEnabled()}))
 }
 
 func (s *Server) createUploadSlotPurchase(w http.ResponseWriter, r *http.Request) {

@@ -120,7 +120,7 @@ func (s *Server) businessEntitlements(w http.ResponseWriter, r *http.Request) {
 		}
 		history = append(history, map[string]any{"id": id, "tier": tier, "status": status, "change_kind": changeKind, "amount": amount, "currency": currency, "starts_at": startsAt, "ends_at": endsAt, "cancel_at_period_end": cancelAtEnd, "created_at": createdAt, "payment_status": paymentStatus, "provider": provider, "receipt_number": receipt, "is_demo": provider == "demo"})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"entitlements": entitlements, "plans": plans, "history": history, "grace_days": s.graceDays(r.Context(), s.db), "demo_payments": s.cfg.DemoPaymentsEnabled})
+	writeJSON(w, http.StatusOK, map[string]any{"entitlements": entitlements, "plans": plans, "history": history, "grace_days": s.graceDays(r.Context(), s.db), "demo_payments": s.demoPaymentsEnabled()})
 }
 
 func (s *Server) businessSubscriptions(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +163,7 @@ func (s *Server) businessSubscriptions(w http.ResponseWriter, r *http.Request) {
 	phone := ""
 	switch input.Method {
 	case "demo":
-		if !s.cfg.DemoPaymentsEnabled {
+		if !s.demoPaymentsEnabled() {
 			errorJSON(w, http.StatusBadRequest, "choose bank card or Rwanda mobile money")
 			return
 		}
@@ -435,7 +435,13 @@ func (s *Server) verifyBusinessSubscriptionPayment(w http.ResponseWriter, r *htt
 	default:
 		s.failBusinessSubscriptionPayment(ctx, paymentID, "failed")
 	}
-	returnURL := s.cfg.FrontendBaseURL + "/upgrade?payment=" + url.QueryEscape(state) + "&subscription_id=" + url.QueryEscape(subscriptionID)
+	returnPath := "/upgrade?"
+	var businessRole string
+	if subscriptionID != "" && s.db.QueryRow(ctx, `SELECT COALESCE(business_role,'') FROM subscriptions WHERE id=$1`, subscriptionID).Scan(&businessRole) == nil && businessRole == "landlord" {
+		// Landlords buy plans from the workspace Plan page.
+		returnPath = "/landlord?section=Plan&"
+	}
+	returnURL := s.cfg.FrontendBaseURL + returnPath + "payment=" + url.QueryEscape(state) + "&subscription_id=" + url.QueryEscape(subscriptionID)
 	if state == "pending" {
 		returnURL += "&tx_ref=" + url.QueryEscape(txRef) + "&transaction_id=" + url.QueryEscape(transactionID)
 	}
@@ -746,6 +752,9 @@ func (s *Server) RunScheduledJobs(ctx context.Context) {
 	}
 	if err := s.expireBusinessSubscriptions(ctx); err != nil {
 		log.Printf("scheduled job: expire subscriptions: %v", err)
+	}
+	if err := s.runAutomaticRentReminders(ctx); err != nil {
+		log.Printf("scheduled job: rent reminders: %v", err)
 	}
 }
 

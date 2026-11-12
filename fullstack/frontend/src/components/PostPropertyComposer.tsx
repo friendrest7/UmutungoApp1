@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChangeEvent, useEffect, useState } from 'react';
-import { AuthModal } from './AuthModal';
+import { goToSignIn } from '../lib/signIn';
 import { Icon } from './Icons';
 import { InterfacePreferences } from './InterfacePreferences';
 import { Logo } from './Logo';
@@ -186,10 +186,11 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
   const [accessRole, setAccessRole] = useState<'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri' | null>(null);
   const [postingRole, setPostingRole] = useState<PostingRole | null>(null);
   const [selectionComplete, setSelectionComplete] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
+  // Signing in happens on the full /sign-in page, which returns here afterwards.
+  const requestSignIn = (role?: 'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri') => goToSignIn(role ?? (postingRole === 'Komisiyoneri' ? 'Commissioner / Komisiyoneri' : postingRole === 'Landlord' ? 'Landlord' : postingRole === 'Property Owner' ? 'Property Owner' : undefined), '/post-property');
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [saveError, setSaveError] = useState('');
-  const [feeQuote, setFeeQuote] = useState<{ fee?: number; rate_percent?: number; payment_model?: 'percentage' | 'fixed' | 'monthly_plan' | 'upload_slot'; available_slots?: number; demo_mode?: boolean } | null>(null);
+  const [feeQuote, setFeeQuote] = useState<{ fee?: number; rate_percent?: number; payment_model?: 'percentage' | 'fixed' | 'monthly_plan' | 'upload_slot'; available_slots?: number; demo_mode?: boolean; covered_by_plan?: boolean; plan_tier?: string } | null>(null);
   const [feeQuoteStatus, setFeeQuoteStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [demoPaymentSucceeded, setDemoPaymentSucceeded] = useState(false);
   const [pendingCheckoutURL, setPendingCheckoutURL] = useState('');
@@ -405,9 +406,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     if (!validateListingPrice()) return;
     setPayBeforeContinue(true);
     if (!apiToken() || accessRole !== 'Property Owner') {
-      setSelectionComplete(false);
-      setAuthOpen(true);
-      setSaveError('Sign in with your Property Owner account to continue to payment.');
+      requestSignIn('Property Owner');
       return;
     }
     setSaveError('');
@@ -466,10 +465,10 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
     if (desiredStatus !== 'draft' && !isCommissionerPosting && paymentMethod === 'mobilemoneyrwanda' && !/^\+?2507\d{8}$/.test(paymentPhone.replace(/[\s()-]/g, '').replace(/^07/, '+2507'))) { closeCheckoutPopup(); setSaveError('Enter a valid Rwanda phone number for mobile money, such as +250 78 123 4567.'); setStep(1); return; }
     if (!district || !sector) { closeCheckoutPopup(); setLocationError('Choose a valid district and sector before saving the listing.'); setStep(2); return; }
     if (publicationMode === 'Scheduled' && (!scheduledFor || new Date(scheduledFor).getTime() <= Date.now())) { closeCheckoutPopup(); setSaveError('Choose a future date and time for scheduled publication.'); setStep(3); return; }
-    if (!apiToken()) { closeCheckoutPopup(); setSelectionComplete(false); setAuthOpen(true); setSaveError('Sign in with a posting account before publishing.'); return; }
+    if (!apiToken()) { closeCheckoutPopup(); requestSignIn(); return; }
     if (accessRole) {
       const roleMatches = (postingRole === 'Komisiyoneri' && accessRole === 'Commissioner / Komisiyoneri') || (postingRole !== 'Komisiyoneri' && (accessRole === 'Landlord' || accessRole === 'Property Owner'));
-      if (!roleMatches) { closeCheckoutPopup(); setSelectionComplete(false); setAuthOpen(true); setSaveError(`Use an account that matches your selected posting role: ${postingRole}.`); return; }
+      if (!roleMatches) { closeCheckoutPopup(); requestSignIn(); return; }
     }
     const expiryDays = accessRole === 'Commissioner / Komisiyoneri' ? 30 : accessRole === 'Property Owner' ? 90 : ownerTier.startsWith('Silver') ? 90 : ownerTier.startsWith('Gold') ? 180 : 365;
     setSaveError('');
@@ -609,6 +608,12 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
       return;
     }
     setSaveError('');
+    // An active plan (including the landlord trial) covers the listing, so
+    // publish straight away instead of asking for a per-listing payment.
+    if (feeQuote?.covered_by_plan) {
+      await saveListingNow();
+      return;
+    }
     setPaymentPanelOpen(true);
   };
 
@@ -659,7 +664,7 @@ export function PostPropertyComposer({ embedded = false, onCancel }: { embedded?
 
   const Container = embedded ? 'section' : 'main';
   if (checkingAccess) return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}><p>Loading listing form...</p></Container>;
-  if (!selectionComplete) return <><PostingSelection role={postingRole} category={propertyType} signedInRole={accessRole} onRoleChange={(value) => { setPostingRole(value); setSaveError(''); }} onCategoryChange={(value) => { setPropertyType(value); setSaveError(''); }} onContinue={continueToForm} error={saveError} /><AuthModal open={authOpen} role={postingRole === 'Komisiyoneri' ? 'Commissioner / Komisiyoneri' : postingRole === 'Landlord' ? 'Landlord' : postingRole === 'Property Owner' ? 'Property Owner' : undefined} onClose={() => { setAuthOpen(false); setPayBeforeContinue(false); }} onSuccess={(accountRole) => { const nextRole = accountRole === 'Commissioner / Komisiyoneri' ? 'Komisiyoneri' : accountRole === 'Property Owner' ? 'Property Owner' : accountRole === 'Landlord' ? 'Landlord' : null; if (nextRole) { if (payBeforeContinue && accountRole !== 'Property Owner') { setSaveError('Sign in with a Property Owner account to pay and continue.'); setPayBeforeContinue(false); setAuthOpen(false); return; } setAccessRole(accountRole as 'Landlord' | 'Property Owner' | 'Commissioner / Komisiyoneri'); setPostingRole((current) => current ?? nextRole); setSelectionComplete(true); setSaveError(''); setAuthOpen(false); if (payBeforeContinue) setPaymentPanelOpen(true); } else setSaveError('A Komisiyoneri, Landlord, or Property Owner account is required to post a listing.'); }} /></>;
+  if (!selectionComplete) return <><PostingSelection role={postingRole} category={propertyType} signedInRole={accessRole} onRoleChange={(value) => { setPostingRole(value); setSaveError(''); }} onCategoryChange={(value) => { setPropertyType(value); setSaveError(''); }} onContinue={continueToForm} error={saveError} /></>;
 
   if (paymentPending && isCommissionerPosting) return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}><section className="post-payment-pending-card"><div className="post-payment-pending-icon"><span><Icon name="building" size={25} /></span><i /></div><p className="post-eyebrow">Paid upload slot required</p><h1>Use a purchased<br /><em>listing slot.</em></h1><p className="post-payment-pending-copy">Komisiyoneri publishing uses paid upload slots. There is no per-property checkout. Buy a slot package, then return to publish your saved draft.</p><Link className="post-primary-button" href="/commissioner">Go to upload slots <Icon name="arrow" size={15} /></Link></section></Container>;
   if (paymentPending && !feeQuote?.demo_mode) return <Container className={embedded ? "post-property-page post-property-embedded" : "post-property-page"}><section className="post-payment-pending-card"><div className="post-payment-pending-icon"><span><Icon name="lock" size={25} /></span><i /></div><p className="post-eyebrow">Secure checkout in progress</p><h1>Finish payment in<br /><em>Flutterwave.</em></h1><p className="post-payment-pending-copy">Flutterwave is opening in a small checkout window. Your listing stays saved as a draft until the payment is confirmed.</p><div className="post-payment-pending-summary"><span><Icon name="creditCard" size={16} /> Posting fee</span><strong>{feeQuote?.fee ? `RWF ${feeQuote.fee.toLocaleString('en-RW')}` : 'Checkout ready'}</strong></div><div className="post-payment-pending-status"><i /> Waiting for payment confirmation</div><button className="post-primary-button" type="button" onClick={reopenSecureCheckout}>{checkoutPopupOpened ? 'Reopen checkout window' : 'Open secure checkout'} <Icon name="arrow" size={15} /></button><small>Keep this page open while you complete checkout. Your listing will remain a draft until payment is confirmed.</small></section></Container>;

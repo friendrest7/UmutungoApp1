@@ -13,7 +13,7 @@ import (
 
 // demoListingPayment completes a visibly marked, development-only checkout.
 func (s *Server) demoListingPayment(w http.ResponseWriter, r *http.Request, listingID string) {
-	if !s.cfg.DemoPaymentsEnabled {
+	if !s.demoPaymentsEnabled() {
 		errorJSON(w, http.StatusNotFound, "demo payments are disabled")
 		return
 	}

@@ -5,7 +5,9 @@ import { Language, t } from '../data/translations';
 import { Icon, type IconName } from './Icons';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
-import { AuthModal, AuthRole } from './AuthModal';
+import type { AuthRole } from './AuthModal';
+import { goToSignIn } from '../lib/signIn';
+import { AccountPanel } from './AccountPanel';
 import { removeFavorite, umutungoApi, type ApiNotification, type FavoriteItem } from '../lib/umutungoApi';
 
 type NavbarProps = {
@@ -109,20 +111,6 @@ function NotificationsPanel({ language, items, onSelect }: { language: Language;
   </div>;
 }
 
-function AccountPanel({ language, role, darkMode, onToggleTheme, onLanguageChange, onAccount, onFavorites, onSignOut, showSettings = true }: { language: Language; role?: string; darkMode: boolean; onToggleTheme: () => void; onLanguageChange: (language: Language) => void; onAccount: () => void; onFavorites: () => void; onSignOut: () => void; showSettings?: boolean }) {
-  return <div className="account-panel" role="menu">
-    <div className="account-panel-heading"><Icon name="user" size={19} /><span><strong>{role ? t(language, role) : t(language, 'Account')}</strong><small>Umutungo account</small></span></div>
-    <button className="account-panel-item" type="button" role="menuitem" onClick={onAccount}><Icon name="user" size={16} /><span>{t(language, 'Account')}</span><Icon name="arrow" size={14} /></button>
-    <button className="account-panel-item" type="button" role="menuitem" onClick={onFavorites}><Icon name="heart" size={16} /><span>{t(language, 'Favorites')}</span><Icon name="arrow" size={14} /></button>
-    {showSettings && <><div className="account-panel-divider" />
-      <span className="account-panel-label">{t(language, 'Settings')}</span>
-      <ThemeToggle darkMode={darkMode} onToggle={onToggleTheme} language={language} />
-      <label className="account-panel-language"><span><Icon name="globe" size={16} />{t(language, 'Language')}</span><select value={language} onChange={(event) => onLanguageChange(event.target.value as Language)}>{languages.map((item) => <option key={item} value={item}>{languageCodes[item]}</option>)}</select></label>
-      <div className="account-panel-divider" /></>}
-    <button className="account-panel-item account-panel-logout" type="button" role="menuitem" onClick={onSignOut}><Icon name="arrow" size={16} /><span>{t(language, 'Log out')}</span></button>
-  </div>;
-}
-
 export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, isSignedIn = false, onSignIn, onSignOut, onAccount, onLandingVisibilityChange }: NavbarProps) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -133,13 +121,10 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
   const [scrolled, setScrolled] = useState(false);
   const [landingVisible, setLandingVisible] = useState(true);
   const [roleKey, setRoleKey] = useState('');
-  const [authOpen, setAuthOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [getStartedOpen, setGetStartedOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const mobileAccountMenuRef = useRef<HTMLDivElement>(null);
-  const [pendingRole, setPendingRole] = useState<AuthRole | undefined>();
-  const [intendedPath, setIntendedPath] = useState<string | undefined>();
   const [demoSignedIn, setDemoSignedIn] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [notifications, setNotifications] = useState<NavNotification[]>([]);
@@ -311,10 +296,9 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
     return () => { document.removeEventListener('mousedown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
   }, [accountMenuOpen, getStartedOpen]);
 
+  // Signing in happens on the full /sign-in page, which brings the person back here.
   const showSignInModal = (requestedRole?: AuthRole, returnTo?: string) => {
-    setPendingRole(requestedRole);
-    setIntendedPath(returnTo);
-    setAuthOpen(true);
+    goToSignIn(requestedRole, returnTo);
   };
 
   const openSignIn = (requestedRole?: AuthRole, returnTo?: string) => {
@@ -383,10 +367,9 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         timer = window.setTimeout(expireSession, idleLimit - (Date.now() - lastActivity));
         return;
       }
-      const previousRole = roleKey as AuthRole | '';
-      signOut();
-      setPendingRole(previousRole || undefined);
-      setAuthOpen(true);
+      const previousRole = (roleKey || undefined) as AuthRole | undefined;
+      const returnTo = `${window.location.pathname}${window.location.search}`;
+      void signOut().then(() => goToSignIn(previousRole, returnTo, 'expired'));
     };
     const resetTimer = () => {
       lastActivity = Date.now();
@@ -458,7 +441,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
             <button className="nav-link nav-sign-in" type="button" title="Get started" aria-label="Get started" aria-haspopup="dialog" aria-expanded={getStartedOpen} onClick={() => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>Get started<Icon name="chevron" size={13} /></button>
             {getStartedOpen && getStartedPanel}
           </div>}
-          {!signedIn && <><a className="nav-join-role" href="/register?role=Komisiyoneri">For Komisiyoneri</a><a className="nav-join-role" href="/register?role=Property%20Owner">For Property Owners</a><a className="nav-join-role" href="/register?role=Landlord">For Landlords</a><a className="nav-join-role" href="/about">{t(language, 'About us')}</a></>}
+          {!signedIn && <><a className="nav-join-role" href="/register?role=Komisiyoneri">For Komisiyoneri</a><a className="nav-join-role" href="/register?role=Property%20Owner">For Property Owners</a><a className="nav-join-role" href="/landlord">For Landlords</a><a className="nav-join-role" href="/about">{t(language, 'About us')}</a></>}
           {signedIn && dashboardPath && <a className="nav-dashboard-link" href={dashboardPath} onClick={() => setMobileOpen(false)}>{t(language, 'Dashboard')}</a>}
         </nav>
 
@@ -470,7 +453,7 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
           {!signedIn && <button className={`nav-link nav-view-more-trigger ${viewMoreOpen ? 'is-open' : ''}`} type="button" aria-expanded={viewMoreOpen} aria-controls="nav-view-more-panel" onClick={() => { setCategoryMenuOpen(false); setViewMoreOpen((open) => !open); }}><span>Log in</span><Icon name="chevron" size={13} /></button>}
           {signedIn ? <div className="account-menu-wrap" ref={accountMenuRef}>
             <button className="nav-sign-in nav-account" type="button" title={t(language, 'Account')} aria-label={t(language, 'Account')} aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((open) => !open)}><Icon name="user" size={16} />{t(language, 'Account')}<Icon name="chevron" size={12} /></button>
-            {accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} />}
+            {accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} favoritesCount={favoriteItems.length} />}
           </div> : null}
           {!isTenant && <span className="mobile-post-action">{postAction}</span>}
           <button className="mobile-menu-button" type="button" aria-expanded={mobileOpen} aria-controls="mobile-menu" aria-label={mobileOpen ? 'Close menu' : 'Open menu'} onClick={() => setMobileOpen(!mobileOpen)}><Icon name={mobileOpen ? 'x' : 'menu'} size={22} /></button>
@@ -497,12 +480,11 @@ export function Navbar({ darkMode, onToggleTheme, language, onLanguageChange, is
         <a className="mobile-menu-link mobile-contact-link" href="/contact" onClick={() => setMobileOpen(false)}>{t(language, 'Contact us')} <Icon name="arrow" size={14} /></a>
         <div className="mobile-account-menu-wrap" ref={mobileAccountMenuRef}>
           <button className="mobile-menu-link mobile-sign-in-link" type="button" aria-haspopup={signedIn ? undefined : 'dialog'} aria-expanded={signedIn ? accountMenuOpen : getStartedOpen} onClick={signedIn ? () => setAccountMenuOpen((open) => !open) : () => { setAccountMenuOpen(false); setGetStartedOpen((open) => !open); }}>{signedIn ? t(language, 'Account') : 'Get started'}<Icon name={signedIn && accountMenuOpen ? 'chevron' : signedIn ? 'user' : 'chevron'} size={15} /></button>
-          {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} showSettings={false} />}
+          {signedIn && accountMenuOpen && <AccountPanel language={language} role={roleKey} darkMode={darkMode} onToggleTheme={onToggleTheme} onLanguageChange={onLanguageChange} onAccount={openAccount} onFavorites={() => { setAccountMenuOpen(false); openFavorites(); }} onSignOut={signOut} favoritesCount={favoriteItems.length} showSettings={false} compact />}
           {!signedIn && getStartedOpen && getStartedPanel}
         </div>
       </div>}
     </header>
-    <AuthModal open={authOpen} role={pendingRole} onClose={() => { setAuthOpen(false); setIntendedPath(undefined); }} onSuccess={(accountRole) => { setDemoSignedIn(true); setRoleKey(accountRole); setAuthOpen(false); window.dispatchEvent(new Event('umutungo:auth-changed')); const isMarketplaceAudience = accountRole === 'Client' || accountRole === 'Tenant'; const destination = accountRole === 'Landlord' ? '/landlord' : intendedPath ?? (isMarketplaceAudience ? '/' : dashboardPaths[accountRole]); setIntendedPath(undefined); router.push(destination); }} />
   </>;
 }
 

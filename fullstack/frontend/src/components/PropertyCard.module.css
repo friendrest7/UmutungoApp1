@@ -82,7 +82,12 @@
 .titleLink:focus-visible { outline: none; }
 .titleLink:focus-visible::after { outline: 3px solid var(--pc-focus); outline-offset: -3px; border-radius: 18px; }
 
-.location { position: relative; z-index: 2; display: inline-flex; align-self: flex-start; align-items: center; gap: 5px; max-width: 100%; margin-top: 6px; color: var(--pc-muted); font-size: 13.5px; text-decoration: none; }
+.locationRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; margin-top: 6px; }
+.viewDetails { position: relative; z-index: 2; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; color: var(--pc-green-ink); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.viewDetails span { transition: transform .15s ease; }
+.viewDetails:hover { text-decoration: underline; }
+.viewDetails:hover span { transform: translateX(2px); }
+.location { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; color: var(--pc-muted); font-size: 13.5px; text-decoration: none; }
 .location span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .location svg { flex: 0 0 auto; color: var(--pc-green-ink); }
 .location:hover span { color: var(--pc-ink); text-decoration: underline; }
@@ -93,13 +98,6 @@
 .facts strong { color: var(--pc-ink); font-weight: 600; }
 
 .footer { display: grid; gap: 12px; margin-top: auto; padding-top: 14px; }
-.poster { display: flex; min-width: 0; align-items: center; gap: 10px; }
-.posterAvatar { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; border-radius: 50%; background: var(--pc-soft); color: var(--pc-green-ink); font-size: 13px; font-weight: 700; }
-.posterText { display: grid; min-width: 0; line-height: 1.3; }
-.posterText strong { overflow: hidden; color: var(--pc-ink); font-size: 13.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.posterText small { display: flex; min-width: 0; align-items: center; gap: 8px; color: var(--pc-muted); font-size: 12px; white-space: nowrap; }
-.posterText small > span:first-child { overflow: hidden; text-overflow: ellipsis; }
-.verified { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 3px; color: var(--pc-green-ink); font-weight: 600; }
 .actions { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; }
 .iconButton, .contact { min-height: 40px; border-radius: 10px; cursor: pointer; font: inherit; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
 .iconButton { display: grid; width: 40px; place-items: center; padding: 0; border: 1px solid var(--pc-line); background: var(--pc-surface); color: var(--pc-ink); }

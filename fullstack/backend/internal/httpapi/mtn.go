@@ -98,6 +98,15 @@ func (m momoClient) token(ctx context.Context) (string, error) {
 	return result.Token, nil
 }
 
+// providerCurrency is the currency label MTN sees. Payments are RWF; only MTN's
+// sandbox, which accepts nothing but EUR, gets "EUR" (MTN_CURRENCY=EUR).
+func (m momoClient) providerCurrency() string {
+	if m.cfg.MTNCurrency == "EUR" && strings.EqualFold(strings.TrimSpace(m.cfg.MTNTargetEnvironment), "sandbox") {
+		return "EUR"
+	}
+	return "RWF"
+}
+
 func (m momoClient) requestToPay(ctx context.Context, ref, phone string, amount float64, currency string) error {
 	if !strings.EqualFold(strings.TrimSpace(currency), "RWF") || amount <= 0 || math.Trunc(amount) != amount {
 		return fmt.Errorf("MTN MoMo payments require a positive whole-number RWF amount")
@@ -120,7 +129,7 @@ func (m momoClient) requestToPay(ctx context.Context, ref, phone string, amount 
 		}
 	}
 	body, _ := json.Marshal(map[string]any{
-		"amount": fmt.Sprintf("%.0f", amount), "currency": currency, "externalId": ref,
+		"amount": fmt.Sprintf("%.0f", amount), "currency": m.providerCurrency(), "externalId": ref,
 		"payer":        map[string]string{"partyIdType": "MSISDN", "partyId": msisdn},
 		"payerMessage": "Umutungo payment", "payeeNote": "Umutungo payment",
 	})
@@ -188,6 +197,9 @@ func (m momoClient) verifiedPaymentStatus(ctx context.Context, reference string,
 	result, err := m.paymentStatus(ctx, reference)
 	if err != nil {
 		return momoPaymentStatus{}, err
+	}
+	if strings.EqualFold(strings.TrimSpace(currency), "RWF") {
+		currency = m.providerCurrency()
 	}
 	if err := validateMoMoPayment(reference, amount, currency, result); err != nil {
 		return momoPaymentStatus{}, err

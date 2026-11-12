@@ -23,8 +23,9 @@ Configure secrets in the named hosting service, not in a committed file. `.env.e
 
 | Variable | Provider | Purpose | Secret? | Configure in |
 |---|---|---|---|---|
-| `APP_ENV` | Umutungo | Enables development-only behavior; use `production` on the pilot service | No | Render backend |
-| `TEST_LOGIN_ENABLED` | Umutungo | Enables documented demo login endpoints only when `APP_ENV=testing`; use only with an isolated staging database | No | Render staging backend |
+| `APP_ENV` | Umutungo | `development` or `production`. Missing or unrecognised values run as **production** (fail closed), so development-only features stay off. Set `production` on Render; set `development` only on local machines | No | Render backend |
+| `TEST_LOGIN_ENABLED` | Umutungo | Development only: test-account logins (`/api/v1/auth/dev-login`, `/auth/dev-admin`). On by default when `APP_ENV=development`, `false` switches them off. Ignored in production: the routes are not registered | No | Local `.env.local` only |
+| `DEMO_PAYMENTS_ENABLED` | Umutungo | Development only: no-charge demo checkouts. On by default when `APP_ENV=development`, `false` switches them off. Ignored in production: real plans and listings activate only after Flutterwave/MTN verification | No | Local `.env.local` only |
 | `PORT` | Render | HTTP listen port (Render normally injects it) | No | Render backend |
 | `DATABASE_URL` | PostgreSQL | Application database connection | Yes | Render backend |
 | `CORS_ORIGINS` | Umutungo | Comma-separated allowed web origins | No | Render backend |
@@ -48,6 +49,15 @@ Configure secrets in the named hosting service, not in a committed file. `.env.e
 | `TWILIO_ACCOUNT_SID` | Twilio | Account SID for fallback SMS | Yes | Render backend |
 | `TWILIO_AUTH_TOKEN` | Twilio | Account authentication token for fallback SMS | Yes | Render backend |
 | `TWILIO_FROM_NUMBER` | Twilio | Sender number approved for destination countries | No | Render backend |
+| `OTP_HMAC_SECRET` | Umutungo | Key for hashing verification codes; 32+ random characters (`openssl rand -hex 32`). Codes can't be sent without it | Yes | Render backend |
+| `TRUSTED_PROXY_HOPS` | Umutungo | Proxies in front of the API, for per-IP rate limits. Vercel → Render = `2` | No | Render backend |
+| `AFRICASTALKING_USERNAME` | Africa's Talking | App username (`sandbox` for the sandbox) | No | Render backend |
+| `AFRICASTALKING_API_KEY` | Africa's Talking | API key for that app | Yes | Render backend |
+| `AFRICASTALKING_SENDER_ID` | Africa's Talking | Optional approved sender ID | No | Render backend |
+| `AFRICASTALKING_ENV` | Africa's Talking | `sandbox` (default) or `live` | No | Render backend |
+| `SMTP_HOST` / `SMTP_PORT` | Email provider | SMTP server for verification emails (587 STARTTLS or 465 TLS) | No | Render backend |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | Email provider | SMTP login | Yes | Render backend |
+| `EMAIL_FROM` | Email provider | Sender, on a domain verified with the provider, e.g. `Umutungo <no-reply@yourdomain.com>` | No | Render backend |
 | `TEST_DATABASE_URL` | PostgreSQL | Dedicated database used only by Go integration tests | Yes | Local test environment; never production runtime |
 
 MTN MoMo sandbox and production values must be provisioned separately and set as a matched pair. Do not use production API User/key/subscription credentials with the sandbox host or vice versa. MTN SMS v3 is a separate product with separate OAuth credentials; its configured `serviceCode` must be approved by the Rwanda operating company. The integration currently sends `receiverAddress`, `message`, `serviceCode`, and a generated `clientCorrelatorId`; it does not configure an optional sender address or delivery receipts. Twilio is attempted only when MTN SMS fails and all three Twilio values are present; its configured sender must be authorized for the destination.
@@ -73,7 +83,11 @@ The backend uses the listing's stored whole-number `price` as the selected rate.
 
 ## OTP policy
 
-Codes expire after 10 minutes, allow at most five verification attempts, enforce a one-minute resend cooldown, and cap requests at five per phone in a rolling hour. Prior live codes are invalidated on resend. Codes and credentials are not logged. Registration uses MTN SMS v3 first and Twilio only as fallback when all Twilio settings are present.
+Codes are 6 digits from a cryptographically secure generator, stored only as an HMAC (keyed with `OTP_HMAC_SECRET`), expire after 10 minutes, and are deleted on first successful use or after five wrong attempts. Sending is limited to one per 60 seconds and five per rolling hour, both per phone/email and per client IP. A new code replaces any earlier one. Send replies are identical whether or not the phone/email is registered. Codes, phone numbers and credentials are not logged. There is no development/test code. Without a configured provider, sending returns HTTP 503.
+
+SMS goes to Africa's Talking first, then MTN SMS v3 (Rwanda numbers only), then Twilio. Email uses SMTP. Phone numbers from any country are accepted and stored in E.164 (`+250788123456`). Numbers without a country code are read as Rwanda numbers.
+
+Endpoints: `POST /api/v1/verification/send`, `/resend` and `/verify` with `{"purpose": "login" | "change_phone" | "verify_email", "destination", "code"}`. `change_phone` and `verify_email` require a signed-in user. `/auth/request-otp`, `/auth/verify-otp`, `/auth/register` and `/me/phone` keep working and use the same rules.
 
 ## Provider verification notes
 

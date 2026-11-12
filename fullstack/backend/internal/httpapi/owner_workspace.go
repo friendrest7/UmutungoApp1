@@ -20,6 +20,9 @@ func (s *Server) ownerWorkspace(w http.ResponseWriter, r *http.Request) {
 		errorJSON(w, http.StatusForbidden, "property owner access required")
 		return
 	}
+	if !s.requireLandlordAccess(w, r, user) {
+		return
+	}
 	if r.Method == http.MethodGet {
 		s.getOwnerWorkspace(w, r, user.ID)
 		return
@@ -63,6 +66,9 @@ func (s *Server) ownerWorkspaceItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodPatch {
 		errorJSON(w, http.StatusMethodNotAllowed, "use PATCH")
+		return
+	}
+	if !s.requireLandlordAccess(w, r, user) {
 		return
 	}
 	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/owner/workspace/"), "/")
@@ -147,8 +153,10 @@ func (s *Server) getOwnerWorkspace(w http.ResponseWriter, r *http.Request, owner
 	properties, err := s.db.Query(r.Context(), `SELECT p.id,p.name,p.province,p.district,p.sector,p.cell,p.village,p.created_at,
 		(SELECT COALESCE(json_agg(json_build_object('id',u.id,'name',u.name,'monthly_rent',u.monthly_rent) ORDER BY u.created_at),'[]'::json) FROM managed_units u WHERE u.property_id=p.id AND u.owner_id=p.owner_id),
 		(SELECT COUNT(*) FROM managed_units u WHERE u.property_id=p.id AND u.owner_id=p.owner_id),
-		(SELECT COUNT(DISTINCT c.unit_id) FROM owner_rent_charges c JOIN managed_units u ON u.id=c.unit_id AND u.owner_id=c.owner_id WHERE c.owner_id=p.owner_id AND u.property_id=p.id AND to_char(c.due_date,'YYYY-MM')=$2)
-		FROM managed_properties p WHERE p.owner_id=$1 ORDER BY p.created_at DESC LIMIT 50`, ownerID, month)
+		(SELECT COUNT(DISTINCT c.unit_id) FROM owner_rent_charges c JOIN managed_units u ON u.id=c.unit_id AND u.owner_id=c.owner_id WHERE c.owner_id=p.owner_id AND u.property_id=p.id AND to_char(c.due_date,'YYYY-MM')=$2),
+		COALESCE(l.id::text,''),COALESCE(l.title,''),COALESCE(l.status,''),COALESCE(l.is_featured,FALSE)
+		FROM managed_properties p LEFT JOIN listings l ON l.id=p.listing_id AND l.owner_id=p.owner_id AND l.deleted_at IS NULL
+		WHERE p.owner_id=$1 ORDER BY p.created_at DESC LIMIT 50`, ownerID, month)
 	if err != nil {
 		errorJSON(w, http.StatusInternalServerError, "could not load properties")
 		return
@@ -159,12 +167,14 @@ func (s *Server) getOwnerWorkspace(w http.ResponseWriter, r *http.Request, owner
 		var created time.Time
 		var unitsJSON []byte
 		var unitCount, occupiedCount int
-		if err := properties.Scan(&id, &name, &province, &district, &sector, &cell, &village, &created, &unitsJSON, &unitCount, &occupiedCount); err != nil {
+		var listingID, listingTitle, listingStatus string
+		var listingFeatured bool
+		if err := properties.Scan(&id, &name, &province, &district, &sector, &cell, &village, &created, &unitsJSON, &unitCount, &occupiedCount, &listingID, &listingTitle, &listingStatus, &listingFeatured); err != nil {
 			properties.Close()
 			errorJSON(w, http.StatusInternalServerError, "could not read properties")
 			return
 		}
-		items = append(items, map[string]any{"id": id, "name": name, "province": province, "district": district, "sector": sector, "cell": cell, "village": village, "created_at": created, "unit_count": unitCount, "units": rawJSON(unitsJSON), "occupied_units": occupiedCount})
+		items = append(items, map[string]any{"id": id, "name": name, "province": province, "district": district, "sector": sector, "cell": cell, "village": village, "created_at": created, "unit_count": unitCount, "units": rawJSON(unitsJSON), "occupied_units": occupiedCount, "listing": propertyListing(listingID, listingTitle, listingStatus, listingFeatured)})
 	}
 	properties.Close()
 	if err := properties.Err(); err != nil {

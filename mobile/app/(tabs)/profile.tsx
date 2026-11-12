@@ -3,7 +3,7 @@ import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { updateProfile } from '@/api/client';
+import { confirmEmailVerification, requestEmailVerification, updateProfile } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme, ThemeMode } from '@/theme/ThemeContext';
 import { languageOptions, normalizeLanguage, useI18n } from '@/i18n';
@@ -41,6 +41,10 @@ export default function ProfileScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // A new email address waiting for its verification code. Until the code is
+  // entered, the account keeps its current address.
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
 
   if (!user) return <ScrollView style={styles.screen} contentContainerStyle={styles.safeContent}><Text style={styles.title}>{t('Your profile')}</Text><Text style={styles.body}>{t('Sign in to manage your account, saved properties, messages, and listings.')}</Text><SettingsCard /><Pressable style={styles.button} onPress={() => router.push('/auth/sign-in')}><Text style={styles.buttonText}>{t('Sign in')}</Text></Pressable><View style={[styles.card, { gap: 10, padding: 14 }]}><Text style={styles.heading}>{t('New to Umutungo?')}</Text><Text style={styles.muted}>{t('Create an account to save properties, message owners, and manage your listings.')}</Text><Pressable accessibilityRole="button" style={[styles.button, { minHeight: 52, flexDirection: 'row', gap: 9, borderRadius: 14 }]} onPress={() => router.push('/auth/register')}><Ionicons name="person-add-outline" size={19} color="#000000" /><Text style={styles.buttonText}>{t('Create account')}</Text></Pressable></View></ScrollView>;
 
@@ -52,14 +56,42 @@ export default function ProfileScreen() {
     setError('');
     setNotice('');
     try {
-      const result = await updateProfile({ name: name.trim(), email: email.trim(), bio: bio.trim(), language });
+      const result = await updateProfile({ name: name.trim(), bio: bio.trim(), language });
       await persistLanguage(normalizeLanguage(language));
       setUser(result.user);
       setProfile(result.profile);
-      setEditing(false);
-      setNotice(t('Profile updated.'));
+      const newEmail = email.trim().toLowerCase();
+      if (newEmail && newEmail !== (user.email ?? '').trim().toLowerCase()) {
+        // The new address only replaces the current one after the code we send
+        // to it is entered.
+        await requestEmailVerification(newEmail);
+        setPendingEmail(newEmail);
+        setEmailCode('');
+        setNotice(t('Profile updated.') + ' ' + t('Enter the code we sent to your new email address to start using it.'));
+      } else {
+        setEditing(false);
+        setNotice(t('Profile updated.'));
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Profile could not be updated.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmEmail = async () => {
+    if (!/^\d{6}$/.test(emailCode.trim())) { setError(t('Enter the 6-digit code.')); return; }
+    setBusy(true);
+    setError('');
+    try {
+      const result = await confirmEmailVerification(pendingEmail, emailCode.trim());
+      setUser(result.user);
+      setPendingEmail('');
+      setEmailCode('');
+      setEditing(false);
+      setNotice(t('Email address verified.'));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The code could not be checked.');
     } finally {
       setBusy(false);
     }
@@ -76,6 +108,11 @@ export default function ProfileScreen() {
         <TextInput style={styles.input} value={name} onChangeText={setName} />
         <Text style={styles.label}>{t('Email')}</Text>
         <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+        {pendingEmail ? <>
+          <Text style={styles.muted}>{t('Code sent to')} {pendingEmail}</Text>
+          <TextInput style={styles.input} value={emailCode} onChangeText={(value) => setEmailCode(value.replace(/\D/g, '').slice(0, 6))} placeholder={t('6-digit code')} keyboardType="number-pad" maxLength={6} autoComplete="one-time-code" />
+          <Pressable style={styles.button} disabled={busy} onPress={() => void confirmEmail()}><Text style={styles.buttonText}>{busy ? t('Verifying...') : t('Verify email')}</Text></Pressable>
+        </> : null}
         <Text style={styles.label}>{t('Bio')}</Text>
         <TextInput style={[styles.input, { minHeight: 90, textAlignVertical: 'top', paddingTop: 12 }]} value={bio} onChangeText={setBio} multiline maxLength={1000} />
         <Text style={styles.label}>{t('Language')}</Text>
@@ -87,7 +124,7 @@ export default function ProfileScreen() {
         <Text style={styles.label}>{t('Role')}</Text><Text style={styles.heading}>{t(user.role)}</Text>
         <Text style={styles.label}>{t('Bio')}</Text><Text style={styles.body}>{profile?.bio || t('No bio added.')}</Text>
         <Text style={styles.label}>Language</Text><Text style={styles.body}>{profile?.language || 'en'}</Text>
-        <Pressable style={styles.secondaryButton} onPress={() => { setName(user.name ?? ''); setEmail(user.email ?? ''); setBio(profile?.bio ?? ''); setLanguage(normalizeLanguage(profile?.language ?? activeLanguage)); setError(''); setNotice(''); setEditing(true); }}><Text style={styles.secondaryText}>{t('Edit profile')}</Text></Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => { setName(user.name ?? ''); setEmail(user.email ?? ''); setBio(profile?.bio ?? ''); setLanguage(normalizeLanguage(profile?.language ?? activeLanguage)); setError(''); setNotice(''); setPendingEmail(''); setEmailCode(''); setEditing(true); }}><Text style={styles.secondaryText}>{t('Edit profile')}</Text></Pressable>
         <Pressable style={styles.secondaryButton} onPress={() => void refresh()}><Text style={styles.secondaryText}>{t('Refresh account')}</Text></Pressable>
       </>}
     </View>

@@ -44,18 +44,9 @@ const audiences: Array<{ icon: IconName; title: string; who: string; body: strin
   { icon: 'home', title: 'Landlords', who: 'Choose this if you rent out units and manage tenants.', body: 'Advertise vacancies, record rent, see who has paid and who is overdue, and handle repair requests from tenants.', cta: 'Join as Landlord', href: '/register?role=Landlord' },
 ];
 
-// Each statement describes something the platform actually enforces.
-const trustPoints: Array<{ icon: IconName; title: string; body: string }> = [
-  { icon: 'phone', title: 'Phone-verified advertisers', body: 'Owners confirm their phone number with a one-time code before they can publish.' },
-  { icon: 'lock', title: 'Payments confirmed first', body: 'A paid listing only goes live after MTN MoMo or card payment is verified.' },
-  { icon: 'bookPen', title: 'Message safely in the app', body: 'Ask questions and arrange viewings without sharing your number until you choose to.' },
-  { icon: 'check', title: 'Report anything suspicious', body: 'Flag fraud, duplicates or wrong details, and our team reviews every report.' },
-];
 
 const searchExamples = [
   '2-bedroom house to rent in Kicukiro',
-  'Plot of land for sale in Bugesera',
-  'Car for hire in Kigali',
 ];
 
 export default function HomePage() {
@@ -65,6 +56,7 @@ export default function HomePage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [goal, setGoal] = useState<Goal>('find');
+  const [selectedAudience, setSelectedAudience] = useState(0);
   const copy = (key: string) => t(language, key);
 
   useEffect(() => {
@@ -141,7 +133,7 @@ export default function HomePage() {
   };
 
   // Featured (paid) listings appear first but keep their label on the card.
-  const landingListings = [...properties].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured))).slice(0, 6);
+  const landingListings = [...properties].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured))).slice(0, 8);
 
   return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
     <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
@@ -157,15 +149,15 @@ export default function HomePage() {
           <p className={styles.heroLead}>{copy('Homes, land, offices and everyday assets for rent, sale or hire across Rwanda, plus simple tools for landlords to manage tenants and rent.')}</p>
 
           <div className={styles.goalCard}>
-            <div className={styles.goalTabs} role="tablist" aria-label={copy('What would you like to do?')}>
-              <button type="button" role="tab" id="goal-tab-find" aria-controls="goal-panel-find" aria-selected={goal === 'find'} className={goal === 'find' ? styles.goalTabActive : styles.goalTab} onClick={() => setGoal('find')}><Icon name="search" size={17} />{copy('Find a property')}</button>
-              <button type="button" role="tab" id="goal-tab-list" aria-controls="goal-panel-list" aria-selected={goal === 'list'} className={goal === 'list' ? styles.goalTabActive : styles.goalTab} onClick={() => setGoal('list')}><Icon name="building" size={17} />{copy('List a property')}</button>
+            <div className={styles.goalTabs}>
+              {/* Find goes straight to the listings page. */}
+              <a href="/categories/properties" className={goal === 'find' ? styles.goalTabActive : styles.goalTab}>{copy('Find a property')}</a>
+              <button type="button" aria-controls="goal-panel-list" aria-expanded={goal === 'list'} className={goal === 'list' ? styles.goalTabActive : styles.goalTab} onClick={() => setGoal('list')}><Icon name="building" size={17} />{copy('List a property')}</button>
             </div>
-            {goal === 'find' ? <div className={styles.goalPanel} role="tabpanel" id="goal-panel-find" aria-labelledby="goal-tab-find">
-              <p className={styles.goalHint}>{copy('Describe what you need in your own words, in English or Kinyarwanda.')}</p>
-              <div className={styles.searchWrap}><ConversationalPropertySearch language={language} compact examples={searchExamples} placeholder={copy('e.g. 3-bedroom house to rent in Kimironko under 400,000 RWF')} submitLabel="Search" /></div>
+            {goal === 'find' ? <div className={styles.goalPanel}>
+              <div className={styles.searchWrap}><ConversationalPropertySearch language={language} compact examples={searchExamples} placeholder={copy('e.g. 3-bedroom house in Kimironko')} submitLabel="Search" /></div>
               <a className={styles.browseLink} href="/categories/properties">{copy('Or browse all listings')} <Icon name="arrow" size={14} /></a>
-            </div> : <div className={styles.goalPanel} role="tabpanel" id="goal-panel-list" aria-labelledby="goal-tab-list">
+            </div> : <div className={styles.goalPanel} id="goal-panel-list">
               <p className={styles.goalHint}>{copy('Pick the option that describes you. You can add another role to the same account later.')}</p>
               <div className={styles.listChoices}>
                 {audiences.slice(1).map((audience) => <a key={audience.title} className={styles.listChoice} href={audience.href}><span className={styles.listChoiceIcon}><Icon name={audience.icon} size={18} /></span><span><strong>{copy(audience.title)}</strong><small>{copy(audience.who)}</small></span><Icon name="arrow" size={15} /></a>)}
@@ -173,13 +165,6 @@ export default function HomePage() {
               <a className={styles.primaryButton} href="/post-property">{copy('Post a property')} <Icon name="arrow" size={15} /></a>
             </div>}
           </div>
-        </div>
-      </section>
-
-      {/* 2. Trust strip: only claims the platform enforces. */}
-      <section className={styles.trustStrip} aria-label={copy('Why people trust Umutungo')}>
-        <div className={styles.container}>
-          {trustPoints.map((point) => <div className={styles.trustItem} key={point.title}><span className={styles.trustIcon}><Icon name={point.icon} size={18} /></span><div><strong>{copy(point.title)}</strong><p>{copy(point.body)}</p></div></div>)}
         </div>
       </section>
 
@@ -211,11 +196,11 @@ export default function HomePage() {
       <section className={`${styles.section} ${styles.sectionTinted}`} id="properties" aria-labelledby="listings-title">
         <div className={styles.container}>
           <div className={styles.sectionHead}>
-            <div><p className={styles.kicker}>{copy('On Umutungo now')}</p><h2 id="listings-title">{copy('Latest listings')}</h2></div>
+            <div><h2 id="listings-title">{copy('Latest listings')}</h2></div>
             <a className={styles.textLink} href="/categories/properties">{copy('Browse all properties')} <Icon name="arrow" size={14} /></a>
           </div>
           {landingListings.length > 0
-            ? <div className={`property-grid landing-property-grid ${styles.listingGrid}`}>{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div>
+            ? <div className={styles.listingGrid}>{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div>
             : <div className={styles.emptyListings}><Icon name="home" size={22} /><p>{copy('New listings will appear here as soon as they are published.')}</p><a className={styles.secondaryButton} href="/post-property">{copy('Be the first to post a property')}</a></div>}
         </div>
       </section>
@@ -226,14 +211,22 @@ export default function HomePage() {
           <div className={styles.sectionHead}>
             <div><p className={styles.kicker}>{copy('Made for everyone in the property journey')}</p><h2 id="audiences-title">{copy('Who is Umutungo for?')}</h2></div>
           </div>
-          <div className={styles.audienceGrid}>
-            {audiences.map((audience, index) => <article key={audience.title} className={index === 0 ? `${styles.audienceCard} ${styles.audienceCardFeatured}` : styles.audienceCard}>
-              <span className={styles.audienceIcon}><Icon name={audience.icon} size={20} /></span>
-              <h3>{copy(audience.title)}</h3>
-              <p className={styles.audienceWho}>{copy(audience.who)}</p>
-              <p>{copy(audience.body)}</p>
-              <a className={styles.audienceLink} href={audience.href}>{copy(audience.cta)} <Icon name="arrow" size={14} /></a>
-            </article>)}
+          {/* Cards work as a radio group: click to select (turns green), then follow the link. */}
+          <div className={styles.audienceGrid} role="radiogroup" aria-labelledby="audiences-title">
+            {audiences.map((audience, index) => {
+              const selected = selectedAudience === index;
+              return <article key={audience.title} className={selected ? `${styles.audienceCard} ${styles.audienceCardFeatured}` : styles.audienceCard} onClick={() => setSelectedAudience(index)}>
+                <label className={styles.audienceSelect}>
+                  <input type="radio" name="audience" className={styles.srOnly} checked={selected} onChange={() => setSelectedAudience(index)} />
+                  <span className={styles.audienceIcon}><Icon name={audience.icon} size={20} /></span>
+                  {selected && <span className={styles.audienceCheck} aria-hidden="true"><Icon name="check" size={14} /></span>}
+                  <h3>{copy(audience.title)}</h3>
+                  <span className={styles.audienceWho}>{copy(audience.who)}</span>
+                  <span className={styles.audienceBody}>{copy(audience.body)}</span>
+                </label>
+                <a className={styles.audienceLink} href={audience.href}>{copy(audience.cta)} <Icon name="arrow" size={14} /></a>
+              </article>;
+            })}
           </div>
         </div>
       </section>

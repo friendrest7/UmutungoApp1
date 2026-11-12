@@ -86,7 +86,7 @@ const normalizedCategory = (value: string) => value.trim().toLowerCase().replace
 type DatabaseListing = ApiListing & { tags?: string[]; amenities?: string[]; owner?: ApiListing['owner'] & { verified?: boolean } };
 
 const mapLocalListings = (): Listing[] => readLocalPropertyListings().map((item) => {
-  const categorySlug = Object.entries(categoryAliases).find(([, aliases]) => aliases.includes(normalizedCategory(item.type)))?.[0] ?? 'properties';
+  const categorySlug = Object.entries(categoryAliases).find(([slug, aliases]) => slug !== 'properties' && aliases.includes(normalizedCategory(item.type)))?.[0] ?? 'properties';
   const intent: Listing['intent'] = item.availableFor === 'rent' ? 'For rent' : item.availableFor === 'both' ? 'For sale or rent' : item.priceNote.includes('/ month') || item.priceNote.includes('/ day') || item.priceNote.includes('/ night') ? 'For rent' : 'For sale';
   const price = `${item.price}${item.priceNote && !/^\s*asking\s*$/i.test(item.priceNote) ? ` ${item.priceNote.trim()}` : ''}`;
   const facts = [item.bedrooms ? `${item.bedrooms} bedrooms` : '', item.bathrooms ? `${item.bathrooms} bathrooms` : '', item.area ? `${item.area} m²` : ''].filter(Boolean);
@@ -281,7 +281,7 @@ export function CategoryExperience({ slug, initialQuery = '', initialLocation = 
       : filter.startsWith('All') || (filter === 'For rent' && ['For rent', 'For sale or rent', 'For lease', 'For sale or lease'].includes(item.intent)) || (filter === 'For sale' && ['For sale', 'For sale or rent', 'For sale or lease'].includes(item.intent)) || (filter === 'Book now' && item.intent === 'Book') || ['Residential', 'Commercial', 'Private office', 'Open workspace'].includes(filter);
       return matchesQuery && matchesLocation && matchesDistrict && matchesSector && matchesBedrooms && matchesIntent && matchesPrice && matchesFilter;
     }).map(normalizeListing);
-    return slug === 'properties' ? filteredListings : filteredListings.slice(0, 10);
+    return filteredListings;
   }, [category, databaseListings, filter, initialDistrict, initialIntent, initialLocation, initialMinBedrooms, initialPriceRange, initialSector, query, slug]);
   const visibleListings = listings.slice(0, visibleListingCount);
   useEffect(() => {

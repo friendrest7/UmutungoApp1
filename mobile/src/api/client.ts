@@ -47,8 +47,10 @@ export async function getCachedSession() {
 }
 
 export async function requestOtp(phone: string) { return request<{ message: string; development_code?: string }>('/api/v1/auth/request-otp', { method: 'POST', body: JSON.stringify({ phone }) }); }
-export async function signInWithPassword(email: string, password: string) {
-  const result = await request<{ user: ApiUser; access_token: string }>('/api/v1/auth/dev-login', { method: 'POST', body: JSON.stringify({ email, password }) });
+// Development backends only: signs in to a local test account by email. A
+// production backend has no /auth/dev-login route and answers 404.
+export async function signInWithTestAccount(email: string) {
+  const result = await request<{ user: ApiUser; access_token: string }>('/api/v1/auth/dev-login', { method: 'POST', body: JSON.stringify({ email }) });
   await SecureStore.setItemAsync(TOKEN_KEY, result.access_token);
   await cacheSession(result.user, null);
   return result;
@@ -62,7 +64,16 @@ export async function verifyOtp(phone: string, code: string) {
 export async function registerAccount(input: { name: string; email: string; phone: string; role: UserRole }) { return request<{ user: ApiUser; message: string; development_code?: string }>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(input) }); }
 export async function getMe() { return request<{ user: ApiUser; profile: ApiProfile }>('/api/v1/me', {}, true); }
 export async function endSession() { try { await request<{ status: string }>('/api/v1/auth/logout', { method: 'POST', body: '{}' }, true); } finally { await clearStoredToken(); } }
-export async function updateProfile(input: { name?: string; email?: string; bio?: string; photo_url?: string; language?: string }) {
+// The email address can't be changed through updateProfile: the backend only
+// switches to a new address after the code sent to it is entered.
+export async function requestEmailVerification(email: string) {
+  return request<{ message?: string; already_verified?: boolean; resend_after_seconds?: number }>('/api/v1/verification/send', { method: 'POST', body: JSON.stringify({ purpose: 'verify_email', destination: email }) }, true);
+}
+export async function confirmEmailVerification(email: string, code: string) {
+  const result = await request<{ user: ApiUser; message?: string }>('/api/v1/verification/verify', { method: 'POST', body: JSON.stringify({ purpose: 'verify_email', destination: email, code }) }, true);
+  return result;
+}
+export async function updateProfile(input: { name?: string; bio?: string; photo_url?: string; language?: string }) {
   const result = await request<{ user: ApiUser; profile: ApiProfile }>('/api/v1/me', { method: 'PATCH', body: JSON.stringify(input) }, true);
   await cacheSession(result.user, result.profile);
   return result;

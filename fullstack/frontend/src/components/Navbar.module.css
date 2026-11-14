@@ -1,0 +1,213 @@
+/*
+ * Site-wide navigation, matching the landing page hero.
+ * - .island: floating dark-green bar used on every page (sticky).
+ * - .overlay: transparent bar laid over the landing hero photo.
+ * Everything beyond the four page links lives in the menu dropdown.
+ */
+
+/* The old layout reserved space for a left sidebar; the new bar has none. */
+:global(.app):has(.slot) { padding-left: 0 !important; }
+
+/* Holds the bar's space in the page so content never jumps when the bar is fixed. */
+.slot { position: relative; z-index: 60; }
+/* In-page links (e.g. /#categories) stop below the fixed bar instead of under it. */
+:global(html):has(.slot) { scroll-padding-top: 96px; }
+
+.bar {
+  --nav-green: #00c763;
+  --nav-green-hover: #00b358;
+  position: relative;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  color: #ffffff;
+}
+.bar a { text-decoration: none; }
+.bar a:focus-visible, .bar button:focus-visible { outline: none; box-shadow: 0 0 0 2px #04190e, 0 0 0 4px var(--nav-green); }
+
+.island {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1400px, calc(100% - 24px));
+  margin: 0;
+  padding: 10px 14px 10px 22px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 180% at 0% 0%, rgba(0, 199, 99, .16), transparent 55%),
+    linear-gradient(180deg, #0a2416, #04190e);
+  box-shadow: 0 10px 30px rgba(4, 25, 14, .18);
+  transition: box-shadow .25s ease;
+}
+.island.scrolled { box-shadow: 0 16px 40px rgba(4, 25, 14, .32); }
+/* Landing hero: the transparent bar drops in as the island once the visitor scrolls. */
+.dropIn { animation: dropIn .28s cubic-bezier(.22, .8, .24, 1); }
+@keyframes dropIn { from { opacity: 0; transform: translate(-50%, -14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.overlay { width: 100%; }
+
+.logo { display: flex; align-items: center; flex: 0 0 auto; }
+.logo :global(.brand-logo) { width: 112px; }
+.island .logo :global(.brand-logo) { width: 104px; }
+
+.pills {
+  display: flex; gap: 4px; padding: 4px;
+  border: 1px solid rgba(255, 255, 255, .18); border-radius: 999px;
+  background: rgba(255, 255, 255, .1);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.pill {
+  display: inline-flex; align-items: center; min-height: 34px; padding: 0 18px;
+  border: 0; border-radius: 999px; background: transparent;
+  color: rgba(255, 255, 255, .92) !important; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background .2s ease, color .2s ease;
+}
+.pill:hover { background: rgba(255, 255, 255, .14); }
+.pillActive, .pillActive:hover { background: linear-gradient(180deg, #ffffff, #dfe3e0); color: #0d140f !important; box-shadow: 0 2px 8px rgba(0, 0, 0, .2); }
+
+.actions { display: flex; align-items: center; gap: 14px; flex: 0 0 auto; }
+.textAction { padding: 6px 4px; border: 0; background: none; color: #ffffff !important; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+.textAction:hover { text-decoration: underline; text-underline-offset: 4px; }
+.postButton {
+  display: inline-flex; align-items: center; min-height: 42px; padding: 0 22px;
+  border-radius: 999px; background: var(--nav-green); color: #ffffff !important;
+  font-size: 14px; font-weight: 600; white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(0, 199, 99, .3); transition: background .2s ease, transform .2s ease;
+}
+.postButton:hover { background: var(--nav-green-hover); transform: translateY(-1px); }
+
+.menuWrap { position: relative; }
+.menuButton {
+  position: relative; display: inline-flex; width: 42px; height: 42px; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .25); border-radius: 50%;
+  background: rgba(255, 255, 255, .1); color: #ffffff; cursor: pointer;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: background .2s ease;
+}
+.menuButton:hover, .menuButton[aria-expanded='true'] { background: rgba(255, 255, 255, .22); }
+.menuBadge {
+  position: absolute; top: -3px; right: -3px; display: grid; min-width: 18px; height: 18px; place-items: center; padding: 0 4px;
+  border: 2px solid #04190e; border-radius: 999px; background: var(--nav-green); color: #03170b; font-size: 10px; font-weight: 700;
+}
+
+/* ---------- Dropdown ---------- */
+.menu {
+  --m-ink: #0d140f; --m-muted: #5f6862; --m-surface: #ffffff; --m-soft: #f3f1ea; --m-line: #e6e2d8;
+  position: absolute; top: calc(100% + 12px); right: 0;
+  width: min(360px, calc(100vw - 24px)); max-height: min(640px, calc(100vh - 110px)); overflow-y: auto;
+  padding: 10px; border: 1px solid var(--m-line); border-radius: 22px;
+  background: var(--m-surface); color: var(--m-ink);
+  box-shadow: 0 24px 60px rgba(4, 25, 14, .28);
+  animation: menuIn .16s ease-out;
+}
+:global(.theme-dark) .menu { --m-ink: #eef3ee; --m-muted: #a7b3aa; --m-surface: #101c14; --m-soft: #17251b; --m-line: #24362a; }
+@keyframes menuIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+.group { padding: 6px 0; border-top: 1px solid var(--m-line); }
+.group:first-child, .accountCard + .group { border-top: 0; }
+.groupTitle { margin: 6px 10px 4px; color: var(--m-muted); font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+
+.row, .prefRow, .categoryGrid a {
+  display: flex; width: 100%; align-items: center; gap: 12px; padding: 9px 10px;
+  border: 0; border-radius: 14px; background: transparent; color: var(--m-ink) !important;
+  font: inherit; text-align: left; cursor: pointer; transition: background .15s ease;
+}
+.row:hover, .prefRow:hover, .categoryGrid a:hover { background: var(--m-soft); }
+.rowIcon {
+  display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center;
+  border-radius: 10px; background: var(--m-soft); color: var(--m-ink);
+}
+.row:hover .rowIcon, .categoryGrid a:hover .rowIcon { background: var(--nav-green); color: #ffffff; }
+.rowText { display: grid; flex: 1; min-width: 0; }
+.rowText strong { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.rowText small { color: var(--m-muted); font-size: 12px; line-height: 1.35; }
+.rowCount { display: grid; min-width: 22px; height: 22px; place-items: center; padding: 0 6px; border-radius: 999px; background: var(--nav-green); color: #ffffff; font-size: 11px; font-weight: 700; }
+.rowChevron { display: flex; color: var(--m-muted); }
+
+.accountCard { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; padding: 12px; border-radius: 16px; background: linear-gradient(180deg, #0a2416, #04190e); color: #ffffff; }
+.accountCard > span:nth-child(2) { display: grid; flex: 1; min-width: 0; }
+.accountCard small { color: rgba(255, 255, 255, .7); font-size: 11px; }
+.accountCard strong { font-size: 14px; }
+.avatar { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .14); }
+.accountButton { min-height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--nav-green); color: #ffffff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.accountButton:hover { background: var(--nav-green-hover); }
+
+.joinGrid { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px; }
+.joinChip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px;
+  border: 1px solid var(--m-line); border-radius: 999px; color: var(--m-ink) !important; font-size: 12px; font-weight: 500;
+}
+.joinChip:hover { border-color: var(--nav-green); color: #007a3d !important; }
+.signInLine { margin: 8px 10px 4px; color: var(--m-muted); font-size: 12px; }
+.signInLine button { padding: 0; border: 0; background: none; color: #007a3d; font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+:global(.theme-dark) .signInLine button, :global(.theme-dark) .joinChip:hover { color: #3fe08d !important; }
+
+.segment { display: flex; flex: 1; gap: 4px; padding: 3px; border-radius: 999px; background: var(--m-soft); }
+.segment button { flex: 1; min-height: 28px; border: 0; border-radius: 999px; background: transparent; color: var(--m-muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.segment .segmentActive { background: var(--m-surface); color: var(--m-ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
+.prefStatic { cursor: default; }
+.prefStatic:hover { background: transparent; }
+.switch { position: relative; flex: 0 0 auto; width: 38px; height: 22px; border-radius: 999px; background: var(--m-line); transition: background .2s ease; }
+.switch i { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, .2); transition: transform .2s ease; }
+.switchOn { background: var(--nav-green); }
+.switchOn i { transform: translateX(16px); }
+
+.signOut {
+  display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; min-height: 42px; margin-top: 6px;
+  border: 1px solid var(--m-line); border-radius: 14px; background: transparent; color: #b42318; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.signOut:hover { background: #fdecea; }
+:global(.theme-dark) .signOut { color: #ff8a80; }
+:global(.theme-dark) .signOut:hover { background: rgba(255, 138, 128, .1); }
+
+.viewHeader { display: flex; align-items: center; gap: 10px; padding: 4px 4px 10px; border-bottom: 1px solid var(--m-line); }
+.viewHeader strong { font-size: 15px; }
+.backButton { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--m-line); border-radius: 50%; background: transparent; color: var(--m-ink); cursor: pointer; }
+.backButton svg { transform: rotate(180deg); }
+
+.itemList { display: grid; gap: 2px; margin: 8px 0 0; padding: 0; list-style: none; }
+.itemList li { position: relative; }
+.itemLink {
+  display: flex; width: 100%; align-items: center; gap: 12px; padding: 8px 36px 8px 8px;
+  border: 0; border-radius: 14px; background: transparent; color: var(--m-ink) !important; font: inherit; text-align: left; cursor: pointer;
+}
+.itemLink:hover { background: var(--m-soft); }
+.itemLink img { flex: 0 0 auto; width: 56px; height: 44px; border-radius: 10px; object-fit: cover; background: var(--m-soft); }
+.itemLink > span:last-child { display: grid; min-width: 0; }
+.itemLink strong { overflow: hidden; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+.itemLink small { overflow: hidden; color: var(--m-muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.itemLink em { color: var(--m-ink); font-size: 12px; font-style: normal; font-weight: 600; }
+.itemRemove { position: absolute; top: 50%; right: 8px; display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--m-muted); cursor: pointer; transform: translateY(-50%); }
+.itemRemove:hover { background: var(--m-soft); color: var(--m-ink); }
+.empty { display: grid; justify-items: center; gap: 6px; padding: 26px 16px; color: var(--m-muted); text-align: center; }
+.empty strong { color: var(--m-ink); font-size: 14px; }
+.empty p { margin: 0; font-size: 12px; }
+.empty a { margin-top: 6px; color: #007a3d !important; font-size: 13px; font-weight: 600; }
+
+.categoryGrid { display: grid; grid-template-columns: 1fr; gap: 2px; margin-top: 8px; }
+
+.mobileOnly { display: none; }
+
+@media (max-width: 960px) {
+  .pills { display: none; }
+  .mobileOnly { display: block; }
+  .mobileOnly + .group { border-top: 1px solid var(--m-line); }
+}
+
+@media (max-width: 600px) {
+  .island { top: 8px; width: calc(100% - 16px); padding: 8px 8px 8px 14px; border-radius: 18px; }
+  .textAction { display: none; }
+  .actions { gap: 8px; }
+  .postButton { min-height: 38px; padding: 0 14px; font-size: 13px; }
+  .logo :global(.brand-logo), .island .logo :global(.brand-logo) { width: 92px; }
+}
+@media (max-width: 380px) {
+  .postButton { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu, .dropIn { animation: none; }
+  .bar *, .menu * { transition: none !important; }
+}

@@ -1,0 +1,47 @@
+.footer {
+  --f-green: #00c763;
+  padding: 56px 0 28px;
+  background: #04190e;
+  color: rgba(255, 255, 255, .78);
+}
+.footer a { text-decoration: none; }
+.footer a:focus-visible, .footer button:focus-visible, .footer select:focus-visible { outline: none; box-shadow: 0 0 0 2px #04190e, 0 0 0 4px var(--f-green); }
+.container { width: min(1180px, calc(100% - 64px)); margin: 0 auto; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.main { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr)); gap: 40px; }
+.logo { display: inline-flex; }
+.logo :global(.brand-logo) { width: 120px; }
+.brand p { margin: 14px 0 0; max-width: 280px; font-size: 12px; line-height: 1.6; }
+.brand .tagline { margin-top: 18px; color: #ffffff; font-size: 15px; line-height: 1.5; }
+.footer nav { display: grid; align-content: start; gap: 14px; }
+.footer nav h2 { margin: 0 0 6px; color: #ffffff; font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
+.footer nav a { color: rgba(255, 255, 255, .72); font-size: 12px; }
+.footer nav a:hover, .bottom a:hover { color: var(--f-green); }
+
+.bottom {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;
+  margin-top: 48px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, .16); font-size: 11px;
+}
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+.bottom a { color: rgba(255, 255, 255, .72); }
+.controls select {
+  padding: 4px 8px; border: 1px solid rgba(255, 255, 255, .2); border-radius: 999px;
+  background: transparent; color: rgba(255, 255, 255, .85); font-size: 11px;
+}
+.controls select option { color: #0d140f; }
+.controls button {
+  display: flex; width: 28px; height: 28px; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .2); border-radius: 50%; background: transparent; color: #ffffff; cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .main { grid-template-columns: 1fr 1fr; }
+  .brand { grid-column: span 2; }
+}
+@media (max-width: 600px) {
+  .container { width: calc(100% - 32px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .footer * { transition: none !important; }
+}

@@ -1,64 +1,109 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { AiChatbot } from '../components/AiChatbot';
-import { Footer } from '../components/Footer';
 import { Icon, type IconName } from '../components/Icons';
+import { Logo } from '../components/Logo';
 import { Navbar } from '../components/Navbar';
-import { PropertyCard, PropertyPlaceholder } from '../components/PropertyCard';
-import { ConversationalPropertySearch } from '../components/ConversationalPropertySearch';
+import { SiteFooter } from '../components/SiteFooter';
+import { type PropertyPlaceholder } from '../components/PropertyCard';
 import { t } from '../data/translations';
-import { listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, type FavoriteItem } from '../lib/umutungoApi';
+import { apiToken, listFavorites, publicUmutungoApi, removeFavorite, saveFavorite, umutungoApi, type FavoriteItem } from '../lib/umutungoApi';
 import { toProperty, type ApiListing } from '../lib/listings';
 import { readCachedApiListings, writeCachedApiListings } from '../lib/listingCache';
 import { isLocalDevelopmentHost, readLocalPropertyListings, writeLocalPropertyListings } from '../lib/localListings';
+import { goToSignIn } from '../lib/signIn';
 import { usePersistentLanguage } from '../lib/language';
 import { usePersistentTheme } from '../lib/theme';
 import styles from './landing.module.css';
 
-type Goal = 'find' | 'list';
+type Intent = 'Buy' | 'Rent' | 'All';
+type ListingFilter = 'all' | 'sale' | 'rent';
+type Story = { id: string; name: string; body: string };
 
-// Categories are grouped into two families so the browse area stays readable.
-const propertyCategories = [
-  { name: 'Residential houses', slug: 'houses', image: '/properties/house-01.jpg' },
+const ANDROID_APP_URL = 'https://expo.dev/artifacts/eas/SNaCxDJnUvtKjrTOxPwA4glDW9nQZrbxRYwfw8HziKg.apk';
+const IOS_APP_URL = 'https://apps.apple.com/rw/search?term=Umutungo';
+
+const categories = [
+  { name: 'Houses', slug: 'houses', image: '/properties/house-02.jpg' },
   { name: 'Apartments', slug: 'apartments', image: '/properties/apartment-01.jpg' },
   { name: 'Land', slug: 'land', image: '/properties/land-02.jpg' },
-  { name: 'Commercial buildings', slug: 'commercial', image: '/properties/commercial-01.jpg' },
-  { name: 'Offices', slug: 'offices', image: '/properties/office-03.jpg' },
-  { name: 'Hotels and lodges', slug: 'hospitality', image: '/properties/hospitality-03.jpg' },
-];
-const assetCategories: Array<{ name: string; slug: string; icon: IconName; hint: string }> = [
-  { name: 'Vehicles', slug: 'vehicles', icon: 'car', hint: 'Cars, motorbikes and trucks' },
-  { name: 'Furniture', slug: 'furniture', icon: 'home', hint: 'Sofas, beds and dining sets' },
-  { name: 'Appliances', slug: 'appliances', icon: 'appliance', hint: 'Fridges, cookers and washers' },
-  { name: 'Equipment', slug: 'equipment', icon: 'wrench', hint: 'Tools and machinery for hire' },
-  { name: 'Other assets', slug: 'other', icon: 'building', hint: 'Anything else of value' },
+  { name: 'Commercial', slug: 'commercial', image: '/properties/commercial-01.jpg' },
+  { name: 'Offices', slug: 'offices', image: '/properties/office-04.jpg' },
+  { name: 'Hotels', slug: 'hospitality', image: '/properties/hospitality-03.jpg' },
+  { name: 'Vehicles', slug: 'vehicles', image: '/properties/vehicle-02.jpg' },
+  { name: 'Furniture', slug: 'furniture', image: '/properties/furniture-04.jpg' },
+  { name: 'Appliances', slug: 'appliances', image: '/properties/appliance-03.jpg' },
+  { name: 'Equipment', slug: 'equipment', image: '/properties/equipment-02.jpg' },
 ];
 
-// Plain-language role descriptions, in the order a visitor is most likely to be.
-const audiences: Array<{ icon: IconName; title: string; who: string; body: string; cta: string; href: string }> = [
-  { icon: 'search', title: 'Tenants and buyers', who: 'Choose this if you are looking for a place or an item.', body: 'Browse every listing for free, save favourites, message advertisers and track your rent and repair requests in one place.', cta: 'Start browsing', href: '/categories/properties' },
-  { icon: 'users', title: 'Komisiyoneri', who: 'Choose this if you list properties on behalf of their owners.', body: 'Manage all your clients’ listings, answer buyer and tenant enquiries, and follow up leads from one professional profile.', cta: 'Join as Komisiyoneri', href: '/register?role=Komisiyoneri' },
-  { icon: 'building', title: 'Property Owners', who: 'Choose this if you want to sell or rent out property you own.', body: 'Publish your property with photos, receive enquiries directly, and see how many people view each listing.', cta: 'Join as Property Owner', href: '/register?role=Property%20Owner' },
-  { icon: 'home', title: 'Landlords', who: 'Choose this if you rent out units and manage tenants.', body: 'Advertise vacancies, record rent, see who has paid and who is overdue, and handle repair requests from tenants.', cta: 'Join as Landlord', href: '/register?role=Landlord' },
+const searchCategories = [
+  { value: 'properties', label: 'Properties & assets' },
+  ...categories.map((category) => ({ value: category.slug, label: category.name })),
+  { value: 'other', label: 'Other assets' },
+];
+const searchLocations = ['Anywhere in Rwanda', 'Kigali', 'Eastern Province', 'Northern Province', 'Southern Province', 'Western Province'];
+const searchBudgets = ['Any budget', 'Under RWF 500,000', 'RWF 500,000 - 1,000,000', 'Over RWF 1,000,000'];
+
+const audiences = [
+  { step: '01 / Connect', title: 'Komisiyoneri', body: 'Connect people with properties and assets. Bring your next listing to the marketplace.', cta: 'Join as Komisiyoneri', href: '/register?role=Komisiyoneri' },
+  { step: '02 / Own', title: 'Property Owners', body: 'Showcase your property to people looking for their next home, workspace or investment.', cta: 'Advertise a property', href: '/register?role=Property%20Owner' },
+  { step: '03 / Rent', title: 'Landlords', body: 'Share your available spaces and help prospective tenants find a place to call home.', cta: 'List a rental', href: '/landlord' },
 ];
 
 
-const searchExamples = [
-  '2-bedroom house to rent in Kicukiro',
-];
+function availability(property: PropertyPlaceholder) {
+  if (property.availableFor === 'rent') return 'To rent';
+  if (property.availableFor === 'both') return 'Sale or rent';
+  if (property.availableFor === 'book') return 'To book';
+  return 'For sale';
+}
+
+function matchesFilter(property: PropertyPlaceholder, filter: ListingFilter) {
+  if (filter === 'all') return true;
+  if (filter === 'rent') return property.availableFor === 'rent' || property.availableFor === 'both' || property.availableFor === 'book';
+  return !property.availableFor || property.availableFor === 'sale' || property.availableFor === 'both';
+}
+
+function SearchField({ icon, label, value, onChange, options }: { icon: IconName; label: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }> }) {
+  const id = `hero-search-${label.toLowerCase().replace(/\s+/g, '-')}`;
+  return <label className={styles.searchField} htmlFor={id}>
+    <span className={styles.searchIcon}><Icon name={icon} size={16} /></span>
+    <span className={styles.searchText}>
+      <small>{label}</small>
+      <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </span>
+    <span className={styles.searchChevron} aria-hidden="true"><Icon name="chevron" size={12} /></span>
+  </label>;
+}
 
 export default function HomePage() {
   const { darkMode, toggleTheme } = usePersistentTheme();
   const { language, changeLanguage } = usePersistentLanguage();
+  const copy = (key: string) => t(language, key);
+
   const [properties, setProperties] = useState<PropertyPlaceholder[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
-  const [goal, setGoal] = useState<Goal>('find');
-  const [selectedAudience, setSelectedAudience] = useState(0);
-  const copy = (key: string) => t(language, key);
+  const [listingFilter, setListingFilter] = useState<ListingFilter>('all');
+  const [signedIn, setSignedIn] = useState(false);
 
+  const [intent, setIntent] = useState<Intent>('Buy');
+  const [searchLocation, setSearchLocation] = useState(searchLocations[0]);
+  const [searchCategory, setSearchCategory] = useState('properties');
+  const [searchBudget, setSearchBudget] = useState(searchBudgets[0]);
+
+  const [stories, setStories] = useState<Story[]>([]);
+  const [storyIndex, setStoryIndex] = useState(0);
+  const [storyFormOpen, setStoryFormOpen] = useState(false);
+  const [storyBody, setStoryBody] = useState('');
+  const [storySubmitting, setStorySubmitting] = useState(false);
+  const [storyStatus, setStoryStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
+  // Listings: cached copy first, then the live API (with local fallbacks for development).
   useEffect(() => {
     let cancelled = false;
     const cachedListings = readCachedApiListings();
@@ -97,6 +142,21 @@ export default function HomePage() {
     document.documentElement.lang = localeMap[language] ?? 'en';
   }, [language]);
 
+  // Signed-in state decides whether visitors can submit a story.
+  useEffect(() => {
+    const readAccount = () => setSignedIn(Boolean(apiToken() || window.localStorage.getItem('umutungo-demo-user')));
+    readAccount();
+    window.addEventListener('umutungo:auth-changed', readAccount);
+    return () => window.removeEventListener('umutungo:auth-changed', readAccount);
+  }, []);
+
+  // Only approved testimonials come back from the public endpoint.
+  useEffect(() => {
+    void publicUmutungoApi<{ items: Story[] }>('/api/v1/testimonials', { cache: 'no-store' })
+      .then((result) => setStories(result?.items ?? []))
+      .catch(() => setStories([]));
+  }, []);
+
   useEffect(() => {
     const readLocalFavorites = () => {
       try {
@@ -132,140 +192,236 @@ export default function HomePage() {
     void (wasSaved ? removeFavorite(property.id) : saveFavorite(item)).catch(() => undefined);
   };
 
-  // Featured (paid) listings appear first but keep their label on the card.
-  const landingListings = [...properties].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured))).slice(0, 8);
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const params = new URLSearchParams();
+    if (intent !== 'All') params.set('intent', intent);
+    if (searchLocation !== searchLocations[0]) params.set('location', searchLocation);
+    if (searchBudget !== searchBudgets[0]) params.set('priceRange', searchBudget);
+    const query = params.toString();
+    window.location.assign(`/categories/${searchCategory}${query ? `?${query}` : ''}`);
+  };
 
-  return <div className={`${darkMode ? 'app theme-dark' : 'app'} app-realistic`}>
-    <Navbar darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
+  const submitStory = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setStoryStatus(null);
+    setStorySubmitting(true);
+    try {
+      await umutungoApi('/api/v1/testimonials', { method: 'POST', body: JSON.stringify({ body: storyBody }) });
+      setStoryBody('');
+      setStoryStatus({ kind: 'ok', text: 'Thank you. Your story is with our team for review before it appears here.' });
+    } catch (error) {
+      setStoryStatus({ kind: 'error', text: error instanceof Error ? error.message : 'Your story could not be submitted. Please try again.' });
+    } finally { setStorySubmitting(false); }
+  };
+
+  // Featured (paid) listings first, then filtered by sale/rent.
+  const sortedListings = [...properties].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)));
+  const visibleListings = sortedListings.filter((property) => matchesFilter(property, listingFilter)).slice(0, 8);
+  const phoneListing = sortedListings[0];
+  const story = stories.length ? stories[storyIndex % stories.length] : null;
+
+  return <div className={`${darkMode ? 'app theme-dark' : 'app'} sidebar-hidden`}>
     <AiChatbot language={language} />
     <main className={styles.landing} data-own-colors="">
-      {/* 1. Hero: one clear choice between finding and listing. */}
-      <section className={styles.hero} id="home" aria-labelledby="landing-title">
-        <video className={styles.heroMedia} autoPlay muted loop playsInline preload="metadata" poster="/properties/land-01.jpg" aria-hidden="true"><source src="/properties/land.mp4" type="video/mp4" /></video>
-        <div className={styles.heroVeil} aria-hidden="true" />
-        <div className={styles.heroInner}>
-          {/* Kept for screen readers and search engines; not shown visually. */}
-          <h1 id="landing-title" className={styles.srOnly}>{copy('Umutungo: find, list and manage property in Rwanda')}</h1>
-          <p className={styles.heroLead}>{copy('Homes, land, offices and everyday assets for rent, sale or hire across Rwanda, plus simple tools for landlords to manage tenants and rent.')}</p>
 
-          <div className={styles.goalCard}>
-            <div className={styles.goalTabs}>
-              {/* Find goes straight to the listings page. */}
-              <a href="/categories/properties" className={goal === 'find' ? styles.goalTabActive : styles.goalTab}>{copy('Find a property')}</a>
-              <button type="button" aria-controls="goal-panel-list" aria-expanded={goal === 'list'} className={goal === 'list' ? styles.goalTabActive : styles.goalTab} onClick={() => setGoal('list')}><Icon name="building" size={17} />{copy('List a property')}</button>
-            </div>
-            {goal === 'find' ? <div className={styles.goalPanel}>
-              <div className={styles.searchWrap}><ConversationalPropertySearch language={language} compact examples={searchExamples} placeholder={copy('e.g. 3-bedroom house in Kimironko')} submitLabel="Search" /></div>
-              <a className={styles.browseLink} href="/categories/properties">{copy('Or browse all listings')} <Icon name="arrow" size={14} /></a>
-            </div> : <div className={styles.goalPanel} id="goal-panel-list">
-              <p className={styles.goalHint}>{copy('Pick the option that describes you. You can add another role to the same account later.')}</p>
-              <div className={styles.listChoices}>
-                {audiences.slice(1).map((audience) => <a key={audience.title} className={styles.listChoice} href={audience.href}><span className={styles.listChoiceIcon}><Icon name={audience.icon} size={18} /></span><span><strong>{copy(audience.title)}</strong><small>{copy(audience.who)}</small></span><Icon name="arrow" size={15} /></a>)}
+      {/* Hero: framed photograph with the navigation and search laid over it. */}
+      <section className={styles.heroFrame} id="home" aria-labelledby="landing-title">
+        <div className={styles.hero}>
+          <Image src="/properties/house-01.jpg" alt="" fill priority sizes="100vw" className={styles.heroImage} />
+          <div className={styles.heroVeil} aria-hidden="true" />
+
+          <Navbar variant="overlay" active="home" darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
+
+          <div className={styles.heroCopy}>
+            <p className={styles.heroKicker}>{copy('Umutungo property marketplace for everyone')}</p>
+            <h1 id="landing-title" className={styles.heroTitle}>{copy('You are on Umutungo and')}<br />{copy('you can find different properties')} <a className={styles.heroTitleLink} href="/categories/properties">{copy('here')}</a>.</h1>
+          </div>
+
+          <div className={styles.heroBottom}>
+            <a className={styles.exploreChip} href="/categories/properties"><Icon name="pin" size={14} />{copy('Explore Rwanda')}</a>
+            <form className={styles.search} onSubmit={submitSearch} role="search" aria-label={copy('Search listings')}>
+              <div className={styles.intentTabs} role="tablist" aria-label={copy('What do you want to do?')}>
+                {(['Buy', 'Rent', 'All'] as Intent[]).map((option) => <button key={option} type="button" role="tab" aria-selected={intent === option} className={intent === option ? styles.intentActive : styles.intentTab} onClick={() => setIntent(option)}>{copy(option === 'All' ? 'All assets' : option)}</button>)}
               </div>
-              <a className={styles.primaryButton} href="/post-property">{copy('Post a property')} <Icon name="arrow" size={15} /></a>
+              <div className={styles.searchRow}>
+                <SearchField icon="pin" label={copy('Location')} value={searchLocation} onChange={setSearchLocation} options={searchLocations.map((value) => ({ value, label: copy(value) }))} />
+                <SearchField icon="building" label={copy('Category')} value={searchCategory} onChange={setSearchCategory} options={searchCategories.map((option) => ({ value: option.value, label: copy(option.label) }))} />
+                <SearchField icon="creditCard" label={copy('Price range')} value={searchBudget} onChange={setSearchBudget} options={searchBudgets.map((value) => ({ value, label: copy(value) }))} />
+                <button type="submit" className={styles.searchSubmit}>{copy('Search')} <span aria-hidden="true">→</span></button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      {/* Categories. */}
+      <section className={styles.section} id="categories" aria-label={copy('Browse categories')}>
+        <div className={styles.container}>
+          <div className={styles.sectionHead}>
+            <div>
+              <p className={styles.kicker}>{copy('Browse categories')}</p>
+            </div>
+          </div>
+          <div className={styles.categoryRow}>
+            {categories.map((category) => <a key={category.slug} className={styles.categoryTile} href={`/categories/${category.slug}`}>
+              <span className={styles.categoryImage}><Image src={category.image} alt="" fill sizes="(max-width: 640px) 40vw, 200px" /></span>
+              <span className={styles.categoryLabel}>{copy(category.name)}</span>
+            </a>)}
+          </div>
+        </div>
+      </section>
+
+      {/* Featured listings. */}
+      <section className={styles.section} id="properties" aria-label={copy('Featured listings')}>
+        <div className={styles.container}>
+          <div className={styles.sectionHead}>
+            <div>
+              <p className={styles.sectionLead}>{copy('Explore homes, land and spaces for work.')}</p>
+              <div className={styles.filterChips} role="group" aria-label={copy('Filter listings')}>
+                {([['all', 'All'], ['sale', 'For sale'], ['rent', 'To rent']] as Array<[ListingFilter, string]>).map(([value, label]) => <button key={value} type="button" aria-pressed={listingFilter === value} className={listingFilter === value ? styles.chipActive : styles.chip} onClick={() => setListingFilter(value)}>{copy(label)}</button>)}
+              </div>
+            </div>
+            <a className={styles.btnGreenGlow} href="/categories/properties">{copy('View all listings')} <span aria-hidden="true">→</span></a>
+          </div>
+
+          {visibleListings.length > 0
+            ? <div className={styles.listingGrid}>
+              {visibleListings.map((property) => {
+                const saved = favorites.includes(property.id);
+                const href = `/property/${encodeURIComponent(property.id)}`;
+                const image = property.image || '/properties/listing-placeholder.svg';
+                return <article key={property.id} className={styles.listingCard}>
+                  <a className={styles.listingMedia} href={href} tabIndex={-1} aria-hidden="true">
+                    <Image src={image} alt="" fill sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 380px" unoptimized={image.startsWith('http')} />
+                  </a>
+                  <span className={styles.listingBadge}>{copy(property.featured ? 'Featured' : availability(property))}</span>
+                  <button type="button" className={saved ? styles.heartActive : styles.heart} aria-pressed={saved} aria-label={`${copy(saved ? 'Remove from favorites' : 'Save to favorites')}: ${property.title}`} onClick={() => toggleFavorite(property)}><Icon name="heart" size={16} /></button>
+                  <h3><a href={href}>{copy(property.title)}</a></h3>
+                  <p className={styles.listingLocation}>{copy(property.location || 'Location available on request')}</p>
+                  <p className={styles.listingPrice}>{property.price}{property.priceNote && !/^\s*asking\s*$/i.test(property.priceNote) && <span> {copy(property.priceNote)}</span>}</p>
+                  <a className={styles.detailsButton} href={href}>{copy('View Details')} <span aria-hidden="true">→</span></a>
+                </article>;
+              })}
+            </div>
+            : <div className={styles.emptyListings}>
+              <Icon name="home" size={22} />
+              <p>{copy(properties.length ? 'No listings match this filter yet.' : 'New listings will appear here as soon as they are published.')}</p>
+              <a className={styles.btnOutline} href="/post-property">{copy('Post a property')}</a>
             </div>}
-          </div>
         </div>
       </section>
 
-      {/* 3. Categories grouped into two families. */}
-      <section className={styles.section} id="categories" aria-labelledby="categories-title">
+      {/* Other assets banner. */}
+      <section className={styles.section} aria-labelledby="assets-title">
         <div className={styles.container}>
-          <div className={styles.sectionHead}>
-            <div><p className={styles.kicker}>{copy('Browse')}</p><h2 id="categories-title">{copy('What are you looking for?')}</h2></div>
-            <a className={styles.textLink} href="/categories/properties">{copy('All listings')} <Icon name="arrow" size={14} /></a>
-          </div>
-          <h3 className={styles.familyTitle}>{copy('Property')}</h3>
-          <div className={styles.propertyTiles}>
-            {propertyCategories.map((category) => <a key={category.slug} className={styles.propertyTile} href={`/categories/${category.slug}`}>
-              <Image src={category.image} alt="" fill sizes="(max-width: 640px) 70vw, (max-width: 1100px) 33vw, 190px" className={styles.propertyTileImage} />
-              <span className={styles.propertyTileLabel}>{copy(category.name)}<Icon name="arrow" size={14} /></span>
-            </a>)}
-          </div>
-          <h3 className={styles.familyTitle}>{copy('Other assets')}</h3>
-          <div className={styles.assetTiles}>
-            {assetCategories.map((category) => <a key={category.slug} className={styles.assetTile} href={`/categories/${category.slug}`}>
-              <span className={styles.assetIcon}><Icon name={category.icon} size={20} /></span>
-              <span><strong>{copy(category.name)}</strong><small>{copy(category.hint)}</small></span>
-            </a>)}
+          <div className={styles.assetsBanner}>
+            <Image src="/properties/tour-living.jpg" alt="" fill sizes="(max-width: 1180px) 100vw, 1180px" className={styles.assetsBg} />
+            <div className={styles.assetsVeil} aria-hidden="true" />
+            <div className={styles.collage}>
+              <a className={styles.collageWide} href="/categories/vehicles"><Image src="/properties/vehicle-02.jpg" alt="" fill sizes="260px" /><span>{copy('Vehicles')}</span></a>
+              <a href="/categories/furniture"><Image src="/properties/furniture-04.jpg" alt="" fill sizes="130px" /><span>{copy('Furniture')}</span></a>
+              <a href="/categories/equipment"><Image src="/properties/equipment-02.jpg" alt="" fill sizes="130px" /><span>{copy('Equipment')}</span></a>
+            </div>
+            <div className={styles.assetsCopy}>
+              <p className={styles.kickerGreen}>{copy('Explore opportunities')}</p>
+              <h2 id="assets-title" className={styles.display}>{copy('A world beyond four walls.')}</h2>
+              <p>{copy('Discover vehicles, furniture, appliances and equipment alongside your next property.')}</p>
+              <a className={styles.btnGreen} href="/categories/vehicles">{copy('Explore other assets')} <span aria-hidden="true">→</span></a>
+              <div className={styles.premiumRow}>
+                <div><strong>{copy('Umutungo Premium')}</strong><span>{copy('Increase advertising and listing capacity with a plan that fits your business.')}</span></div>
+                <a href="/upgrade">{copy('Explore plans')} <span aria-hidden="true">→</span></a>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 4. Latest listings. */}
-      <section className={`${styles.section} ${styles.sectionTinted}`} id="properties" aria-labelledby="listings-title">
-        <div className={styles.container}>
-          <div className={styles.sectionHead}>
-            <div><h2 id="listings-title">{copy('Latest listings')}</h2></div>
-            <a className={styles.textLink} href="/categories/properties">{copy('Browse all properties')} <Icon name="arrow" size={14} /></a>
-          </div>
-          {landingListings.length > 0
-            ? <div className={styles.listingGrid}>{landingListings.map((property) => <PropertyCard key={property.id} language={language} property={property} favorite={favorites.includes(property.id)} onFavorite={() => toggleFavorite(property)} />)}</div>
-            : <div className={styles.emptyListings}><Icon name="home" size={22} /><p>{copy('New listings will appear here as soon as they are published.')}</p><a className={styles.secondaryButton} href="/post-property">{copy('Be the first to post a property')}</a></div>}
-        </div>
-      </section>
-
-      {/* 5. Who it is for, in plain language. */}
+      {/* Who it is for. */}
       <section className={styles.section} id="who-its-for" aria-labelledby="audiences-title">
-        <div className={styles.container}>
-          <div className={styles.sectionHead}>
-            <div><p className={styles.kicker}>{copy('Made for everyone in the property journey')}</p><h2 id="audiences-title">{copy('Who is Umutungo for?')}</h2></div>
+        <div className={`${styles.container} ${styles.whoGrid}`}>
+          <div className={styles.whoIntro}>
+            <p className={styles.kicker}>{copy('Who is Umutungo for?')}</p>
+            <h2 id="audiences-title" className={styles.display}>{copy('Every connection starts here.')}</h2>
+            <p className={styles.sectionLead}>{copy('Whether you connect, own or rent out — make your next move here.')}</p>
+            <div className={styles.whoImage}><Image src="/properties/office-03.jpg" alt="" fill sizes="(max-width: 900px) 100vw, 420px" /></div>
           </div>
-          {/* Cards work as a radio group: click to select (turns green), then follow the link. */}
-          <div className={styles.audienceGrid} role="radiogroup" aria-labelledby="audiences-title">
-            {audiences.map((audience, index) => {
-              const selected = selectedAudience === index;
-              return <article key={audience.title} className={selected ? `${styles.audienceCard} ${styles.audienceCardFeatured}` : styles.audienceCard} onClick={() => setSelectedAudience(index)}>
-                <label className={styles.audienceSelect}>
-                  <input type="radio" name="audience" className={styles.srOnly} checked={selected} onChange={() => setSelectedAudience(index)} />
-                  <span className={styles.audienceIcon}><Icon name={audience.icon} size={20} /></span>
-                  {selected && <span className={styles.audienceCheck} aria-hidden="true"><Icon name="check" size={14} /></span>}
-                  <h3>{copy(audience.title)}</h3>
-                  <span className={styles.audienceWho}>{copy(audience.who)}</span>
-                  <span className={styles.audienceBody}>{copy(audience.body)}</span>
-                </label>
-                <a className={styles.audienceLink} href={audience.href}>{copy(audience.cta)} <Icon name="arrow" size={14} /></a>
-              </article>;
-            })}
-          </div>
+          <ol className={styles.whoList}>
+            {audiences.map((audience) => <li key={audience.title}>
+              <div>
+                <span className={styles.whoStep}>{copy(audience.step)}</span>
+                <h3>{copy(audience.title)}</h3>
+                <p>{copy(audience.body)}</p>
+              </div>
+              <a className={styles.btnGreen} href={audience.href}>{copy(audience.cta)}</a>
+            </li>)}
+          </ol>
         </div>
       </section>
 
-      {/* 6. How it works: two short tracks. */}
-      <section className={`${styles.section} ${styles.sectionTinted}`} id="how-it-works" aria-labelledby="how-title">
-        <div className={styles.container}>
-          <div className={styles.sectionHead}>
-            <div><p className={styles.kicker}>{copy('How it works')}</p><h2 id="how-title">{copy('Three steps either way')}</h2></div>
-            <a className={styles.textLink} href="/how-it-works">{copy('Read the full guide')} <Icon name="arrow" size={14} /></a>
+      {/* Customer stories: approved testimonials only. */}
+      <section className={styles.section} id="stories" aria-labelledby="stories-title">
+        <div className={`${styles.container} ${styles.storiesGrid}`}>
+          <div>
+            <p className={styles.kicker}>{copy('Customer stories')}</p>
+            <h2 id="stories-title" className={styles.display}>{copy('Stories worth sharing.')}</h2>
+            <p className={styles.sectionLead}>{copy('Real experiences from the Umutungo community, shared with permission.')}</p>
           </div>
-          <div className={styles.tracks}>
-            <ol className={styles.track} aria-label={copy('Finding a property')}>
-              <li className={styles.trackHeading}><Icon name="search" size={18} />{copy('Finding a property')}</li>
-              <li><b>1</b><span><strong>{copy('Search or browse')}</strong>{copy('Describe what you need or pick a category and location.')}</span></li>
-              <li><b>2</b><span><strong>{copy('Compare and save')}</strong>{copy('Check photos, price, location and key facts. Save the ones you like.')}</span></li>
-              <li><b>3</b><span><strong>{copy('Contact the advertiser')}</strong>{copy('Message in the app, call, or use WhatsApp to arrange a viewing.')}</span></li>
-            </ol>
-            <ol className={styles.track} aria-label={copy('Listing a property')}>
-              <li className={styles.trackHeading}><Icon name="building" size={18} />{copy('Listing a property')}</li>
-              <li><b>1</b><span><strong>{copy('Create your account')}</strong>{copy('Sign up with your phone number and confirm it with a one-time code.')}</span></li>
-              <li><b>2</b><span><strong>{copy('Add your property')}</strong>{copy('Upload photos, set the price and location, and save it as a draft.')}</span></li>
-              <li><b>3</b><span><strong>{copy('Publish and get enquiries')}</strong>{copy('Pay per listing or use a plan, then manage enquiries from your dashboard.')}</span></li>
-            </ol>
-          </div>
+          <figure className={styles.storyCard}>
+            <span className={styles.quoteMark} aria-hidden="true">“</span>
+            {story
+              ? <><blockquote>{story.body}</blockquote><figcaption>{story.name}</figcaption></>
+              : <><blockquote>{copy('Approved customer stories will appear here.')}</blockquote><figcaption>{copy('Be the first to tell us how Umutungo helped you.')}</figcaption></>}
+            <div className={styles.storyActions}>
+              {stories.length > 1 && <div className={styles.storyNav}>
+                <button type="button" aria-label={copy('Previous story')} onClick={() => setStoryIndex((index) => (index - 1 + stories.length) % stories.length)}>←</button>
+                <span>{(storyIndex % stories.length) + 1} / {stories.length}</span>
+                <button type="button" aria-label={copy('Next story')} onClick={() => setStoryIndex((index) => (index + 1) % stories.length)}>→</button>
+              </div>}
+              {signedIn
+                ? <button type="button" className={styles.storyShare} aria-expanded={storyFormOpen} onClick={() => setStoryFormOpen((open) => !open)}>{copy('Share your story')}</button>
+                : <button type="button" className={styles.storyShare} onClick={() => goToSignIn('Client')}>{copy('Sign in to share your story')}</button>}
+            </div>
+            {signedIn && storyFormOpen && <form className={styles.storyForm} onSubmit={submitStory}>
+              <label htmlFor="landing-story">{copy('Your story')}</label>
+              <textarea id="landing-story" value={storyBody} onChange={(event) => setStoryBody(event.target.value)} minLength={20} maxLength={1000} rows={4} required disabled={storySubmitting} placeholder={copy('Share your experience (20–1000 characters)')} />
+              <div><span>{storyBody.length}/1000</span><button type="submit" className={styles.btnGreen} disabled={storySubmitting || storyBody.trim().length < 20}>{copy(storySubmitting ? 'Submitting…' : 'Submit for review')}</button></div>
+              {storyStatus && <p role={storyStatus.kind === 'ok' ? 'status' : 'alert'} className={storyStatus.kind === 'ok' ? styles.storyOk : styles.storyError}>{copy(storyStatus.text)}</p>}
+            </form>}
+          </figure>
         </div>
       </section>
 
-      {/* 7. Closing call to action. */}
-      <section className={styles.ctaBand} aria-labelledby="cta-title">
+      {/* Mobile app band. */}
+      <section className={styles.section} id="app-download" aria-labelledby="app-title">
         <div className={styles.container}>
-          <div><h2 id="cta-title">{copy('Ready when you are.')}</h2><p>{copy('Browsing is free. Listing takes a few minutes.')}</p></div>
-          <div className={styles.ctaActions}>
-            <a className={styles.ctaPrimary} href="/categories/properties"><Icon name="search" size={16} />{copy('Find a property')}</a>
-            <a className={styles.ctaSecondary} href="/post-property"><Icon name="building" size={16} />{copy('List a property')}</a>
+          <div className={styles.appBand}>
+            <div className={styles.appCopy}>
+              <h2 id="app-title" className={styles.display}>{copy('Umutungo Mobile App')}</h2>
+              <p className={styles.sectionLead}>{copy('Download it and use it in your hands.')}</p>
+              <div className={styles.storeButtons}>
+                <a className={styles.btnOutline} href={ANDROID_APP_URL} target="_blank" rel="noopener noreferrer"><Icon name="googlePlay" size={16} />{copy('Android app')}</a>
+                <a className={styles.btnOutline} href={IOS_APP_URL} target="_blank" rel="noopener noreferrer"><Icon name="apple" size={16} />{copy('App Store')}</a>
+              </div>
+            </div>
+            <div className={styles.phone} aria-hidden="true">
+              <div className={styles.phoneScreen}>
+                <span className={styles.phoneNotch} />
+                <strong className={styles.phoneTitle}>{copy('Find your')}<br />{copy('next move.')}</strong>
+                <small>{copy('Properties & assets in Rwanda')}</small>
+                <span className={styles.phoneSearch}><Icon name="search" size={11} />{copy('Search properties & assets')}</span>
+                <span className={styles.phoneTabs}><b>{copy('Buy')}</b><i>{copy('Rent')}</i><i>{copy('Assets')}</i></span>
+                <span className={styles.phoneImage}><Image src={phoneListing?.image && !phoneListing.image.startsWith('http') ? phoneListing.image : '/properties/house-02.jpg'} alt="" fill sizes="160px" /></span>
+                <strong className={styles.phoneListing}>{phoneListing ? phoneListing.title : copy('Family house')}</strong>
+                <small>{phoneListing ? phoneListing.location : copy('Kigali, Rwanda')}</small>
+                <span className={styles.phoneBar}><Icon name="home" size={12} /><Icon name="heart" size={12} /><Icon name="user" size={12} /></span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
     </main>
-    <Footer language={language} darkMode={darkMode} />
+
+    <SiteFooter language={language} onLanguageChange={changeLanguage} darkMode={darkMode} onToggleTheme={toggleTheme} />
   </div>;
 }

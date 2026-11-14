@@ -5,14 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { PropertyPlaceholder } from '../../../components/PropertyCard';
 import { Icon, type IconName } from '../../../components/Icons';
-import { InterfacePreferences } from '../../../components/InterfacePreferences';
-import { Logo } from '../../../components/Logo';
+import { Navbar } from '../../../components/Navbar';
 import { PropertyViewer } from '../../../components/PropertyViewer';
 import { publicUmutungoApi, umutungoApi } from '../../../lib/umutungoApi';
 import { toProperty, type ApiListing as SharedApiListing } from '../../../lib/listings';
 import { propertySlug, supportsSpatialPreview } from '../../../lib/listings';
 import { isLocalDevelopmentHost, readLocalPropertyListings } from '../../../lib/localListings';
 import { usePersistentTheme } from '../../../lib/theme';
+import { usePersistentLanguage } from '../../../lib/language';
 import styles from './property.module.css';
 
 type ApiListing = SharedApiListing & { id: string; title: string };
@@ -49,7 +49,8 @@ const sentenceCase = (text: string) => text ? text.charAt(0).toUpperCase() + tex
 export default function PropertyDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { darkMode } = usePersistentTheme();
+  const { darkMode, toggleTheme } = usePersistentTheme();
+  const { language, changeLanguage } = usePersistentLanguage();
   const [property, setProperty] = useState<PropertyPlaceholder | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPlan, setShowPlan] = useState(false);
@@ -178,15 +179,11 @@ export default function PropertyDetailPage() {
   return (
     <>
       <div className={styles.shell} data-own-colors="">
-        <header className={styles.topbar}>
-          <div className={styles.topbarInner}>
-            <button className={styles.backButton} type="button" onClick={goBack}><Icon name="arrow" size={15} /><span>Back</span></button>
-            <Link href="/" className={styles.brand} aria-label="Umutungo home"><Logo darkMode={darkMode} /></Link>
-            <InterfacePreferences className={styles.preferences} />
-          </div>
-        </header>
+        <Navbar active="explore" darkMode={darkMode} onToggleTheme={toggleTheme} language={language} onLanguageChange={changeLanguage} />
 
         <main className={styles.page}>
+          <div className={styles.crumbRow}>
+          <button className={styles.backButton} type="button" onClick={goBack}><Icon name="arrow" size={15} /><span>Back</span></button>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <ol>
               <li><Link href="/">Home</Link></li>
@@ -194,6 +191,7 @@ export default function PropertyDetailPage() {
               <li aria-current="page">{property.title}</li>
             </ol>
           </nav>
+          </div>
 
           <div className={styles.titleRow}>
             <div>

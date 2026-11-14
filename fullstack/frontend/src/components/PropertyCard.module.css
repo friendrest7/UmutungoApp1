@@ -84,6 +84,7 @@
 
 .locationRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; margin-top: 6px; }
 .viewDetails { position: relative; z-index: 2; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; color: var(--pc-green-ink); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+button.viewDetails { padding: 0; border: 0; background: none; cursor: pointer; font-family: inherit; }
 .viewDetails span { transition: transform .15s ease; }
 .viewDetails:hover { text-decoration: underline; }
 .viewDetails:hover span { transform: translateX(2px); }
@@ -102,9 +103,9 @@
 .iconButton, .contact { min-height: 40px; border-radius: 10px; cursor: pointer; font: inherit; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
 .iconButton { display: grid; width: 40px; place-items: center; padding: 0; border: 1px solid var(--pc-line); background: var(--pc-surface); color: var(--pc-ink); }
 .iconButton:hover { border-color: var(--pc-green-ink); color: var(--pc-green-ink); }
-.contact { display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: 7px; min-width: 0; padding: 0 14px; border: 0; background: #007a3d; color: #ffffff; font-size: 14px; font-weight: 600; }
-.contact:hover { background: #04502b; }
-:global(.theme-dark) .contact { background: #00c763; color: #04230f; }
+.contact { text-decoration: none; display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: 7px; min-width: 0; padding: 0 14px; border: 0; background: #00c763; color: #ffffff; font-size: 14px; font-weight: 600; }
+.contact:hover { background: #00b358; }
+:global(.theme-dark) .contact { background: #00c763; color: #ffffff; }
 :global(.theme-dark) .contact:hover { background: #38d987; }
 
 @media (prefers-reduced-motion: reduce) {

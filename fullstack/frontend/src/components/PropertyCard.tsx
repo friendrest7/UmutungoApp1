@@ -124,13 +124,13 @@ export function PropertyCard({ language, property, favorite, onFavorite }: Prope
         <h3 className={styles.title}><Link className={styles.titleLink} href={detailHref}>{t(language, property.title)}</Link></h3>
         <div className={styles.locationRow}>
           <a className={styles.location} href={directionsHref} target="_blank" rel="noreferrer" title={t(language, 'View route and estimated travel time')}><Icon name="pin" size={14} /><span>{t(language, property.location || 'Location available on request')}</span></a>
-          <Link className={styles.viewDetails} href={detailHref} aria-label={`${t(language, 'View details')}: ${property.title}`}>{t(language, 'View details')}<span aria-hidden="true">→</span></Link>
+          <button className={styles.viewDetails} type="button" onClick={() => setDialog('contact')} aria-label={`${contactLabel}: ${property.title}`}><Icon name="phone" size={14} />{contactLabel}</button>
         </div>
         {facts.length > 0 && <ul className={styles.facts} aria-label={t(language, 'Key facts')}>{facts.map((fact) => <li key={fact.label}><Icon name={fact.icon} size={15} /><strong>{fact.value}</strong><span>{t(language, fact.label)}</span></li>)}</ul>}
 
         <div className={styles.footer}>
           <div className={styles.actions}>
-            <button className={styles.contact} type="button" onClick={() => setDialog('contact')} aria-label={`${contactLabel}: ${property.title}`}><Icon name="phone" size={15} />{contactLabel}</button>
+            <Link className={styles.contact} href={detailHref} aria-label={`${t(language, 'View details')}: ${property.title}`}>{t(language, 'View details')}<span aria-hidden="true">→</span></Link>
             <button className={styles.iconButton} type="button" onClick={() => void openShare()} aria-label={`${t(language, 'Share')} ${property.title}`}><Icon name="share" size={16} /></button>
           </div>
         </div>

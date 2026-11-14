@@ -51,7 +51,9 @@
 
 /* ---------- Page ---------- */
 .page { width: min(1200px, calc(100% - 32px)); margin: 0 auto; padding: 20px 0 72px; color: var(--pd-ink); }
-.breadcrumb ol { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; padding: 0; color: var(--pd-muted); font-size: 13.5px; list-style: none; }
+.crumbRow { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 0 0 18px; }
+.crumbRow .breadcrumb { min-width: 0; }
+.breadcrumb ol { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; color: var(--pd-muted); font-size: 13.5px; list-style: none; }
 .breadcrumb li { display: inline-flex; min-width: 0; align-items: center; gap: 6px; }
 .breadcrumb li + li::before { content: '/'; color: color-mix(in srgb, var(--pd-muted) 60%, transparent); }
 .breadcrumb a { color: var(--pd-muted); text-decoration: none; }
